@@ -7,9 +7,11 @@ requires-python = ">=3.13"
 dependencies = [
     "mem0ai>=1.0.10",
     "pydantic>=2.12.5",
+    "pydantic-settings>=1.4.0",
     "python-dotenv>=1.2.2",
     "rich>=14.3.3",
     "typer>=0.24.1",
+    "httpx>=0.26.0",
 ]
 
 [dependency-groups]
@@ -19,3 +21,6 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.15.9",
 ]
+
+[project.scripts]
+"mymemory" = "mymemory.cli:app"
