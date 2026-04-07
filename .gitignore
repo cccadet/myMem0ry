@@ -12,3 +12,4 @@ wheels/
 data/
 .codex
 qdrant_storage/
+unsloth_compiled_cache/

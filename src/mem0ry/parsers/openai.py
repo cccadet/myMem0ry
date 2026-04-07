@@ -19,7 +19,15 @@ class OpenAIParser(BaseParser):
             payload = json.load(stream)
 
         conversations: list[ParsedConversation] = []
-        for raw in payload.get("conversations", []):
+        entries = []
+        if isinstance(payload, dict):
+            entries = payload.get("conversations", [])
+        elif isinstance(payload, list):
+            entries = payload
+        else:
+            entries = []
+
+        for raw in entries:
             mapping = raw.get("mapping", {}) or {}
             if not mapping:
                 continue
