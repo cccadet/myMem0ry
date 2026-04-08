@@ -26,12 +26,6 @@ def train_model(
     """Train the LoRA weights for the personal memory model."""
 
     config = config or TrainingConfig()
-    LOGGER.info("Preparing dataset %s", dataset_path)
-
-    dataset = load_dataset("json", data_files=str(dataset_path), split="train")
-    dataset = dataset.map(
-        _formatting_func, batched=True, remove_columns=dataset.column_names
-    )
 
     LOGGER.info("Loading base model %s", config.model_name)
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -40,6 +34,11 @@ def train_model(
         load_in_4bit=config.load_in_4bit,
     )
     tokenizer = get_chat_template(tokenizer, chat_template="qwen-3")
+
+    LOGGER.info("Preparing dataset %s", dataset_path)
+    dataset = load_dataset("json", data_files=str(dataset_path), split="train")
+    format_fn = _make_formatting_func(tokenizer, config.system_prompt)
+    dataset = dataset.map(format_fn, batched=True, remove_columns=dataset.column_names)
 
     model = FastLanguageModel.get_peft_model(
         model,
@@ -90,11 +89,19 @@ def train_model(
     return model_dir
 
 
-def _formatting_func(batch: dict) -> dict[str, list[str]]:
-    texts: list[str] = []
-    for messages in batch.get("messages", []):
-        formatted = "\n".join(
-            f"{msg.get('role', 'user')}: {msg.get('content', '')}" for msg in messages
-        )
-        texts.append(formatted)
-    return {"text": texts}
+def _make_formatting_func(tokenizer, system_prompt: str):
+    """Return a batched formatting function that uses the Qwen3 chat template."""
+
+    def _format(batch: dict) -> dict[str, list[str]]:
+        texts: list[str] = []
+        for messages in batch.get("messages", []):
+            msgs = list(messages)
+            if msgs and msgs[0].get("role") != "system":
+                msgs.insert(0, {"role": "system", "content": system_prompt})
+            text = tokenizer.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=False
+            )
+            texts.append(text)
+        return {"text": texts}
+
+    return _format

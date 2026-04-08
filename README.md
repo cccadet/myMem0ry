@@ -23,10 +23,11 @@ uv add --dev pytest ruff
 ## Commands
 
 ```bash
-py scripts/build_dataset.py --source data/openai/export --output data/processed
-py scripts/train.py --dataset data/processed/train.jsonl --output output/memory_model
-py scripts/export.py --model output/memory_model/memory_model_lora --output output/memory_model
-py scripts/quantize.py output/memory_model/unsloth.F16.gguf --method q4_k_m
+mymem0ry build --source data/openai/export --output data/processed
+mymem0ry train --dataset data/processed/train.jsonl --output output/memory_model
+mymem0ry export --model output/memory_model/memory_model_lora --output output/memory_model
+ollama create qwen3-memory -f output/memory_model_gguf/Modelfile
+mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
 ```
 
 Typer-powered CLI (installed as `mymem0ry`) mirrors the same functionality plus `stats` and `pipeline` shortcuts:
