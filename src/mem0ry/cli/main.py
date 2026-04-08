@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 import typer
 
 from ..pipeline.dataset import build_dataset_from_openai
+from ..training.config import TrainingConfig
 from ..training.export import export_model
 from ..training.train import train_model
 
@@ -23,8 +25,23 @@ def build(
     val_ratio: float = 0.05,
     overlap_turns: int = 2,
     min_turns: int = 2,
+    qa_model: str = "glm-4.7-flashx",
+    qa_pairs: int = 4,
+    qa_cache: str = "data/qa_cache.jsonl",
+    force_qa: bool = False,
+    regen_qa: Optional[list[str]] = None,
+    no_qa: bool = False,
+    no_temporal: bool = False,
 ):
     """Parse exports and produce ChatML JSONL datasets."""
+
+    config = TrainingConfig(
+        qa_generation_model=qa_model,
+        qa_pairs_per_conversation=qa_pairs,
+        qa_cache_path=qa_cache,
+        enable_qa_generation=not no_qa,
+        use_temporal=not no_temporal,
+    )
 
     result = build_dataset_from_openai(
         source=source,
@@ -34,6 +51,9 @@ def build(
         overlap_turns=overlap_turns,
         min_turns=min_turns,
         val_ratio=val_ratio,
+        config=config,
+        force_qa=force_qa,
+        regen_qa_ids=regen_qa,
     )
     typer.echo("Dataset built")
     typer.echo(json.dumps(result["stats"], indent=2))

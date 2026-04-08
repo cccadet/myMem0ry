@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Sequence
 
@@ -42,3 +43,19 @@ class TrainingConfig:
         "Answer questions about the user based on everything you remember from "
         "those conversations. Be specific and reference details when possible."
     )
+
+    zai_api_key: str | None = field(
+        default_factory=lambda: os.environ.get("ZAI_API_KEY")
+    )
+    zai_base_url: str = field(
+        default_factory=lambda: os.environ.get(
+            "ZAI_BASE_URL", "https://api.z.ai/api/paas/v4/"
+        )
+    )
+    qa_generation_model: str = field(
+        default_factory=lambda: os.environ.get("QA_GENERATION_MODEL", "glm-4.7-flashx")
+    )
+    qa_pairs_per_conversation: int = 4
+    qa_cache_path: str = "data/qa_cache.jsonl"
+    enable_qa_generation: bool = True
+    use_temporal: bool = True

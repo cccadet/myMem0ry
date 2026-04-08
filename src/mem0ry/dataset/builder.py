@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..parsers.base import ParsedConversation, ParsedMessage
+from .temporal import build_temporal_system_prompt
 
 
 @dataclass
@@ -26,6 +27,7 @@ def build_chatml_examples(
     overlap_turns: int = 2,
     min_turns: int = 2,
     system_prompt: str | None = None,
+    use_temporal: bool = True,
 ) -> list[ChatMLExample]:
     """Return ChatML-formatted chunks that respect token limits."""
 
@@ -38,7 +40,8 @@ def build_chatml_examples(
             conversation.messages, max_chars, overlap_turns, min_turns
         )
         for chunk_index, chunk in enumerate(chunks):
-            messages = _build_messages(chunk, system_prompt)
+            prompt = _resolve_prompt(system_prompt, conversation, use_temporal)
+            messages = _build_messages(chunk, prompt)
             if len(messages) < min_turns:
                 continue
             metadata = {
@@ -60,6 +63,18 @@ def build_chatml_examples(
                 )
             )
     return examples
+
+
+def _resolve_prompt(
+    base_prompt: str | None,
+    conversation: ParsedConversation,
+    use_temporal: bool,
+) -> str | None:
+    if not base_prompt:
+        return None
+    if not use_temporal:
+        return base_prompt
+    return build_temporal_system_prompt(conversation, base_prompt)
 
 
 def _build_messages(
