@@ -87,6 +87,10 @@ def _update_modelfile(modelfile_path: Path, gguf_filename: str) -> None:
             break
     else:
         contents.insert(0, f"FROM {gguf_filename}")
+        
+    if not any(line.strip().startswith("PARAMETER presence_penalty") for line in contents):
+        contents.append("PARAMETER presence_penalty 1.5")
+        
     modelfile_path.write_text("\n".join(contents) + "\n", encoding="utf-8")
 
 
