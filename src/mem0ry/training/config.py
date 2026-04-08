@@ -8,7 +8,7 @@ from typing import Sequence
 
 @dataclass
 class TrainingConfig:
-    model_name: str = "unsloth/Qwen3-0.6B-unsloth-bnb-4bit"
+    model_name: str = "Qwen/Qwen3-0.6B"
     max_seq_length: int = 2048
     load_in_4bit: bool = True
     lora_r: int = 32

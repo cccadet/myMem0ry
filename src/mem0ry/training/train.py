@@ -39,7 +39,7 @@ def train_model(
         max_seq_length=config.max_seq_length,
         load_in_4bit=config.load_in_4bit,
     )
-    tokenizer = get_chat_template(tokenizer, chat_template="qwen-2.5")
+    tokenizer = get_chat_template(tokenizer, chat_template="qwen-3")
 
     model = FastLanguageModel.get_peft_model(
         model,
