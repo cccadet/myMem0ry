@@ -30,6 +30,15 @@ ollama create qwen3-memory -f output/memory_model_gguf/Modelfile
 mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
 ```
 
+# Build normal (incremental - só processa conversas novas)
+mymem0ry build --source data/openai/export --output data/processed
+# Forçar regeneração de todo Q&A
+mymem0ry build --source data/openai/export --output data/processed --force-qa
+# Regenerar Q&A de conversas específicas
+mymem0ry build --source data/openai/export --output data/processed --regen-qa abc-123 def-456
+# Build sem Q&A (só chunks de conversa com datas)
+mymem0ry build --source data/openai/export --output data/processed --no-qa
+
 Typer-powered CLI (installed as `mymem0ry`) mirrors the same functionality plus `stats` and `pipeline` shortcuts:
 
 ```

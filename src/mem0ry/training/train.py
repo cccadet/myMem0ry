@@ -33,7 +33,7 @@ def train_model(
         max_seq_length=config.max_seq_length,
         load_in_4bit=config.load_in_4bit,
     )
-    tokenizer = get_chat_template(tokenizer, chat_template="qwen-3")
+    tokenizer = get_chat_template(tokenizer, chat_template="qwen3")
 
     LOGGER.info("Preparing dataset %s", dataset_path)
     dataset = load_dataset("json", data_files=str(dataset_path), split="train")
