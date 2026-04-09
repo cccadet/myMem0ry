@@ -19,6 +19,7 @@ from ..dataset.qa_cache import QACache, load_cache, make_entry, save_cache
 from ..dataset.qa_generator import (
     QAPair,
     create_client,
+    create_llamacpp_model,
     generate_qa_pairs,
     qa_pairs_to_chatml,
 )
@@ -29,6 +30,12 @@ from ..utils.logging import configure_logging
 from ..utils.paths import ensure_dir
 
 LOGGER = configure_logging()
+
+
+def _qa_description(conv_title: str | None, max_len: int = 40) -> str:
+    if not conv_title:
+        return "Generating QA..."
+    return conv_title[:max_len] + ("..." if len(conv_title) > max_len else "")
 
 
 def build_dataset_from_openai(
@@ -143,69 +150,109 @@ def _generate_qa_incremental(
             cache.remove(cid)
         LOGGER.info("Regenerating QA for %d conversation IDs", len(regen_qa_ids))
 
-    client = create_client(
-        api_key=config.zai_api_key,
-        base_url=config.zai_base_url,
-    )
+    client = None
+    llama_model = None
 
+    if config.qa_backend == "llamacpp":
+        LOGGER.info("Loading llama.cpp model from %s", config.llamacpp_model_path)
+        llama_model = create_llamacpp_model(
+            config.llamacpp_model_path,
+            n_gpu_layers=config.llamacpp_n_gpu_layers,
+            n_ctx=config.llamacpp_n_ctx,
+        )
+        effective_model = config.llamacpp_model_path
+    elif config.qa_backend == "ollama":
+        client = create_client(
+            "ollama",
+            ollama_base_url=config.ollama_base_url,
+        )
+        effective_model = config.ollama_model
+    else:
+        client = create_client(
+            "api",
+            api_key=config.zai_api_key,
+            base_url=config.zai_base_url,
+        )
+        effective_model = config.qa_generation_model
+
+    backend: str = config.qa_backend
     all_qa_examples: list[dict] = []
     api_calls = 0
 
-    for conv in conversations:
-        if not conv.messages:
-            continue
+    eligible = [c for c in conversations if c.messages]
+    from rich.progress import (
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        BarColumn,
+        MofNCompleteColumn,
+        TimeElapsedColumn,
+    )
 
-        content_hash = QACache.compute_hash(conv.messages)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+    ) as progress:
+        task = progress.add_task("QA generation", total=len(eligible))
 
-        if not force_qa and not (regen_qa_ids and conv.conversation_id in regen_qa_ids):
-            if cache.is_cached(conv.conversation_id, content_hash):
-                cached = cache.get(conv.conversation_id)
-                qa_dicts = cached.qa_pairs if cached else []
-                LOGGER.debug(
-                    "Cache hit for conversation %s (%d QA pairs)",
-                    conv.conversation_id,
-                    len(qa_dicts),
-                )
+        for conv in eligible:
+            progress.update(task, description=_qa_description(conv.title))
+
+            content_hash = QACache.compute_hash(conv.messages)
+
+            if not force_qa and not (
+                regen_qa_ids and conv.conversation_id in regen_qa_ids
+            ):
+                if cache.is_cached(conv.conversation_id, content_hash):
+                    cached = cache.get(conv.conversation_id)
+                    qa_dicts = cached.qa_pairs if cached else []
+                else:
+                    qa_dicts = _call_api_and_cache(
+                        conv,
+                        client=client,
+                        llama_model=llama_model,
+                        model=effective_model,
+                        n_pairs=config.qa_pairs_per_conversation,
+                        cache=cache,
+                        content_hash=content_hash,
+                        backend=backend,
+                    )
+                    api_calls += 1
             else:
                 qa_dicts = _call_api_and_cache(
                     conv,
                     client=client,
-                    model=config.qa_generation_model,
+                    llama_model=llama_model,
+                    model=effective_model,
                     n_pairs=config.qa_pairs_per_conversation,
                     cache=cache,
                     content_hash=content_hash,
+                    backend=backend,
                 )
                 api_calls += 1
-        else:
-            qa_dicts = _call_api_and_cache(
-                conv,
-                client=client,
-                model=config.qa_generation_model,
-                n_pairs=config.qa_pairs_per_conversation,
-                cache=cache,
-                content_hash=content_hash,
-            )
-            api_calls += 1
 
-        qa_pairs = [
-            QAPair(question=d["question"], answer=d["answer"]) for d in qa_dicts
-        ]
-        if not qa_pairs:
-            continue
+            qa_pairs = [
+                QAPair(question=d["question"], answer=d["answer"]) for d in qa_dicts
+            ]
+            if qa_pairs:
+                prompt = build_temporal_system_prompt(conv, base_prompt)
+                conv_meta = {
+                    "source_file": conv.metadata.get("source_file", ""),
+                }
+                examples = qa_pairs_to_chatml(
+                    qa_pairs,
+                    conversation_id=conv.conversation_id,
+                    system_prompt=prompt,
+                    metadata=conv_meta,
+                )
+                all_qa_examples.extend(examples)
 
-        prompt = build_temporal_system_prompt(conv, base_prompt)
-        conv_meta = {
-            "source_file": conv.metadata.get("source_file", ""),
-        }
-        examples = qa_pairs_to_chatml(
-            qa_pairs,
-            conversation_id=conv.conversation_id,
-            system_prompt=prompt,
-            metadata=conv_meta,
-        )
-        all_qa_examples.extend(examples)
+            save_cache(cache, cache_path)
+            progress.advance(task)
 
-    save_cache(cache, cache_path)
     LOGGER.info(
         "QA generation complete: %d pairs from %d API calls (cache has %d entries)",
         len(all_qa_examples),
@@ -219,14 +266,23 @@ def _generate_qa_incremental(
 def _call_api_and_cache(
     conv,
     *,
-    client,
+    client=None,
+    llama_model=None,
     model: str,
     n_pairs: int,
     cache: QACache,
     content_hash: str,
+    backend: str = "api",
 ) -> list[dict[str, str]]:
     try:
-        pairs = generate_qa_pairs(conv, client=client, model=model, n_pairs=n_pairs)
+        pairs = generate_qa_pairs(
+            conv,
+            client=client,
+            llama_model=llama_model,
+            model=model,
+            n_pairs=n_pairs,
+            backend=backend,
+        )
     except Exception as exc:
         LOGGER.warning(
             "QA generation failed for conversation %s: %s",

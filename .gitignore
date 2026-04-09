@@ -14,3 +14,5 @@ data/
 qdrant_storage/
 unsloth_compiled_cache/
 output/
+pyproject.toml
+models/Qwen3.5-0.8B-BF16.gguf

@@ -1,4 +1,4 @@
-"""Generate synthetic Q&A pairs from conversations using the z.ai API."""
+"""Generate synthetic Q&A pairs from conversations using an LLM backend."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Literal, Sequence
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -48,10 +48,22 @@ class QAPair:
     answer: str
 
 
+QABackend = Literal["api", "ollama", "llamacpp"]
+
+
 def create_client(
+    backend: QABackend = "api",
+    *,
     api_key: str | None = None,
     base_url: str | None = None,
+    ollama_base_url: str | None = None,
 ) -> OpenAI:
+    if backend == "ollama":
+        return OpenAI(
+            api_key="ollama",
+            base_url=ollama_base_url
+            or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+        )
     return OpenAI(
         api_key=api_key or os.environ.get("ZAI_API_KEY", ""),
         base_url=base_url
@@ -59,43 +71,110 @@ def create_client(
     )
 
 
+def create_llamacpp_model(
+    model_path: str | None = None,
+    *,
+    n_gpu_layers: int = -1,
+    n_ctx: int = 4096,
+):
+    from llama_cpp import Llama
+
+    path = model_path or os.environ.get("LLAMACPP_MODEL_PATH", "")
+    if not path:
+        raise ValueError(
+            "llamacpp backend requires a model path. "
+            "Set --llamacpp-model or LLAMACPP_MODEL_PATH env var."
+        )
+    return Llama(
+        model_path=path,
+        n_gpu_layers=n_gpu_layers,
+        n_ctx=n_ctx,
+        verbose=False,
+    )
+
+
+_LOCAL_SYSTEM_PROMPT = (
+    "You are a data annotation assistant. Read the conversation and generate "
+    "question-answer pairs about it. Be specific and include dates when available. "
+    "Reply with ONLY a JSON array like: "
+    '[{"question": "...", "answer": "..."}]'
+)
+
+
+def _get_system_prompt(backend: QABackend) -> str:
+    if backend in ("ollama", "llamacpp"):
+        return _LOCAL_SYSTEM_PROMPT
+    return _QA_SYSTEM_PROMPT
+
+
 def generate_qa_pairs(
     conversation: ParsedConversation,
     *,
-    client: OpenAI,
+    client: OpenAI | None = None,
+    llama_model=None,
     model: str | None = None,
     n_pairs: int = 4,
+    backend: QABackend = "api",
 ) -> list[QAPair]:
-    model = model or os.environ.get("QA_GENERATION_MODEL", "glm-4.7-flashx")
     prompt = _build_prompt(conversation, n_pairs)
+    system = _get_system_prompt(backend)
 
+    if backend == "llamacpp":
+        return _generate_qa_llamacpp(llama_model, system, prompt)
+
+    model = model or os.environ.get("QA_GENERATION_MODEL", "glm-4.7-flashx")
     response = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": _QA_SYSTEM_PROMPT},
+            {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ],
         temperature=0.7,
         max_tokens=2048,
     )
-
     raw = response.choices[0].message.content or ""
+    return _parse_response(raw)
+
+
+def _generate_qa_llamacpp(
+    llama_model,
+    system: str,
+    prompt: str,
+) -> list[QAPair]:
+    response = llama_model.create_chat_completion(
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.7,
+        max_tokens=2048,
+    )
+    raw = response["choices"][0]["message"]["content"] or ""
     return _parse_response(raw)
 
 
 def generate_qa_batch(
     conversations: Sequence[ParsedConversation],
     *,
-    client: OpenAI,
+    client: OpenAI | None = None,
+    llama_model=None,
     model: str | None = None,
     n_pairs: int = 4,
+    backend: QABackend = "api",
 ) -> dict[str, list[QAPair]]:
     results: dict[str, list[QAPair]] = {}
     for conv in conversations:
         if not conv.messages:
             continue
         try:
-            pairs = generate_qa_pairs(conv, client=client, model=model, n_pairs=n_pairs)
+            pairs = generate_qa_pairs(
+                conv,
+                client=client,
+                llama_model=llama_model,
+                model=model,
+                n_pairs=n_pairs,
+                backend=backend,
+            )
             results[conv.conversation_id] = pairs
         except Exception:
             results[conv.conversation_id] = []

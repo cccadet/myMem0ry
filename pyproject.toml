@@ -19,7 +19,12 @@ dependencies = [
     "typer>=0.24.1",
     "unsloth>=2026.4.4",
     "unsloth-zoo>=2026.4.3",
+    "pip",
+    "llama-cpp-python",
 ]
+
+[project.optional-dependencies]
+llamacpp = ["llama-cpp-python>=0.3.0"]
 
 [project.scripts]
 mymem0ry = "mem0ry.cli.main:app"

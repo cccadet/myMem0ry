@@ -44,6 +44,7 @@ class TrainingConfig:
         "those conversations. Be specific and reference details when possible."
     )
 
+    qa_backend: str = field(default_factory=lambda: os.environ.get("QA_BACKEND", "api"))
     zai_api_key: str | None = field(
         default_factory=lambda: os.environ.get("ZAI_API_KEY")
     )
@@ -54,6 +55,23 @@ class TrainingConfig:
     )
     qa_generation_model: str = field(
         default_factory=lambda: os.environ.get("QA_GENERATION_MODEL", "glm-4.7-flashx")
+    )
+    ollama_base_url: str = field(
+        default_factory=lambda: os.environ.get(
+            "OLLAMA_BASE_URL", "http://localhost:11434/v1"
+        )
+    )
+    ollama_model: str = field(
+        default_factory=lambda: os.environ.get("OLLAMA_MODEL", "qwen3:0.6b")
+    )
+    llamacpp_model_path: str = field(
+        default_factory=lambda: os.environ.get("LLAMACPP_MODEL_PATH", "")
+    )
+    llamacpp_n_gpu_layers: int = field(
+        default_factory=lambda: int(os.environ.get("LLAMACPP_N_GPU_LAYERS", "-1"))
+    )
+    llamacpp_n_ctx: int = field(
+        default_factory=lambda: int(os.environ.get("LLAMACPP_N_CTX", "4096"))
     )
     qa_pairs_per_conversation: int = 4
     qa_cache_path: str = "data/qa_cache.jsonl"
