@@ -41,6 +41,11 @@ def build(
 ):
     """Parse exports and produce ChatML JSONL datasets."""
 
+    if qa_backend == "turns":
+        enable_qa = True
+    else:
+        enable_qa = not no_qa
+
     config = TrainingConfig(
         qa_backend=qa_backend,
         qa_generation_model=qa_model,
@@ -51,7 +56,7 @@ def build(
         llamacpp_n_ctx=llamacpp_ctx,
         qa_pairs_per_conversation=qa_pairs,
         qa_cache_path=qa_cache,
-        enable_qa_generation=not no_qa,
+        enable_qa_generation=enable_qa,
         use_temporal=not no_temporal,
     )
 

@@ -38,6 +38,8 @@ mymem0ry build --source data/openai/export --output data/processed --force-qa
 mymem0ry build --source data/openai/export --output data/processed --regen-qa abc-123 def-456
 # Build sem Q&A (só chunks de conversa com datas)
 mymem0ry build --source data/openai/export --output data/processed --no-qa
+# Extrair Q&A diretamente dos turnos da conversa (sem modelo)
+mymem0ry build --source data/openai/export --output data/processed --qa-backend turns
 
 Typer-powered CLI (installed as `mymem0ry`) mirrors the same functionality plus `stats` and `pipeline` shortcuts:
 
@@ -49,6 +51,48 @@ mymem0ry export --model output/memory_model/memory_model_lora --output output/me
 mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
 mymem0ry pipeline --source data/openai/export --processed data/processed --model-output output/memory_model
 ```
+
+### QA Backends (`--qa-backend`)
+
+The `build` command supports multiple backends for generating Q&A training examples:
+
+| Backend | Description | Requirements |
+|---------|-------------|--------------|
+| `turns` | Extrai pares pergunta/resposta diretamente dos turnos `user` → `assistant` das conversas. Sem chamadas de API, sem custo, instantâneo. | Nenhum |
+| `api` | Gera Q&A sintético usando a API Z AI (padrão). | `ZAI_API_KEY` no `.env` |
+| `ollama` | Gera Q&A sintético via servidor Ollama local. | Ollama rodando localmente com modelo instalado |
+| `llamacpp` | Gera Q&A sintético via llama.cpp direto (GPU/CPU). | `--llamacpp-model` ou `LLAMACPP_MODEL_PATH` |
+
+Exemplos:
+
+```bash
+# Turns (sem modelo, extrai dos turnos)
+mymem0ry build --qa-backend turns --source data/openai/export --output data/processed
+
+# API Z AI (padrão)
+mymem0ry build --qa-backend api --qa-model glm-4.7-flashx --source data/openai/export --output data/processed
+
+# Ollama local
+mymem0ry build --qa-backend ollama --ollama-model qwen3:0.6b --source data/openai/export --output data/processed
+
+# llama.cpp direto
+mymem0ry build --qa-backend llamacpp --llamacpp-model models/qwen3-0.6b.gguf --source data/openai/export --output data/processed
+```
+
+### Outras opções do build
+
+| Flag | Descrição | Padrão |
+|------|-----------|--------|
+| `--max-seq-length` | Comprimento máximo de sequência por chunk | `2048` |
+| `--overlap-turns` | Turnos de sobreposição entre chunks | `2` |
+| `--min-turns` | Mínimo de turnos para manter um exemplo | `2` |
+| `--val-ratio` | Proporção do conjunto de validação | `0.05` |
+| `--qa-pairs` | Pares Q&A por conversa (backends api/ollama/llamacpp) | `4` |
+| `--qa-cache` | Caminho do cache Q&A (JSONL) | `data/qa_cache.jsonl` |
+| `--force-qa` | Força regeneração de todo o cache Q&A | `false` |
+| `--regen-qa` | Regenera Q&A apenas para IDs específicos | — |
+| `--no-qa` | Desabilita geração de Q&A (só chunks) | `false` |
+| `--no-temporal` | Desabilita enriquecimento temporal nos prompts | `false` |
 
 The `export` command now defaults to **F16** (no quantization loss). Add `--quantization q4_k_m` if you want to quantize during export.
 

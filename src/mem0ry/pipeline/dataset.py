@@ -20,6 +20,7 @@ from ..dataset.qa_generator import (
     QAPair,
     create_client,
     create_llamacpp_model,
+    generate_qa_from_turns,
     generate_qa_pairs,
     qa_pairs_to_chatml,
 )
@@ -83,13 +84,19 @@ def build_dataset_from_openai(
 
     qa_examples: list[dict] = []
     if config.enable_qa_generation:
-        qa_examples = _generate_qa_incremental(
-            conversations,
-            config=config,
-            base_prompt=base_prompt,
-            force_qa=force_qa,
-            regen_qa_ids=list(regen_qa_ids) if regen_qa_ids else None,
-        )
+        if config.qa_backend == "turns":
+            qa_examples = _generate_qa_from_turns(
+                conversations,
+                base_prompt=base_prompt,
+            )
+        else:
+            qa_examples = _generate_qa_incremental(
+                conversations,
+                config=config,
+                base_prompt=base_prompt,
+                force_qa=force_qa,
+                regen_qa_ids=list(regen_qa_ids) if regen_qa_ids else None,
+            )
 
     all_examples = raw_examples + qa_examples
     LOGGER.info(
@@ -129,6 +136,60 @@ def build_dataset_from_openai(
         "val": len(val),
         "stats": stats_dict,
     }
+
+
+def _generate_qa_from_turns(
+    conversations: Sequence,
+    *,
+    base_prompt: str,
+) -> list[dict]:
+    from rich.progress import (
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        BarColumn,
+        MofNCompleteColumn,
+        TimeElapsedColumn,
+    )
+
+    eligible = [c for c in conversations if c.messages]
+    all_qa_examples: list[dict] = []
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+    ) as progress:
+        task = progress.add_task("Turns extraction", total=len(eligible))
+
+        for conv in eligible:
+            progress.update(task, description=_qa_description(conv.title))
+
+            pairs = generate_qa_from_turns(conv)
+            if pairs:
+                prompt = build_temporal_system_prompt(conv, base_prompt)
+                conv_meta = {
+                    "source_file": conv.metadata.get("source_file", ""),
+                }
+                examples = qa_pairs_to_chatml(
+                    pairs,
+                    conversation_id=conv.conversation_id,
+                    system_prompt=prompt,
+                    metadata=conv_meta,
+                )
+                all_qa_examples.extend(examples)
+
+            progress.advance(task)
+
+    LOGGER.info(
+        "Turns extraction complete: %d pairs from %d conversations",
+        len(all_qa_examples),
+        len(eligible),
+    )
+
+    return all_qa_examples
 
 
 def _generate_qa_incremental(

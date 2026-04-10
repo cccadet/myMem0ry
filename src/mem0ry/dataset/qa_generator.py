@@ -48,7 +48,7 @@ class QAPair:
     answer: str
 
 
-QABackend = Literal["api", "ollama", "llamacpp"]
+QABackend = Literal["api", "ollama", "llamacpp", "turns"]
 
 
 def create_client(
@@ -151,6 +151,20 @@ def _generate_qa_llamacpp(
     )
     raw = response["choices"][0]["message"]["content"] or ""
     return _parse_response(raw)
+
+
+def generate_qa_from_turns(
+    conversation: ParsedConversation,
+) -> list[QAPair]:
+    pairs: list[QAPair] = []
+    messages = conversation.messages
+    for i in range(len(messages) - 1):
+        if messages[i].role == "user" and messages[i + 1].role == "assistant":
+            q = messages[i].content.strip()
+            a = messages[i + 1].content.strip()
+            if q and a:
+                pairs.append(QAPair(question=q, answer=a))
+    return pairs
 
 
 def generate_qa_batch(
