@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import torch
 from datasets import load_dataset
 from trl import SFTTrainer
 from transformers import TrainingArguments
@@ -31,8 +32,12 @@ def train_model(
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=config.model_name,
         max_seq_length=config.max_seq_length,
-        load_in_4bit=config.load_in_4bit,
+        load_in_4bit=config.load_in_4bit if not config.full_finetune else False,
+        dtype=None,
     )
+    if config.full_finetune:
+        LOGGER.info("Converting model to float16 for fp16 training")
+        model = model.to(torch.float16)
     tokenizer = get_chat_template(tokenizer, chat_template="qwen3")
 
     LOGGER.info("Preparing dataset %s", dataset_path)
@@ -40,27 +45,67 @@ def train_model(
     format_fn = _make_formatting_func(tokenizer, config.system_prompt)
     dataset = dataset.map(format_fn, batched=True, remove_columns=dataset.column_names)
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=config.lora_r,
-        target_modules=list(config.target_modules),
-        lora_alpha=config.lora_alpha,
-        lora_dropout=config.lora_dropout,
-        bias="none",
-        use_gradient_checkpointing="unsloth",
-    )
+    if config.full_finetune:
+        LOGGER.info(
+            "Full fine-tuning mode — dtype=%s, skipping LoRA",
+            next(model.parameters()).dtype,
+        )
+    elif config.lora_turbo:
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=128,
+            target_modules=list(config.target_modules),
+            lora_alpha=256,
+            lora_dropout=0,
+            bias="none",
+            use_gradient_checkpointing="unsloth",
+        )
+        LOGGER.info("LoRA turbo mode — r=128, alpha=256")
+    else:
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=config.lora_r,
+            target_modules=list(config.target_modules),
+            lora_alpha=config.lora_alpha,
+            lora_dropout=config.lora_dropout,
+            bias="none",
+            use_gradient_checkpointing="unsloth",
+        )
+
+    lr = config.learning_rate
+    epochs = config.num_train_epochs
+    optim = config.optim
+    fp16 = config.fp16
+    batch_size = config.batch_size
+    grad_accum = config.gradient_accumulation_steps
+    grad_ckpt = False
+    if config.full_finetune:
+        lr = 5e-4
+        epochs = max(epochs, 20)
+        optim = "adamw_torch"
+        batch_size = 1
+        grad_accum = 8
+        grad_ckpt = True
+        fp16 = True
+    elif config.lora_turbo:
+        lr = max(lr, 1e-3)
+        epochs = max(epochs, 50)
+        optim = "adamw_torch"
 
     training_args = TrainingArguments(
         output_dir=str(output_dir / "checkpoints"),
-        per_device_train_batch_size=config.batch_size,
-        gradient_accumulation_steps=config.gradient_accumulation_steps,
+        per_device_train_batch_size=batch_size,
+        gradient_accumulation_steps=grad_accum,
+        gradient_checkpointing=grad_ckpt,
         warmup_steps=config.warmup_steps,
         max_steps=config.max_steps,
-        num_train_epochs=config.num_train_epochs,
-        learning_rate=config.learning_rate,
+        num_train_epochs=epochs,
+        learning_rate=lr,
         weight_decay=config.weight_decay,
-        fp16=config.fp16,
-        optim=config.optim,
+        fp16=fp16,
+        bf16=False,
+        max_grad_norm=0,
+        optim=optim,
         lr_scheduler_type=config.lr_scheduler_type,
         logging_steps=10,
         save_strategy="epoch",
@@ -80,7 +125,9 @@ def train_model(
     trainer.train()
 
     ensure_dir(output_dir)
-    model_dir = output_dir / "memory_model_lora"
+    model_dir = output_dir / (
+        "memory_model_full" if config.full_finetune else "memory_model_lora"
+    )
     ensure_dir(model_dir)
     model.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)

@@ -92,16 +92,44 @@ def stats(target: Path = Path("data/processed/stats.json")) -> None:
 def train(
     dataset: Path = Path("data/processed/train.jsonl"),
     output: Path = Path("output/memory_model"),
+    full_finetune: bool = typer.Option(
+        False,
+        "--full-finetune",
+        help="Full fine-tuning without LoRA (pure memorization mode).",
+    ),
+    lora_turbo: bool = typer.Option(
+        False,
+        "--lora-turbo",
+        help="LoRA with high-rank memorization preset (r=128, alpha=256, lr=1e-3, 50 epochs).",
+    ),
+    epochs: int = typer.Option(
+        3,
+        "--epochs",
+        help="Number of training epochs (ignored if --full-finetune, min 20).",
+    ),
+    learning_rate: float = typer.Option(
+        2e-4, "--lr", help="Learning rate (ignored if --full-finetune, uses 5e-4)."
+    ),
 ):
-    """Train the LoRA adapters on the fine-tuning dataset."""
+    """Train the model on the fine-tuning dataset (LoRA by default, or full fine-tune)."""
 
-    model_dir = train_model(dataset_path=dataset, output_dir=output)
+    config = TrainingConfig(
+        full_finetune=full_finetune,
+        lora_turbo=lora_turbo,
+        num_train_epochs=epochs,
+        learning_rate=learning_rate,
+    )
+    model_dir = train_model(dataset_path=dataset, output_dir=output, config=config)
     typer.echo(f"Model stored in {model_dir}")
 
 
 @app.command()
 def export(
-    model: Path = Path("output/memory_model/memory_model_lora"),
+    model: Path = typer.Option(
+        None,
+        "--model",
+        help="Path to the trained model directory. Auto-detects LoRA or full fine-tune output.",
+    ),
     output: Path = Path("output/memory_model"),
     quantization: str | None = typer.Option(
         None,
@@ -110,6 +138,11 @@ def export(
     ),
 ):
     """Export the trained model to a GGUF bundle (F16 by default)."""
+
+    if model is None:
+        full_path = output / "memory_model_full"
+        lora_path = output / "memory_model_lora"
+        model = full_path if full_path.exists() else lora_path
 
     bundle = export_model(
         model_dir=model, output_dir=output, quantization_method=quantization
@@ -182,9 +215,20 @@ def pipeline(
     processed: Path = Path("data/processed"),
     model_output: Path = Path("output/memory_model"),
     gguf_output: Path = Path("output/memory_model"),
+    full_finetune: bool = typer.Option(
+        False, "--full-finetune", help="Full fine-tuning without LoRA."
+    ),
+    lora_turbo: bool = typer.Option(
+        False, "--lora-turbo", help="LoRA high-rank memorization preset."
+    ),
 ) -> None:
     """Execute the full pipeline: dataset → train → export."""
 
     build(source=source, output=processed)
-    train(dataset=processed / "train.jsonl", output=model_output)
-    export(model=model_output / "memory_model_lora", output=gguf_output)
+    train(
+        dataset=processed / "train.jsonl",
+        output=model_output,
+        full_finetune=full_finetune,
+        lora_turbo=lora_turbo,
+    )
+    export(output=gguf_output)

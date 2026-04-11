@@ -12,6 +12,8 @@ class TrainingConfig:
     model_name: str = "unsloth/Qwen3-0.6B"
     max_seq_length: int = 2048
     load_in_4bit: bool = True
+    full_finetune: bool = False
+    lora_turbo: bool = False
     lora_r: int = 32
     lora_alpha: int = 32
     lora_dropout: float = 0.0
