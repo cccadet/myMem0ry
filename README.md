@@ -1,140 +1,93 @@
 # myMem0ry
 
-Fine-tune `unsloth/Qwen3-0.6B-unsloth-bnb-4bit` with LoRA adapters so your exported conversations become a personal memory model.
+Personal memory system using **KV Cache** — no fine-tuning, no vector store, no latency.
+
+## How it works
+
+```
+[Setup — runs once per memory update]
+Conversations → Ollama extracts memories → memories.txt
+memories.txt → transformers builds KV cache → memoria.kvcache (~50-200 MB)
+
+[Chat — runs every time]
+memoria.kvcache (instant load) + question → answer
+```
+
+The model has already "read" your memories before you ask anything.
+The KV cache is the internal attention state after processing the memory text —
+not an index, not an embedding, it's the model's own internal representation.
 
 ## Architecture
 
-1. **Parser & extractor** – `src/mem0ry/parsers/openai.py` walks the OpenAI `mapping` tree, filters `user`/`assistant` turns, and normalizes multi-part messages into `ParsedConversation` objects.
-2. **ChatML builder** – `src/mem0ry/dataset` handles chunking, quality filtering, deduplication, and statistics before producing `train.jsonl` / `val.jsonl` outputs.
-3. **LoRA training** – `src/mem0ry/training/train.py` wires `FastLanguageModel`, `SFTTrainer`, and the dataset to run the fine-tuning job.
-4. **Export** – `src/mem0ry/training/export.py` emits a GGUF bundle compatible with Ollama and `llama.cpp`.
-
-Supporting helpers live under `src/mem0ry/utils` and the CLI entry point is `src/mem0ry/cli/main.py`.
+1. **Parser** — `src/mem0ry/parsers/openai.py` walks the OpenAI `mapping` tree, filters `user`/`assistant` turns.
+2. **Memory extraction** — `src/mem0ry/kvcache/extract.py` sends each conversation to Ollama and extracts factual memories.
+3. **KV cache build** — `src/mem0ry/kvcache/model.py` processes the memories through the model and saves the KV cache.
+4. **Chat** — `src/mem0ry/kvcache/model.py` loads the cache and generates responses.
 
 ## Setup
 
 ```bash
-# Initialize the uv project & install dependencies
-uv init --name myMem0ry --package
-uv add unsloth unsloth_zoo torch transformers trl peft datasets typer pydantic
-uv add --dev pytest ruff
+# Install dependencies
+uv sync
+
+# Install model in Ollama
+ollama pull unsloth/Qwen3.5-0.8B
 ```
 
 ## Commands
 
 ```bash
-mymem0ry build --source data/openai/export --output data/processed
-mymem0ry train --dataset data/processed/train.jsonl --output output/memory_model
-mymem0ry export --model output/memory_model/memory_model_lora --output output/memory_model
-ollama create qwen3-memory -f output/memory_model_gguf/Modelfile
-mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
+# 1. Parse conversations and extract memories via Ollama
+mymem0ry build --source data/openai/export --output data/memories
+
+# 2. Build KV cache from memories (run once, or when memories change)
+mymem0ry build-cache --memories data/memories/memories.txt
+
+# 3. Chat with your memories
+mymem0ry chat "Qual é o meu nome?"
+mymem0ry chat "O que eu estava estudando?"
+
+# Interactive mode
+mymem0ry interactive
 ```
 
-# Build normal (incremental - só processa conversas novas)
-mymem0ry build --source data/openai/export --output data/processed
-# Forçar regeneração de todo Q&A
-mymem0ry build --source data/openai/export --output data/processed --force-qa
-# Regenerar Q&A de conversas específicas
-mymem0ry build --source data/openai/export --output data/processed --regen-qa abc-123 def-456
-# Build sem Q&A (só chunks de conversa com datas)
-mymem0ry build --source data/openai/export --output data/processed --no-qa
-# Extrair Q&A diretamente dos turnos da conversa (sem modelo)
-mymem0ry build --source data/openai/export --output data/processed --qa-backend turns
+## Environment Variables
 
-Typer-powered CLI (installed as `mymem0ry`) mirrors the same functionality plus `stats` and `pipeline` shortcuts:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MEMORY_MODEL` | Model for extraction + KV cache | `unsloth/Qwen3.5-0.8B` |
+| `OLLAMA_BASE_URL` | Ollama API endpoint | `http://localhost:11434/v1` |
+| `KVCACHE_PATH` | KV cache file path | `memoria.kvcache` |
+| `KVCACHE_META_PATH` | Metadata JSON path | `memoria.meta.json` |
+| `KVCACHE_MAX_TOKENS` | Max tokens for memories | `1024` |
+| `EXTRACTION_MAX_TOKENS` | Max tokens for extraction | `2048` |
+| `EXTRACTION_TEMPERATURE` | Temperature for extraction | `0.3` |
+| `CHAT_MAX_NEW_TOKENS` | Max new tokens in chat | `256` |
+
+## Example
 
 ```
-mymem0ry build --source data/openai/export --output data/processed
-mymem0ry stats --target data/processed
-mymem0ry train --dataset data/processed/train.jsonl --output output/memory_model
-mymem0ry export --model output/memory_model/memory_model_lora --output output/memory_model
-mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
-mymem0ry pipeline --source data/openai/export --processed data/processed --model-output output/memory_model
+$ mymem0ry chat "Qual é o nome do meu cachorro?"
+Seu cachorro se chama Rex, um golden retriever de 3 anos.
+
+$ mymem0ry chat "Onde eu moro?"
+Você mora em São Paulo, no bairro Vila Madalena.
 ```
 
-### QA Backends (`--qa-backend`)
+## Why KV Cache instead of fine-tuning
 
-The `build` command supports multiple backends for generating Q&A training examples:
+Fine-tuning modifies model weights to "memorize" information —
+in a small model this causes instability and catastrophic forgetting.
 
-| Backend | Description | Requirements |
-|---------|-------------|--------------|
-| `turns` | Extrai pares pergunta/resposta diretamente dos turnos `user` → `assistant` das conversas. Sem chamadas de API, sem custo, instantâneo. | Nenhum |
-| `api` | Gera Q&A sintético usando a API Z AI (padrão). | `ZAI_API_KEY` no `.env` |
-| `ollama` | Gera Q&A sintético via servidor Ollama local. | Ollama rodando localmente com modelo instalado |
-| `llamacpp` | Gera Q&A sintético via llama.cpp direto (GPU/CPU). | `--llamacpp-model` ou `LLAMACPP_MODEL_PATH` |
-
-Exemplos:
-
-```bash
-# Turns (sem modelo, extrai dos turnos)
-mymem0ry build --qa-backend turns --source data/openai/export --output data/processed
-
-# API Z AI (padrão)
-mymem0ry build --qa-backend api --qa-model glm-4.7-flashx --source data/openai/export --output data/processed
-
-# Ollama local
-mymem0ry build --qa-backend ollama --ollama-model qwen3:0.6b --source data/openai/export --output data/processed
-
-# llama.cpp direto
-mymem0ry build --qa-backend llamacpp --llamacpp-model models/qwen3-0.6b.gguf --source data/openai/export --output data/processed
-```
-
-### Outras opções do build
-
-| Flag | Descrição | Padrão |
-|------|-----------|--------|
-| `--max-seq-length` | Comprimento máximo de sequência por chunk | `2048` |
-| `--overlap-turns` | Turnos de sobreposição entre chunks | `2` |
-| `--min-turns` | Mínimo de turnos para manter um exemplo | `2` |
-| `--val-ratio` | Proporção do conjunto de validação | `0.05` |
-| `--qa-pairs` | Pares Q&A por conversa (backends api/ollama/llamacpp) | `4` |
-| `--qa-cache` | Caminho do cache Q&A (JSONL) | `data/qa_cache.jsonl` |
-| `--force-qa` | Força regeneração de todo o cache Q&A | `false` |
-| `--regen-qa` | Regenera Q&A apenas para IDs específicos | — |
-| `--no-qa` | Desabilita geração de Q&A (só chunks) | `false` |
-| `--no-temporal` | Desabilita enriquecimento temporal nos prompts | `false` |
-
-The `export` command now defaults to **F16** (no quantization loss). Add `--quantization q4_k_m` if you want to quantize during export.
-
-## Ollama deployment
-
-### Test with F16 (recommended first step)
-
-`mymem0ry export` produces an F16 GGUF by default, preserving full model quality. After exporting, rebuild the Ollama model:
-
-```bash
-ollama build -f output/memory_model_gguf/Modelfile qwen3-0.6-memory output/memory_model_gguf
-```
-
-Then test it:
-
-```bash
-ollama run qwen3-0.6-memory:latest
-```
-
-### Optional: Quantize for production
-
-If you're happy with the model and want a smaller, faster version, quantize the F16 GGUF:
-
-```bash
-mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
-```
-
-Then rebuild the Ollama model with the quantized GGUF:
-
-```bash
-ollama build -f output/memory_model_gguf/Modelfile qwen3-0.6-memory output/memory_model_gguf
-ollama run qwen3-0.6-memory:latest
-```
-
-The export command also supports `--quantization q4_k_m` to skip the F16 step entirely, and `--no-patch-modelfile` if you need to skip the Modelfile rewrite.
+The KV cache doesn't touch the weights. It injects the already-processed
+representation of memories directly into the attention layers, as if the model
+had just read the text. It's more faithful and more predictable.
 
 ## Outputs
 
-- `data/processed/train.jsonl`, `data/processed/val.jsonl`, `data/processed/stats.json`
-- `output/memory_model/memory_model_lora` (LoRA weights)
-- `output/memory_model/unsloth.F16.gguf` (GGUF export, default)
-- `output/memory_model/unsloth.Q4_K_M.gguf` (if quantized via `--quantization` or `mymem0ry quantize`)
+- `data/memories/memories.txt` — extracted memories
+- `memoria.kvcache` — serialized KV cache (~50-200 MB)
+- `memoria.meta.json` — cache metadata
 
 ## Testing & Formatting
 
