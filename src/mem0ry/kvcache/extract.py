@@ -1,4 +1,4 @@
-"""Extract memories from conversations using Ollama API."""
+"""Extract memories from conversations using Ollama or OpenAI API."""
 
 from __future__ import annotations
 
@@ -36,11 +36,15 @@ Extract all factual memories about the user from this conversation:
 List each memory as a concise bullet point:"""
 
 
-def create_ollama_client(config: MemoryConfig | None = None) -> OpenAI:
-    config = config or MemoryConfig()
-    return OpenAI(
-        api_key="ollama",
-        base_url=config.ollama_base_url,
+def _create_client(config: MemoryConfig) -> tuple[OpenAI, str]:
+    if config.extraction_backend == "openai":
+        kwargs: dict = {"api_key": config.openai_api_key}
+        if config.openai_base_url:
+            kwargs["base_url"] = config.openai_base_url
+        return OpenAI(**kwargs), config.openai_model
+    return (
+        OpenAI(api_key="ollama", base_url=config.ollama_base_url),
+        config.ollama_model,
     )
 
 
@@ -59,15 +63,24 @@ def extract_memories_from_conversation(
 
     prompt = _EXTRACTION_USER_TEMPLATE.format(conversation_text=conversation_text)
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
+    kwargs: dict = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": _EXTRACTION_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+        "temperature": temperature,
+    }
+    try:
+        kwargs["max_tokens"] = max_tokens
+        response = client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        if "max_tokens" in str(exc) and "max_completion_tokens" in str(exc):
+            kwargs.pop("max_tokens", None)
+            kwargs["max_completion_tokens"] = max_tokens
+            response = client.chat.completions.create(**kwargs)
+        else:
+            raise
     return response.choices[0].message.content or ""
 
 
@@ -76,8 +89,7 @@ def extract_memories(
     config: MemoryConfig | None = None,
 ) -> str:
     config = config or MemoryConfig()
-    client = create_ollama_client(config)
-    model = config.ollama_model
+    client, model = _create_client(config)
 
     all_memories: list[str] = []
     total = len(conversations)

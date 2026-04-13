@@ -19,10 +19,20 @@ app = typer.Typer(help="myMem0ry — KV Cache personal memory system")
 def build(
     source: Path = Path("data/openai/export"),
     output: Path = Path("data/memories"),
+    backend: str = "",
+    model: str = "",
 ) -> None:
-    """Parse conversations and extract memories via Ollama."""
+    """Parse conversations and extract memories."""
 
     config = MemoryConfig()
+    if backend:
+        config.extraction_backend = backend
+    if model:
+        if config.extraction_backend == "openai":
+            config.openai_model = model
+        else:
+            config.ollama_model = model
+
     parser = OpenAIParser()
 
     typer.echo(f"Parsing OpenAI exports in {source}...")

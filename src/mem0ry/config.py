@@ -13,11 +13,15 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 @dataclass
 class MemoryConfig:
+    extraction_backend: str = os.environ.get("EXTRACTION_BACKEND", "ollama")
     ollama_model: str = os.environ.get("OLLAMA_MODEL", "qwen3.5:0.8b")
-    kvcache_model: str = os.environ.get("KVCACHE_MODEL", "Qwen/Qwen3.5-0.8B")
     ollama_base_url: str = os.environ.get(
         "OLLAMA_BASE_URL", "http://localhost:11434/v1"
     )
+    openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
+    openai_base_url: str = os.environ.get("OPENAI_BASE_URL", "")
+    openai_model: str = os.environ.get("OPENAI_MODEL", "gpt-5.4-nano")
+    kvcache_model: str = os.environ.get("KVCACHE_MODEL", "Qwen/Qwen3.5-0.8B")
     kvcache_path: str = os.environ.get("KVCACHE_PATH", "memoria.kvcache")
     kvcache_meta_path: str = os.environ.get("KVCACHE_META_PATH", "memoria.meta.json")
     kvcache_max_tokens: int = int(os.environ.get("KVCACHE_MAX_TOKENS", "1024"))
