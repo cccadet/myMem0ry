@@ -37,3 +37,5 @@ class MemoryConfig:
         "those conversations. Be specific and reference details when possible."
     )
     default_user_id: str = os.environ.get("DEFAULT_USER_ID", "me")
+    conversations_dir: str = os.environ.get("CONVERSATIONS_DIR", "data/conversations")
+    search_top_k: int = int(os.environ.get("SEARCH_TOP_K", "3"))

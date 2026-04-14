@@ -7,6 +7,8 @@ from pathlib import Path
 import typer
 
 from ..config import MemoryConfig
+from ..conversations.ask import ask as conversations_ask
+from ..conversations.writer import split_conversations
 from ..kvcache.extract import extract_memories
 from ..kvcache.model import build_cache, chat, load_model
 from ..parsers.openai import OpenAIParser
@@ -150,3 +152,53 @@ def dataset(
     )
     typer.echo("Dataset built")
     typer.echo(json.dumps(result["stats"], indent=2))
+
+
+@app.command()
+def split(
+    source: Path = Path("data/openai/export"),
+    output: Path = Path("data/conversations"),
+) -> None:
+    """Split conversations into individual .md files organized by date."""
+
+    if not source.exists():
+        typer.echo(f"Source directory not found: {source}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Splitting conversations from {source}...")
+    stats = split_conversations(source, output)
+
+    typer.echo(f"Done: {stats['written']} files written, {stats['skipped']} skipped")
+
+
+@app.command(name="ask")
+def ask_cmd(
+    question: str = typer.Argument(..., help="Question to ask"),
+    top_k: int = 0,
+    conversations: Path = Path(""),
+    model_name: str = "",
+) -> None:
+    """Search conversations and answer using dynamic KV cache."""
+
+    config = MemoryConfig()
+    if model_name:
+        config.kvcache_model = model_name
+    if top_k > 0:
+        config.search_top_k = top_k
+    conv_dir = conversations if str(conversations) not in ("", ".") else Path(config.conversations_dir)
+
+    if not conv_dir.exists():
+        typer.echo(
+            f"Conversations directory not found: {conv_dir}", err=True
+        )
+        typer.echo("Run 'mymem0ry split' first.", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Searching in {conv_dir}...")
+    answer = conversations_ask(
+        question,
+        conversations_dir=conv_dir,
+        top_k=config.search_top_k,
+        config=config,
+    )
+    typer.echo(f"\n{answer}")

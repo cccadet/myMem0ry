@@ -1,0 +1,5 @@
+{
+  "model": "Qwen/Qwen3.5-0.8B",
+  "n_tokens": 1024,
+  "prompt_preview": "<|im_start|>system\n As informações abaixo são memórias do usuário. Use-as para responder perguntas sobre ele.\n\n# Filtrar e Calcular Similaridades\n> id: 699e62b4-fb28-8325-"
+}
