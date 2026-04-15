@@ -8,6 +8,10 @@ import typer
 
 from ..config import MemoryConfig
 from ..conversations.ask import ask as conversations_ask
+from ..conversations.ask import load_ask_model
+from ..conversations.benchmark import format_table, run_benchmark
+from ..conversations.search_bm25 import build_bm25_index
+from ..conversations.search_fts import build_fts_index
 from ..conversations.writer import split_conversations
 from ..kvcache.extract import extract_memories
 from ..kvcache.model import build_cache, chat, load_model
@@ -171,12 +175,54 @@ def split(
     typer.echo(f"Done: {stats['written']} files written, {stats['skipped']} skipped")
 
 
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Search query"),
+    backend: str = typer.Option("ripgrep", "--backend", "-b", help="Backend: ripgrep, bm25, fts5"),
+    top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results"),
+    conversations: Path = Path(""),
+) -> None:
+    """Search conversations without model inference."""
+
+    from ..conversations.search import search as rg_search
+    from ..conversations.search_bm25 import search_bm25
+    from ..conversations.search_fts import search_fts
+
+    config = MemoryConfig()
+    conv_dir = conversations if str(conversations) not in ("", ".") else Path(config.conversations_dir)
+
+    if not conv_dir.exists():
+        typer.echo(f"Conversations directory not found: {conv_dir}", err=True)
+        raise typer.Exit(code=1)
+
+    backends = {"ripgrep": rg_search, "bm25": search_bm25, "fts5": search_fts}
+    search_fn = backends.get(backend)
+    if not search_fn:
+        typer.echo(f"Unknown backend: {backend} (use: ripgrep, bm25, fts5)", err=True)
+        raise typer.Exit(code=1)
+
+    import time
+    t0 = time.perf_counter()
+    paths = search_fn(query, conv_dir, top_k=top_k)
+    elapsed = (time.perf_counter() - t0) * 1000
+
+    if not paths:
+        typer.echo("Nenhum resultado encontrado.")
+        return
+
+    typer.echo(f"[{backend}] {len(paths)} resultados em {elapsed:.1f}ms\n")
+    for p in paths:
+        typer.echo(f"  {p.relative_to(conv_dir)}")
+
+
 @app.command(name="ask")
 def ask_cmd(
     question: str = typer.Argument(..., help="Question to ask"),
     top_k: int = 0,
     conversations: Path = Path(""),
     model_name: str = "",
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive mode — keep model loaded"),
+    backend: str = typer.Option("", "--backend", "-b", help="Search backend: ripgrep, bm25, fts5"),
 ) -> None:
     """Search conversations and answer using dynamic KV cache."""
 
@@ -185,6 +231,8 @@ def ask_cmd(
         config.kvcache_model = model_name
     if top_k > 0:
         config.search_top_k = top_k
+    if backend:
+        config.search_backend = backend
     conv_dir = conversations if str(conversations) not in ("", ".") else Path(config.conversations_dir)
 
     if not conv_dir.exists():
@@ -194,11 +242,81 @@ def ask_cmd(
         typer.echo("Run 'mymem0ry split' first.", err=True)
         raise typer.Exit(code=1)
 
-    typer.echo(f"Searching in {conv_dir}...")
-    answer = conversations_ask(
-        question,
-        conversations_dir=conv_dir,
-        top_k=config.search_top_k,
-        config=config,
-    )
-    typer.echo(f"\n{answer}")
+    if interactive:
+        model_obj, tokenizer, device = load_ask_model(config)
+        typer.echo("[memoria] Modelo carregado. Digite 'sair' para encerrar.\n")
+        while True:
+            try:
+                q = input("Você: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if q.lower() in ("sair", "exit", "quit"):
+                break
+            if not q:
+                continue
+            answer = conversations_ask(
+                q,
+                conversations_dir=conv_dir,
+                top_k=config.search_top_k,
+                backend=config.search_backend,
+                config=config,
+                model=model_obj,
+                tokenizer=tokenizer,
+                device=device,
+            )
+            typer.echo(f"\n{answer}\n")
+    else:
+        typer.echo(f"Searching in {conv_dir}...")
+        answer = conversations_ask(
+            question,
+            conversations_dir=conv_dir,
+            top_k=config.search_top_k,
+            backend=config.search_backend,
+            config=config,
+        )
+        typer.echo(f"\n{answer}")
+
+
+@app.command()
+def benchmark(
+    question: str = typer.Argument(..., help="Query to benchmark"),
+    top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results per backend"),
+    conversations: Path = Path(""),
+) -> None:
+    """Compare search backends side by side."""
+
+    config = MemoryConfig()
+    conv_dir = conversations if str(conversations) not in ("", ".") else Path(config.conversations_dir)
+
+    if not conv_dir.exists():
+        typer.echo(f"Conversations directory not found: {conv_dir}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Query: {question}\n")
+    results = run_benchmark(question, conv_dir, top_k=top_k)
+    typer.echo(format_table(results))
+
+
+@app.command()
+def index(
+    backend: str = typer.Option("", "--backend", "-b", help="Backend to index: bm25, fts5 (empty = all)"),
+    conversations: Path = Path(""),
+) -> None:
+    """Build search indexes for BM25 and/or FTS5 backends."""
+
+    config = MemoryConfig()
+    conv_dir = conversations if str(conversations) not in ("", ".") else Path(config.conversations_dir)
+
+    if not conv_dir.exists():
+        typer.echo(f"Conversations directory not found: {conv_dir}", err=True)
+        raise typer.Exit(code=1)
+
+    backends = [backend] if backend else ["bm25", "fts5"]
+
+    for b in backends:
+        if b == "bm25":
+            build_bm25_index(conv_dir)
+        elif b == "fts5":
+            build_fts_index(conv_dir)
+        else:
+            typer.echo(f"Unknown backend: {b} (use: bm25, fts5)", err=True)

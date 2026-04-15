@@ -39,3 +39,4 @@ class MemoryConfig:
     default_user_id: str = os.environ.get("DEFAULT_USER_ID", "me")
     conversations_dir: str = os.environ.get("CONVERSATIONS_DIR", "data/conversations")
     search_top_k: int = int(os.environ.get("SEARCH_TOP_K", "3"))
+    search_backend: str = os.environ.get("SEARCH_BACKEND", "ripgrep")
