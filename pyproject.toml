@@ -1,7 +1,7 @@
 [project]
 name = "mymem0ry"
 version = "0.2.0"
-description = "Personal memory system using KV Cache — no fine-tuning, no vector store"
+description = "Personal memory search system with semantic query expansion"
 readme = "README.md"
 authors = [
     { name = "cccadet", email = "perestra.ccds@gmail.com" }

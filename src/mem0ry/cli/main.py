@@ -1,4 +1,4 @@
-"""Typer CLI for the myMem0ry KV cache pipeline."""
+"""Typer CLI for myMem0ry — personal memory search system."""
 
 from __future__ import annotations
 
@@ -7,128 +7,14 @@ from pathlib import Path
 import typer
 
 from ..config import MemoryConfig
-from ..conversations.ask import ask as conversations_ask
-from ..conversations.ask import load_ask_model
 from ..conversations.benchmark import format_table, run_benchmark
 from ..conversations.search_bm25 import build_bm25_index
 from ..conversations.search_fts import build_fts_index
 from ..conversations.writer import split_conversations
-from ..kvcache.extract import extract_memories
-from ..kvcache.model import build_cache, chat, load_model
 from ..parsers.openai import OpenAIParser
 from ..pipeline.dataset import build_dataset_from_openai
 
-app = typer.Typer(help="myMem0ry — KV Cache personal memory system")
-
-
-@app.command()
-def build(
-    source: Path = Path("data/openai/export"),
-    output: Path = Path("data/memories"),
-    backend: str = "",
-    model: str = "",
-) -> None:
-    """Parse conversations and extract memories."""
-
-    config = MemoryConfig()
-    if backend:
-        config.extraction_backend = backend
-    if model:
-        if config.extraction_backend == "openai":
-            config.openai_model = model
-        else:
-            config.ollama_model = model
-
-    parser = OpenAIParser()
-
-    typer.echo(f"Parsing OpenAI exports in {source}...")
-    conversations = parser.parse_directory(source)
-    typer.echo(f"Parsed {len(conversations)} conversations")
-
-    if not conversations:
-        typer.echo("No conversations found.", err=True)
-        raise typer.Exit(code=1)
-
-    typer.echo("Extracting memories...")
-    memories_text = extract_memories(conversations, config=config)
-
-    output.mkdir(parents=True, exist_ok=True)
-    memories_path = output / "memories.txt"
-    memories_path.write_text(memories_text, encoding="utf-8")
-    typer.echo(f"Memories saved to {memories_path}")
-
-
-@app.command(name="build-cache")
-def build_cache_cmd(
-    memories: Path = Path("data/memories/memories.txt"),
-    model_name: str = "",
-    max_tokens: int = 0,
-) -> None:
-    """Build KV cache from extracted memories (runs once)."""
-
-    if not memories.exists():
-        typer.echo(f"Memories file not found: {memories}", err=True)
-        typer.echo("Run 'mymem0ry build' first.", err=True)
-        raise typer.Exit(code=1)
-
-    config = MemoryConfig()
-    if model_name:
-        config.kvcache_model = model_name
-    if max_tokens > 0:
-        config.kvcache_max_tokens = max_tokens
-
-    memories_text = memories.read_text(encoding="utf-8")
-    if not memories_text.strip():
-        typer.echo("Memories file is empty.", err=True)
-        raise typer.Exit(code=1)
-
-    model_obj, tokenizer, _, _ = load_model(config)
-    n_tokens = build_cache(
-        memories_text, config=config, model=model_obj, tokenizer=tokenizer
-    )
-    typer.echo(f"KV cache built with {n_tokens} tokens")
-
-
-@app.command(name="chat")
-def chat_cmd(
-    question: str = typer.Argument(..., help="Question to ask"),
-    model_name: str = "",
-) -> None:
-    """Ask a question using the KV cache."""
-
-    config = MemoryConfig()
-    if model_name:
-        config.kvcache_model = model_name
-
-    model_obj, tokenizer, _, _ = load_model(config)
-    answer = chat(question, config=config, model=model_obj, tokenizer=tokenizer)
-    typer.echo(f"\n{answer}")
-
-
-@app.command()
-def interactive(
-    model_name: str = "",
-) -> None:
-    """Interactive chat mode using KV cache."""
-
-    config = MemoryConfig()
-    if model_name:
-        config.kvcache_model = model_name
-
-    model_obj, tokenizer, _, _ = load_model(config)
-
-    typer.echo("[memoria] Modo interativo. Digite 'sair' para encerrar.\n")
-    while True:
-        try:
-            q = input("Você: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            break
-        if q.lower() in ("sair", "exit", "quit"):
-            break
-        if not q:
-            continue
-        answer = chat(q, config=config, model=model_obj, tokenizer=tokenizer)
-        typer.echo(f"Modelo: {answer}\n")
+app = typer.Typer(help="myMem0ry — personal memory search system")
 
 
 @app.command()
@@ -180,6 +66,7 @@ def search(
     query: str = typer.Argument(..., help="Search query"),
     backend: str = typer.Option("ripgrep", "--backend", "-b", help="Backend: ripgrep, bm25, fts5"),
     top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results"),
+    expand: bool = typer.Option(False, "--expand", "-e", help="Expand query with semantically similar tokens"),
     conversations: Path = Path(""),
 ) -> None:
     """Search conversations without model inference."""
@@ -195,6 +82,16 @@ def search(
         typer.echo(f"Conversations directory not found: {conv_dir}", err=True)
         raise typer.Exit(code=1)
 
+    # Optionally expand query with semantically similar tokens
+    effective_query = query
+    if expand:
+        from ..conversations.query_expansion import ConceptSearch, expand_query
+
+        typer.echo(f"[expand] Carregando modelo {config.model_name}...")
+        cs = ConceptSearch(model_name=config.model_name)
+        effective_query = expand_query(query, cs, top_k=config.expand_top_k)
+        typer.echo(f"[expand] Query expandida: {effective_query}")
+
     backends = {"ripgrep": rg_search, "bm25": search_bm25, "fts5": search_fts}
     search_fn = backends.get(backend)
     if not search_fn:
@@ -203,7 +100,7 @@ def search(
 
     import time
     t0 = time.perf_counter()
-    paths = search_fn(query, conv_dir, top_k=top_k)
+    paths = search_fn(effective_query, conv_dir, top_k=top_k)
     elapsed = (time.perf_counter() - t0) * 1000
 
     if not paths:
@@ -215,72 +112,11 @@ def search(
         typer.echo(f"  {p.relative_to(conv_dir)}")
 
 
-@app.command(name="ask")
-def ask_cmd(
-    question: str = typer.Argument(..., help="Question to ask"),
-    top_k: int = 0,
-    conversations: Path = Path(""),
-    model_name: str = "",
-    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive mode — keep model loaded"),
-    backend: str = typer.Option("", "--backend", "-b", help="Search backend: ripgrep, bm25, fts5"),
-) -> None:
-    """Search conversations and answer using dynamic KV cache."""
-
-    config = MemoryConfig()
-    if model_name:
-        config.kvcache_model = model_name
-    if top_k > 0:
-        config.search_top_k = top_k
-    if backend:
-        config.search_backend = backend
-    conv_dir = conversations if str(conversations) not in ("", ".") else Path(config.conversations_dir)
-
-    if not conv_dir.exists():
-        typer.echo(
-            f"Conversations directory not found: {conv_dir}", err=True
-        )
-        typer.echo("Run 'mymem0ry split' first.", err=True)
-        raise typer.Exit(code=1)
-
-    if interactive:
-        model_obj, tokenizer, device = load_ask_model(config)
-        typer.echo("[memoria] Modelo carregado. Digite 'sair' para encerrar.\n")
-        while True:
-            try:
-                q = input("Você: ").strip()
-            except (EOFError, KeyboardInterrupt):
-                break
-            if q.lower() in ("sair", "exit", "quit"):
-                break
-            if not q:
-                continue
-            answer = conversations_ask(
-                q,
-                conversations_dir=conv_dir,
-                top_k=config.search_top_k,
-                backend=config.search_backend,
-                config=config,
-                model=model_obj,
-                tokenizer=tokenizer,
-                device=device,
-            )
-            typer.echo(f"\n{answer}\n")
-    else:
-        typer.echo(f"Searching in {conv_dir}...")
-        answer = conversations_ask(
-            question,
-            conversations_dir=conv_dir,
-            top_k=config.search_top_k,
-            backend=config.search_backend,
-            config=config,
-        )
-        typer.echo(f"\n{answer}")
-
-
 @app.command()
 def benchmark(
     question: str = typer.Argument(..., help="Query to benchmark"),
     top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results per backend"),
+    expand: bool = typer.Option(False, "--expand", "-e", help="Expand query with semantically similar tokens"),
     conversations: Path = Path(""),
 ) -> None:
     """Compare search backends side by side."""
@@ -292,8 +128,18 @@ def benchmark(
         typer.echo(f"Conversations directory not found: {conv_dir}", err=True)
         raise typer.Exit(code=1)
 
-    typer.echo(f"Query: {question}\n")
-    results = run_benchmark(question, conv_dir, top_k=top_k)
+    # Optionally expand query
+    effective_query = question
+    if expand:
+        from ..conversations.query_expansion import ConceptSearch, expand_query
+
+        typer.echo(f"[expand] Carregando modelo {config.model_name}...")
+        cs = ConceptSearch(model_name=config.model_name)
+        effective_query = expand_query(question, cs, top_k=config.expand_top_k)
+        typer.echo(f"[expand] Query expandida: {effective_query}\n")
+
+    typer.echo(f"Query: {effective_query}\n")
+    results = run_benchmark(effective_query, conv_dir, top_k=top_k)
     typer.echo(format_table(results))
 
 

@@ -1,56 +1,57 @@
 # CLAUDE.md — myMem0ry
 
-Sistema de memória pessoal usando KV Cache — sem fine-tuning, sem vector store.
+Sistema de busca pessoal em conversas com query expansion semântica.
 
 ## Stack
 
 - Python 3.13, uv, Typer CLI
-- transformers + torch (inferência GPU/CPU)
-- OpenAI SDK (extração de memórias via Ollama ou OpenAI API)
-- ripgrep (busca em conversas)
+- transformers + torch (embeddings para query expansion)
+- ripgrep, rank-bm25, SQLite FTS5 (busca em conversas)
 
 ## Estrutura
 
 ```
 src/mem0ry/
-├── cli/main.py          # Typer CLI — todos os comandos
-├── config.py            # MemoryConfig dataclass
+├── cli/main.py              # Typer CLI — todos os comandos
+├── config.py                # MemoryConfig dataclass
 ├── parsers/
-│   ├── base.py          # ParsedConversation, ParsedMessage, BaseParser
-│   └── openai.py        # OpenAIParser — lê exports JSON do ChatGPT
+│   ├── base.py              # ParsedConversation, ParsedMessage, BaseParser
+│   └── openai.py            # OpenAIParser — lê exports JSON do ChatGPT
 ├── conversations/
-│   ├── writer.py        # split_conversations() — export → .md por data
-│   ├── search.py        # search() — busca via ripgrep
-│   └── ask.py           # ask() — busca + inferência direta
-├── kvcache/
-│   ├── cache.py         # save_kv / load_kv — serialização do cache
-│   ├── extract.py       # extract_memories() — LLM extrai fatos das conversas
-│   └── model.py         # load_model, build_cache, chat
-├── dataset/             # Pipeline legado de fine-tuning (builder, temporal, splitter, etc.)
-└── pipeline/dataset.py  # Dataset JSONL legado
+│   ├── writer.py            # split_conversations() — export → .md por data
+│   ├── search.py            # search() — busca via ripgrep
+│   ├── search_bm25.py       # search_bm25() — busca via BM25 (rank-bm25)
+│   ├── search_fts.py        # search_fts() — busca via SQLite FTS5
+│   ├── query_expansion.py   # ConceptSearch + expand_query — expansão semântica via embeddings
+│   └── benchmark.py         # run_benchmark() — compara backends
+├── dataset/                 # Pipeline legado de fine-tuning (builder, temporal, splitter, etc.)
+└── pipeline/dataset.py      # Dataset JSONL legado
 ```
 
 ## Comandos CLI
 
 ```bash
-# Pipeline de memórias (fluxo original)
-mymem0ry build                    # Parse + extrai memórias → memories.txt
-mymem0ry build-cache              # memories.txt → KV cache serializado
-mymem0ry chat "pergunta"          # Chat usando KV cache pré-construído
-mymem0ry interactive              # Modo interativo
-
-# Pipeline de conversas (fluxo novo)
-mymem0ry split                    # Export OpenAI → .md por data em data/conversations/
-mymem0ry ask "qdrant"             # Busca ripgrep → contexto → inferência direta
+# Pipeline de conversas
+mymem0ry split                        # Export OpenAI → .md por data em data/conversations/
+mymem0ry search "qdrant"              # Busca em conversas (ripgrep, bm25 ou fts5)
+mymem0ry search "qdrant" --expand     # Busca com expansão semântica da query
+mymem0ry benchmark "python"           # Compara backends lado a lado
+mymem0ry benchmark "python" --expand  # Benchmark com query expansion
+mymem0ry index                        # Constrói índices BM25 e FTS5
+mymem0ry dataset                      # Build ChatML JSONL (legacy)
 ```
 
-## Fluxo `ask` (busca + resposta)
+## Query Expansion
 
-1. `ripgrep` busca a query nos arquivos `.md` de `data/conversations/YYYY-MM-DD/`
-2. Carrega conteúdo dos top-K arquivos (default 3, config `search_top_k`)
-3. Monta prompt ChatML com contexto + pergunta
-4. Inferência em único forward pass (sem cache serializado)
-5. Retorna resposta do modelo
+O flag `--expand` usa a embedding matrix de um modelo de linguagem para encontrar tokens semanticamente similares ao termo pesquisado. A query original é expandida com esses tokens antes de ser passada ao backend de busca escolhido.
+
+Fluxo:
+1. Tokeniza a query
+2. Computa embedding médio dos tokens
+3. Calcula cosine similarity com todos os tokens do vocabulário
+4. Seleciona os top-k tokens mais similares (filtrando stop words e duplicatas)
+5. Expande a query original com os termos encontrados
+6. Passa a query expandida ao backend de busca (ripgrep/bm25/fts5)
 
 ## Configuração
 
@@ -58,24 +59,21 @@ Variáveis de ambiente (ou `.env` na raiz do projeto):
 
 | Variável | Default | Uso |
 |---|---|---|
-| `EXTRACTION_BACKEND` | `ollama` | `ollama` ou `openai` |
-| `OLLAMA_MODEL` | `qwen3.5:0.8b` | Modelo para extração de memórias |
-| `KVCACHE_MODEL` | `Qwen/Qwen3.5-0.8B` | Modelo para inferência/cache |
-| `KVCACHE_MAX_TOKENS` | `1024` | Limite de tokens no cache/prompt |
+| `MODEL_NAME` | `Qwen/Qwen3.5-0.8B` | Modelo para query expansion |
+| `EXPAND_TOP_K` | `10` | Quantos tokens similares gerar |
 | `CONVERSATIONS_DIR` | `data/conversations` | Diretório das conversas em .md |
 | `SEARCH_TOP_K` | `3` | Quantos arquivos recuperar na busca |
+| `SEARCH_BACKEND` | `ripgrep` | Backend padrão: ripgrep, bm25, fts5 |
 
 ## Dados
 
 ```
 data/
 ├── openai/export/              # JSONs de export do ChatGPT (fonte original)
-├── conversations/YYYY-MM-DD/   # Conversas individuais em .md (gerado por split)
-└── memories/                   # memories.txt extraído (gerado por build)
+└── conversations/YYYY-MM-DD/   # Conversas individuais em .md (gerado por split)
 ```
 
 ## Notas técnicas
 
-- Qwen 3.5 usa arquitetura híbrida (linear + standard attention). O `build-cache` pré-computa cache serializado que funciona com modelos de attention padrão. Para Qwen 3.5, o comando `ask` faz inferência direta em vez de injetar cache pré-construído.
 - O parser `_merge_parts` no OpenAIParser retorna conteúdo bruto incluindo metadata de áudio. Conversas de texto são limpas; as de voz vêm com dicts JSON inline.
 - Os testes usam pytest. Linter: ruff.
