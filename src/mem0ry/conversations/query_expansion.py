@@ -111,11 +111,11 @@ class ConceptSearch:
         return self._similar_tokens_embedding(text, top_k)
 
     def similar_tokens_with_layers(
-        self, text: str, top_k: int = 10
+        self, text: str, top_k: int = 10, gate_k: int = 32, debug: bool = False,
     ) -> list[tuple[str, float, int]]:
         """Return tokens with layer information (FFN walk only)."""
         if self._ffn_cache is not None:
-            return self._ffn_cache.describe(text, top_k=top_k)
+            return self._ffn_cache.describe(text, top_k=top_k, gate_k=gate_k, debug=debug)
         # Fallback: no layer info
         return [(tok, sc, -1) for tok, sc in self._similar_tokens_embedding(text, top_k)]
 

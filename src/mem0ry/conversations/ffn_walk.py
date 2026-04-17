@@ -1,13 +1,14 @@
 """FFN walk — LARQL-inspired knowledge extraction from FFN layers.
 
-Extracts gate projections and pre-computes feature-to-token mappings from a
-model's feed-forward network layers.  At query time, performs gate KNN to find
-activated features and looks up the pre-computed related tokens.
+Extracts gate/up projections and pre-computes feature-to-token mappings from a
+model's feed-forward network layers.  At query time, computes GeGLU activations
+(silu(gate) * up) to find activated features and looks up pre-computed tokens.
 
 Cache layout (data/.cache/ffn/<model>/):
     gate_projs.pt        {layer_idx: Tensor(intermediate, hidden)}  (f16)
+    up_projs.pt          {layer_idx: Tensor(intermediate, hidden)}  (f16)
     feature_tokens.pt    {layer_idx: (token_ids, scores)}           (int32 + f16)
-    config.json          {model_name, layers, hidden_size, intermediate_size, top_n}
+    config.json          {model_name, layers, hidden_size, top_n, embed_scale}
 """
 
 from __future__ import annotations
@@ -68,18 +69,20 @@ def build_ffn_cache(
 
     hidden_size = embed_tokens.weight.shape[1]
     num_layers_total = len(layers)
-    intermediate_size = layers[0].mlp.gate_proj.weight.shape[0]
 
     cache = _cache_dir(model_name)
     cache.mkdir(parents=True, exist_ok=True)
 
     # Save config
+    # Detect embed_scale — Gemma scales embeddings by sqrt(hidden_size)
+    embed_scale = float(hidden_size**0.5)
+
     config = {
         "model_name": model_name,
         "layers": list(layer_range),
         "hidden_size": hidden_size,
-        "intermediate_size": intermediate_size,
         "top_n": top_n,
+        "embed_scale": embed_scale,
     }
     (cache / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
@@ -92,6 +95,7 @@ def build_ffn_cache(
 
     # Process each layer
     gate_projs: dict[int, torch.Tensor] = {}
+    up_projs: dict[int, torch.Tensor] = {}
     feature_tokens: dict[int, tuple[torch.Tensor, torch.Tensor]] = {}
 
     lm_head_f = lm_head.weight.detach().float()
@@ -104,18 +108,22 @@ def build_ffn_cache(
         # gate_proj: (intermediate, hidden) — save in f16
         gate_w = mlp.gate_proj.weight.detach().to(torch.float16)
         gate_projs[li] = gate_w
+        layer_intermediate = gate_w.shape[0]
+
+        # up_proj: (intermediate, hidden) — save in f16 (needed for GeGLU at query time)
+        up_w = mlp.up_proj.weight.detach().to(torch.float16)
+        up_projs[li] = up_w
 
         # down_proj: (hidden, intermediate)
         down_w = mlp.down_proj.weight.detach().float()  # (hidden, intermediate)
 
         # Pre-compute lm_head @ down_proj in chunks along the intermediate dim
-        # Full matrix would be (262K, 10240) = ~10 GB f32, chunk to keep bounded
         feat_chunk = 2048
-        top_ids = torch.zeros(top_n, intermediate_size, dtype=torch.long)
-        top_vals = torch.full((top_n, intermediate_size), float("-inf"))
+        top_ids = torch.zeros(top_n, layer_intermediate, dtype=torch.long)
+        top_vals = torch.full((top_n, layer_intermediate), float("-inf"))
 
-        for fs in range(0, intermediate_size, feat_chunk):
-            fe = min(fs + feat_chunk, intermediate_size)
+        for fs in range(0, layer_intermediate, feat_chunk):
+            fe = min(fs + feat_chunk, layer_intermediate)
             # lm_head: (vocab, hidden) @ down_w[:, fs:fe]: (hidden, chunk) → (vocab, chunk)
             logits_chunk = lm_head_f @ down_w[:, fs:fe]
             topv, topi = torch.topk(logits_chunk, top_n, dim=0)
@@ -130,9 +138,10 @@ def build_ffn_cache(
             top_vals.to(torch.float16),
         )
 
-        print(f"  Layer {li}: gate_proj saved, {top_n} top-tokens per feature computed")
+        print(f"  Layer {li}: gate/up_proj saved, {top_n} top-tokens per feature computed")
 
     torch.save(gate_projs, cache / "gate_projs.pt")
+    torch.save(up_projs, cache / "up_projs.pt")
     torch.save(feature_tokens, cache / "feature_tokens.pt")
 
     del model
@@ -180,9 +189,19 @@ class FFNCache:
 
         self._tokenizer = Tokenizer.from_file(str(cache / "tokenizer.json"))
         self._embeddings = torch.load(cache / "embeddings.pt", weights_only=True).float()
+
+        # Load embed_scale from config (Gemma uses sqrt(hidden_size))
+        cfg = json.loads((cache / "config.json").read_text(encoding="utf-8"))
+        self._embed_scale = cfg.get("embed_scale", 1.0)
         self._gate_projs: dict[int, torch.Tensor] = torch.load(
             cache / "gate_projs.pt", weights_only=True
         )
+        # Load up_proj weights for GeGLU activation (silu(gate) * up)
+        up_path = cache / "up_projs.pt"
+        if up_path.exists():
+            self._up_projs: dict[int, torch.Tensor] = torch.load(up_path, weights_only=True)
+        else:
+            self._up_projs = {}
         raw_ft = torch.load(cache / "feature_tokens.pt", weights_only=True)
         # Saved shape is (top_n, intermediate) — transpose to (intermediate, top_n)
         self._ft_ids: dict[int, torch.Tensor] = {k: v[0].T.long() for k, v in raw_ft.items()}
@@ -190,16 +209,32 @@ class FFNCache:
         self._layers = sorted(self._gate_projs.keys())
 
     def describe(
-        self, text: str, top_k: int = 10, gate_k: int = _GATE_TOP_K
+        self, text: str, top_k: int = 10, gate_k: int = _GATE_TOP_K,
+        debug: bool = False,
     ) -> list[tuple[str, float, int]]:
         """Find semantically related tokens via FFN walk.
 
         Returns list of (token, score, layer) sorted by score descending.
+
+        Uses GeGLU activation (silu(gate) * up) when up_proj is available,
+        which correctly amplifies semantic features over morphological ones.
+        Falls back to raw gate scores for old caches without up_proj.
         """
-        # Encode query → mean embedding
+        import torch.nn.functional as F
+
+        # Encode query → mean embedding, scaled to match model's hidden state space
+        # (Gemma scales embeddings by sqrt(hidden_size); other models may not)
         token_ids = self._tokenizer.encode(text).ids
         ids_tensor = torch.tensor(token_ids)
         query_vec = self._embeddings[ids_tensor].mean(dim=0)  # (hidden,)
+        query_vec = query_vec * self._embed_scale
+
+        has_up = bool(self._up_projs)
+
+        if debug:
+            print(f"  [debug] token_ids={token_ids}")
+            print(f"  [debug] query_vec norm={query_vec.norm().item():.4f}")
+            print(f"  [debug] using GeGLU: {has_up}")
 
         # Walk through cached layers
         candidates: list[tuple[str, float, int]] = []
@@ -209,11 +244,30 @@ class FFNCache:
             ft_ids = self._ft_ids[li]  # (intermediate, top_n)
             ft_scores = self._ft_scores[li]  # (intermediate, top_n)
 
-            # Gate KNN: which features activate for this query?
+            # Compute gate and (optionally) up projections
             gate_scores = gate_proj @ query_vec  # (intermediate,)
-            topk = torch.topk(gate_scores, min(gate_k, gate_scores.shape[0]))
 
-            for feat_idx, gate_score in zip(topk.indices, topk.values):
+            if has_up and li in self._up_projs:
+                up_proj = self._up_projs[li].float()  # (intermediate, hidden)
+                up_scores = up_proj @ query_vec  # (intermediate,)
+                # GeGLU activation: silu(gate) * up
+                activations = F.silu(gate_scores) * up_scores
+            else:
+                # Fallback: raw gate scores (no GeGLU)
+                activations = gate_scores
+
+            if debug:
+                top_debug = torch.topk(activations.abs(), min(5, activations.shape[0]))
+                print(f"  [debug] L{li} top-5 activations: {[f'{v.item():.4f}' for v in top_debug.values]}")
+                for fi in top_debug.indices[:3]:
+                    top_tok = self._tokenizer.decode([ft_ids[fi][0].item()]).strip()
+                    print(f"    feat {fi.item()}: act={activations[fi].item():.4f}, top_tok='{top_tok}' (score={ft_scores[fi][0].item():.2f})")
+
+            # Select top-K features by activation magnitude
+            topk = torch.topk(activations.abs(), min(gate_k, activations.shape[0]))
+
+            for feat_idx in topk.indices:
+                act_score = activations[feat_idx]
                 # Lookup pre-computed top tokens for this feature
                 ids = ft_ids[feat_idx]  # (top_n,)
                 scores = ft_scores[feat_idx]  # (top_n,)
@@ -224,8 +278,8 @@ class FFNCache:
                         continue
                     if token_str.lower() in _STOP_WORDS:
                         continue
-                    # Combine gate activation × feature token score
-                    combined = gate_score.item() * tok_score.item()
+                    # Combine activation × feature token logit contribution
+                    combined = act_score.item() * tok_score.item()
                     candidates.append((token_str, combined, li))
 
         if not candidates:

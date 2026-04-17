@@ -22,8 +22,12 @@ mymem0ry search "qdrant" --backend bm25
 mymem0ry search "qdrant" --backend fts5
 
 # Search with semantic query expansion
-mymem0ry warmup                       # pre-cache embeddings (run once)
+mymem0ry warmup                       # pre-cache FFN walk weights (run once)
 mymem0ry search "qdrant" --expand     # expands query with similar tokens
+
+# Show semantically related tokens
+mymem0ry expand "france"              # top-10 related tokens
+mymem0ry expand "france" -k 20 -g 256 # more results, more features
 
 # Compare backends side by side
 mymem0ry benchmark "python"
@@ -44,33 +48,42 @@ mymem0ry index --backend fts5
 
 ### Query expansion
 
-The `--expand` flag uses FFN walk (LARQL-inspired) to find semantically related concepts. Instead of surface-level embedding similarity, it performs gate KNN on the model's FFN layers to access the semantic knowledge stored in the weights.
+The `--expand` flag uses FFN walk (LARQL-inspired) to find semantically related concepts. Instead of surface-level embedding similarity, it computes GeGLU activations (`silu(gate) * up`) on the model's FFN layers to access the semantic knowledge stored in the weights.
 
 ```
-$ mymem0ry expand "France"
-Query: France
+$ mymem0ry expand "france"
+Query: france
 
-Token                             Score    Layer
+Token                             Score  Layer
 --------------------------------------------------
-Paris                           1436.90    L27
-French                            35.20    L24
-Europe                            14.40    L25
+paris                              0.63    L16
+french                             0.61    L16
+usa                                0.60    L22
+parisian                           0.58    L16
+america                            0.53    L22
 ```
 
 Run `mymem0ry warmup` once to build the FFN cache. You can control which layers are cached with `--layers`:
 
 ```bash
-mymem0ry warmup                     # default: layers 20-35
-mymem0ry warmup -l 18-32            # custom range
+mymem0ry warmup -l 14-27            # knowledge band (recommended for Gemma 3 4B)
 ```
 
-Middle layers hold semantic knowledge (concept relations). Final layers are in token-prediction mode and produce poor results. Rule of thumb:
+Middle layers hold semantic knowledge (concept relations). Final layers are in token-prediction mode and produce poor results. The knowledge band follows the LARQL segmentation: syntax → **knowledge** → output.
 
-| Model | Total layers | Recommended band |
-|-------|-------------|-----------------|
-| Gemma 4B | 42 | L18-L32 |
-| Gemma 2B | 26 | L12-L20 |
-| Qwen 0.5B | 24 | L10-L18 |
+| Model | Total layers | Knowledge band | hidden | intermediate | Cache size |
+|-------|-------------|----------------|--------|-------------|------------|
+| google/gemma-3-4b-it | 34 | L14-L27 | 2560 | 10240 | ~1.7 GB |
+| google/gemma-4-E4B | 42 | L18-L32 | 2560 | 10240 | ~1.7 GB |
+| Qwen/Qwen3.5-0.8B | 24 | L10-L18 | 896 | 4864 | ~80 MB |
+
+The expand command supports tuning:
+
+```bash
+mymem0ry expand "france" -k 20       # more results
+mymem0ry expand "france" -g 256      # more features per layer (default: 32)
+mymem0ry expand "france" --debug     # show gate scores and feature details
+```
 
 If no FFN cache exists, falls back to embedding cosine similarity.
 
@@ -99,7 +112,7 @@ Auto-detected on `mymem0ry split` — both sources write to the same `data/conve
 | `EXPAND_TOP_K` | `10` | Number of similar tokens to generate |
 | `CONVERSATIONS_DIR` | `data/conversations` | Directory with .md conversations |
 | `SEARCH_TOP_K` | `3` | Number of results to retrieve |
-| `SEARCH_BACKEND` | `ripgrep` | Default search backend |
+| `SEARCH_BACKEND` | `ripgrep` | Default search backend: ripgrep, bm25, fts5 |
 
 ## Testing & Linting
 

@@ -165,6 +165,8 @@ def benchmark(
 def expand(
     query: str = typer.Argument(..., help="Query to expand"),
     top_k: int = typer.Option(10, "--top-k", "-k", help="Number of similar tokens"),
+    gate_k: int = typer.Option(32, "--gate-k", "-g", help="Number of gate features to activate per layer"),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Show debug info (gate scores, feature tokens)"),
 ) -> None:
     """Show semantically related tokens for a query."""
 
@@ -173,7 +175,7 @@ def expand(
     config = MemoryConfig()
     cs = ConceptSearch(model_name=config.model_name)
 
-    results = cs.similar_tokens_with_layers(query, top_k=top_k)
+    results = cs.similar_tokens_with_layers(query, top_k=top_k, gate_k=gate_k, debug=debug)
     if not results:
         typer.echo("Nenhum token similar encontrado.")
         return
