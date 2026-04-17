@@ -182,13 +182,22 @@ def expand(
 
     has_layers = any(ly >= 0 for _, _, ly in results)
 
+    # Pick score format based on magnitude
+    max_score = max(abs(s) for _, s, _ in results) if results else 1.0
+    if max_score >= 10:
+        score_fmt = ">10.2f"
+    elif max_score >= 1:
+        score_fmt = ">10.4f"
+    else:
+        score_fmt = ">10.6f"
+
     typer.echo(f"Query: {query}\n")
     if has_layers:
         typer.echo(f"{'Token':<30} {'Score':>10}  {'Layer':>5}")
         typer.echo("-" * 50)
         for token, score, layer in results:
             layer_str = f"L{layer}" if layer >= 0 else "—"
-            typer.echo(f"{token:<30} {score:>10.2f}  {layer_str:>5}")
+            typer.echo(f"{token:<30} {score:{score_fmt}}  {layer_str:>5}")
     else:
         typer.echo(f"{'Token':<30} {'Score':>8}")
         typer.echo("-" * 40)

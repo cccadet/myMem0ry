@@ -73,18 +73,21 @@ def build_ffn_cache(
     cache = _cache_dir(model_name)
     cache.mkdir(parents=True, exist_ok=True)
 
-    # Save config
-    # Detect embed_scale — Gemma scales embeddings by sqrt(hidden_size)
-    embed_scale = float(hidden_size**0.5)
+    # Detect embed_scale — only Gemma models scale embeddings by sqrt(hidden_size)
+    model_type = getattr(model.config, "model_type", "")
+    if model_type and model_type.startswith("gemma"):
+        embed_scale = float(hidden_size**0.5)
+    else:
+        embed_scale = 1.0
 
-    config = {
+    cache_config = {
         "model_name": model_name,
         "layers": list(layer_range),
         "hidden_size": hidden_size,
         "top_n": top_n,
         "embed_scale": embed_scale,
     }
-    (cache / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+    (cache / "config.json").write_text(json.dumps(cache_config, indent=2), encoding="utf-8")
 
     # Save tokenizer for query encoding
     tokenizer.backend_tokenizer.save(str(cache / "tokenizer.json"))
@@ -208,6 +211,29 @@ class FFNCache:
         self._ft_scores: dict[int, torch.Tensor] = {k: v[1].T.float() for k, v in raw_ft.items()}
         self._layers = sorted(self._gate_projs.keys())
 
+    def _best_token_ids(self, text: str) -> list[int]:
+        """Find the tokenization with fewest tokens for each word.
+
+        BPE tokenizers (Llama, Qwen) may split lowercase words into subwords
+        ("france" → ["fr", "ance"]) while the capitalized form is a single
+        token ("France" → ["France"]). Fewer tokens give a stronger concept
+        signal in the embedding space.
+        """
+        words = text.split()
+        if len(words) <= 1:
+            # Single word: try original vs capitalized
+            ids_orig = self._tokenizer.encode(text).ids
+            ids_cap = self._tokenizer.encode(text.capitalize()).ids
+            return ids_orig if len(ids_orig) <= len(ids_cap) else ids_cap
+
+        # Multi-word: try to optimize each word individually
+        best_ids: list[int] = []
+        for word in words:
+            ids_orig = self._tokenizer.encode(word).ids
+            ids_cap = self._tokenizer.encode(word.capitalize()).ids
+            best_ids.extend(ids_orig if len(ids_orig) <= len(ids_cap) else ids_cap)
+        return best_ids
+
     def describe(
         self, text: str, top_k: int = 10, gate_k: int = _GATE_TOP_K,
         debug: bool = False,
@@ -222,12 +248,19 @@ class FFNCache:
         """
         import torch.nn.functional as F
 
-        # Encode query → mean embedding, scaled to match model's hidden state space
-        # (Gemma scales embeddings by sqrt(hidden_size); other models may not)
-        token_ids = self._tokenizer.encode(text).ids
+        # Encode query → pick tokenization with fewest tokens (best signal)
+        # BPE tokenizers like Llama's split "france" → ["fr", "ance"] (2 tokens)
+        # while "France" stays as 1 token. Fewer tokens = stronger concept signal.
+        token_ids = self._best_token_ids(text)
         ids_tensor = torch.tensor(token_ids)
         query_vec = self._embeddings[ids_tensor].mean(dim=0)  # (hidden,)
         query_vec = query_vec * self._embed_scale
+
+        # Normalize to post-RMSNorm scale — gate_proj expects input at residual stream
+        # magnitude (~sqrt(hidden_size)), not raw embedding magnitude.
+        # Gemma's embed_scale already handles this; other models need explicit normalization.
+        hidden_size = query_vec.shape[0]
+        query_vec = query_vec / query_vec.norm() * (hidden_size ** 0.5)
 
         has_up = bool(self._up_projs)
 
