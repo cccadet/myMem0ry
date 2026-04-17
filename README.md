@@ -44,9 +44,35 @@ mymem0ry index --backend fts5
 
 ### Query expansion
 
-The `--expand` flag uses a model's embedding matrix to find semantically similar tokens. The query is expanded with those tokens before being passed to the search backend.
+The `--expand` flag uses FFN walk (LARQL-inspired) to find semantically related concepts. Instead of surface-level embedding similarity, it performs gate KNN on the model's FFN layers to access the semantic knowledge stored in the weights.
 
-On first use (or after `mymem0ry warmup`), the embedding matrix and tokenizer are cached to `data/.cache/embeddings/`. Subsequent runs load the cache directly instead of the full model (~3s vs ~7s).
+```
+$ mymem0ry expand "France"
+Query: France
+
+Token                             Score    Layer
+--------------------------------------------------
+Paris                           1436.90    L27
+French                            35.20    L24
+Europe                            14.40    L25
+```
+
+Run `mymem0ry warmup` once to build the FFN cache. You can control which layers are cached with `--layers`:
+
+```bash
+mymem0ry warmup                     # default: layers 20-35
+mymem0ry warmup -l 18-32            # custom range
+```
+
+Middle layers hold semantic knowledge (concept relations). Final layers are in token-prediction mode and produce poor results. Rule of thumb:
+
+| Model | Total layers | Recommended band |
+|-------|-------------|-----------------|
+| Gemma 4B | 42 | L18-L32 |
+| Gemma 2B | 26 | L12-L20 |
+| Qwen 0.5B | 24 | L10-L18 |
+
+If no FFN cache exists, falls back to embedding cosine similarity.
 
 ### Supported sources
 

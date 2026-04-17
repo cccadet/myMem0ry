@@ -23,7 +23,7 @@ src/mem0ry/
 │   ├── search.py            # search() — busca via ripgrep
 │   ├── search_bm25.py       # search_bm25() — busca via BM25 (rank-bm25)
 │   ├── search_fts.py        # search_fts() — busca via SQLite FTS5
-│   ├── query_expansion.py   # ConceptSearch + expand_query — expansão semântica via embeddings (cache em disco)
+│   ├── query_expansion.py   # ConceptSearch + expand_query — expansão semântica via FFN walk (cache em disco)
 │   └── benchmark.py         # run_benchmark() — compara backends
 ├── dataset/                 # Pipeline legado de fine-tuning (builder, temporal, splitter, etc.)
 └── pipeline/dataset.py      # Dataset JSONL legado
@@ -45,15 +45,31 @@ mymem0ry dataset                      # Build ChatML JSONL (legacy)
 
 ## Query Expansion
 
-O flag `--expand` usa a embedding matrix de um modelo de linguagem para encontrar tokens semanticamente similares ao termo pesquisado. A query original é expandida com esses tokens antes de ser passada ao backend de busca escolhido.
+O flag `--expand` usa FFN walk (estilo LARQL) para encontrar conceitos semanticamente relacionados. Ao invés de cosine similarity na embedding matrix (superficial), faz gate KNN nas camadas FFN do modelo — acessa o conhecimento semântico real armazenado nos pesos.
 
-A embedding matrix é cacheada em `data/.cache/embeddings/` após a primeira carga. Execuções seguintes carregam o tensor cacheado (sub-second) em vez do modelo inteiro. Use `mymem0ry warmup` para pré-gerar o cache.
+O cache FFN (gate_projs + feature-to-token lookup) é construído com `mymem0ry warmup` e fica em `data/.cache/ffn/`. Se não há cache FFN, faz fallback pra embedding similarity.
+
+### Camadas FFN
+
+O warmup aceita `--layers` para definir o range de camadas FFN a cachear:
+```bash
+mymem0ry warmup                     # default: L20-35
+mymem0ry warmup -l 18-32            # custom range
+```
+
+**Importante**: camadas do meio guardam conhecimento semântico (relações entre conceitos). Camadas finais (últimas ~5) estão na fase de predição de tokens e produzem resultados pobres. Regra prática:
+
+| Modelo | Total layers | Banda recomendada |
+|--------|-------------|-------------------|
+| Gemma 4B | 42 | L18-L32 |
+| Gemma 2B | 26 | L12-L20 |
+| Qwen 0.5B | 24 | L10-L18 |
 
 Fluxo:
 1. Tokeniza a query
 2. Computa embedding médio dos tokens
-3. Calcula cosine similarity com todos os tokens do vocabulário
-4. Seleciona os top-k tokens mais similares (filtrando stop words e duplicatas)
+3. Para cada camada cacheada: gate KNN (quais features ativam) → lookup de tokens relacionados
+4. Agrega resultados por score, filtra stop words e duplicatas
 5. Expande a query original com os termos encontrados
 6. Passa a query expandida ao backend de busca (ripgrep/bm25/fts5)
 
@@ -76,7 +92,9 @@ data/
 ├── openai/export/              # JSONs de export do ChatGPT (fonte original)
 ├── Gemini/                     # JSONs de export do Google Takeout (Minhaatividade.json)
 ├── conversations/YYYY-MM-DD/   # Conversas individuais em .md (gerado por split, ambas fontes)
-└── .cache/embeddings/          # Cache da embedding matrix (gerado por warmup ou primeiro --expand)
+└── .cache/                     # Cache gerado por warmup
+    ├── embeddings/<model>/     # Embedding matrix + tokenizer (fallback)
+    └── ffn/<model>/            # FFN walk: gate_projs + feature_tokens (~850 MB)
 ```
 
 ## Notas técnicas

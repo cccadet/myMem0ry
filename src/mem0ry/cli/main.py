@@ -162,6 +162,39 @@ def benchmark(
 
 
 @app.command()
+def expand(
+    query: str = typer.Argument(..., help="Query to expand"),
+    top_k: int = typer.Option(10, "--top-k", "-k", help="Number of similar tokens"),
+) -> None:
+    """Show semantically related tokens for a query."""
+
+    from ..conversations.query_expansion import ConceptSearch
+
+    config = MemoryConfig()
+    cs = ConceptSearch(model_name=config.model_name)
+
+    results = cs.similar_tokens_with_layers(query, top_k=top_k)
+    if not results:
+        typer.echo("Nenhum token similar encontrado.")
+        return
+
+    has_layers = any(ly >= 0 for _, _, ly in results)
+
+    typer.echo(f"Query: {query}\n")
+    if has_layers:
+        typer.echo(f"{'Token':<30} {'Score':>10}  {'Layer':>5}")
+        typer.echo("-" * 50)
+        for token, score, layer in results:
+            layer_str = f"L{layer}" if layer >= 0 else "—"
+            typer.echo(f"{token:<30} {score:>10.2f}  {layer_str:>5}")
+    else:
+        typer.echo(f"{'Token':<30} {'Score':>8}")
+        typer.echo("-" * 40)
+        for token, score, _ in results:
+            typer.echo(f"{token:<30} {score:>8.4f}")
+
+
+@app.command()
 def index(
     backend: str = typer.Option("", "--backend", "-b", help="Backend to index: bm25, fts5 (empty = all)"),
     conversations: Path = Path(""),
@@ -187,24 +220,45 @@ def index(
 
 
 @app.command()
-def warmup() -> None:
-    """Pre-load model and cache embeddings for fast query expansion."""
+def warmup(
+    layers: str = typer.Option("", "--layers", "-l", help="Layer range for FFN cache (e.g. '20-35')"),
+) -> None:
+    """Pre-load model and build caches for fast query expansion."""
 
     import time
 
-    from ..conversations.query_expansion import ConceptSearch, _cache_dir
+    from ..conversations.ffn_walk import _cache_dir as _ffn_cache_dir, build_ffn_cache
 
     config = MemoryConfig()
-    cache = _cache_dir(config.model_name)
 
-    if (cache / "embeddings.pt").exists():
-        typer.echo(f"Cache already exists: {cache}")
-        typer.echo("Use --expand on search/benchmark to use it.")
-        return
+    # Parse layer range
+    layer_range = None
+    if layers:
+        parts = layers.split("-")
+        layer_range = range(int(parts[0]), int(parts[1]) + 1)
 
-    typer.echo(f"Loading model {config.model_name}...")
-    t0 = time.perf_counter()
-    ConceptSearch(model_name=config.model_name)
-    elapsed = time.perf_counter() - t0
+    # FFN walk cache
+    ffn_dir = _ffn_cache_dir(config.model_name)
+    if (ffn_dir / "gate_projs.pt").exists():
+        typer.echo(f"FFN cache already exists: {ffn_dir}")
+    else:
+        typer.echo(f"Building FFN cache for {config.model_name}...")
+        t0 = time.perf_counter()
+        path = build_ffn_cache(config.model_name, layer_range=layer_range)
+        elapsed = time.perf_counter() - t0
+        typer.echo(f"FFN cache built in {elapsed:.1f}s — {path}")
 
-    typer.echo(f"Done in {elapsed:.1f}s — cache saved to {cache}")
+    # Embedding cache (fallback, lighter)
+    from ..conversations.query_expansion import _cache_dir as _emb_cache_dir
+
+    emb_dir = _emb_cache_dir(config.model_name)
+    if (emb_dir / "embeddings.pt").exists():
+        typer.echo(f"Embedding cache already exists: {emb_dir}")
+    else:
+        typer.echo(f"Building embedding cache for {config.model_name}...")
+        t0 = time.perf_counter()
+        from ..conversations.query_expansion import ConceptSearch
+
+        ConceptSearch(model_name=config.model_name)
+        elapsed = time.perf_counter() - t0
+        typer.echo(f"Embedding cache built in {elapsed:.1f}s — {emb_dir}")
