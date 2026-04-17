@@ -16,13 +16,14 @@ src/mem0ry/
 ├── config.py                # MemoryConfig dataclass
 ├── parsers/
 │   ├── base.py              # ParsedConversation, ParsedMessage, BaseParser
-│   └── openai.py            # OpenAIParser — lê exports JSON do ChatGPT
+│   ├── openai.py            # OpenAIParser — lê exports JSON do ChatGPT
+│   └── gemini.py            # GeminiParser — lê exports JSON do Google Takeout
 ├── conversations/
-│   ├── writer.py            # split_conversations() — export → .md por data
+│   ├── writer.py            # split_conversations() — export → .md por data (auto-detecta OpenAI/Gemini)
 │   ├── search.py            # search() — busca via ripgrep
 │   ├── search_bm25.py       # search_bm25() — busca via BM25 (rank-bm25)
 │   ├── search_fts.py        # search_fts() — busca via SQLite FTS5
-│   ├── query_expansion.py   # ConceptSearch + expand_query — expansão semântica via embeddings
+│   ├── query_expansion.py   # ConceptSearch + expand_query — expansão semântica via embeddings (cache em disco)
 │   └── benchmark.py         # run_benchmark() — compara backends
 ├── dataset/                 # Pipeline legado de fine-tuning (builder, temporal, splitter, etc.)
 └── pipeline/dataset.py      # Dataset JSONL legado
@@ -32,11 +33,12 @@ src/mem0ry/
 
 ```bash
 # Pipeline de conversas
-mymem0ry split                        # Export OpenAI → .md por data em data/conversations/
+mymem0ry split                        # Export (OpenAI/Gemini) → .md por data em data/conversations/
 mymem0ry search "qdrant"              # Busca em conversas (ripgrep, bm25 ou fts5)
 mymem0ry search "qdrant" --expand     # Busca com expansão semântica da query
 mymem0ry benchmark "python"           # Compara backends lado a lado
 mymem0ry benchmark "python" --expand  # Benchmark com query expansion
+mymem0ry warmup                       # Pré-carrega modelo e cacheia embeddings
 mymem0ry index                        # Constrói índices BM25 e FTS5
 mymem0ry dataset                      # Build ChatML JSONL (legacy)
 ```
@@ -44,6 +46,8 @@ mymem0ry dataset                      # Build ChatML JSONL (legacy)
 ## Query Expansion
 
 O flag `--expand` usa a embedding matrix de um modelo de linguagem para encontrar tokens semanticamente similares ao termo pesquisado. A query original é expandida com esses tokens antes de ser passada ao backend de busca escolhido.
+
+A embedding matrix é cacheada em `data/.cache/embeddings/` após a primeira carga. Execuções seguintes carregam o tensor cacheado (sub-second) em vez do modelo inteiro. Use `mymem0ry warmup` para pré-gerar o cache.
 
 Fluxo:
 1. Tokeniza a query
@@ -70,7 +74,9 @@ Variáveis de ambiente (ou `.env` na raiz do projeto):
 ```
 data/
 ├── openai/export/              # JSONs de export do ChatGPT (fonte original)
-└── conversations/YYYY-MM-DD/   # Conversas individuais em .md (gerado por split)
+├── Gemini/                     # JSONs de export do Google Takeout (Minhaatividade.json)
+├── conversations/YYYY-MM-DD/   # Conversas individuais em .md (gerado por split, ambas fontes)
+└── .cache/embeddings/          # Cache da embedding matrix (gerado por warmup ou primeiro --expand)
 ```
 
 ## Notas técnicas

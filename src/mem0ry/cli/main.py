@@ -11,10 +11,11 @@ from ..conversations.benchmark import format_table, run_benchmark
 from ..conversations.search_bm25 import build_bm25_index
 from ..conversations.search_fts import build_fts_index
 from ..conversations.writer import split_conversations
-from ..parsers.openai import OpenAIParser
 from ..pipeline.dataset import build_dataset_from_openai
 
 app = typer.Typer(help="myMem0ry — personal memory search system")
+
+_DEFAULT_SOURCES = [Path("data/openai/export"), Path("data/Gemini")]
 
 
 @app.command()
@@ -46,19 +47,36 @@ def dataset(
 
 @app.command()
 def split(
-    source: Path = Path("data/openai/export"),
+    source: Path = Path(""),
     output: Path = Path("data/conversations"),
+    type: str = typer.Option("", "--type", "-t", help="Force parser: openai, gemini (auto-detect if empty)"),
 ) -> None:
     """Split conversations into individual .md files organized by date."""
 
-    if not source.exists():
-        typer.echo(f"Source directory not found: {source}", err=True)
+    explicit = str(source) not in ("", ".")
+    sources = [source] if explicit else [s for s in _DEFAULT_SOURCES if s.exists()]
+
+    if not sources:
+        typer.echo("No source directories found.", err=True)
         raise typer.Exit(code=1)
 
-    typer.echo(f"Splitting conversations from {source}...")
-    stats = split_conversations(source, output)
+    total_written = 0
+    total_skipped = 0
 
-    typer.echo(f"Done: {stats['written']} files written, {stats['skipped']} skipped")
+    for src in sources:
+        source_type = type if type else None
+        typer.echo(f"Splitting conversations from {src}...")
+        try:
+            stats = split_conversations(src, output, source_type=source_type)
+        except ValueError as e:
+            typer.echo(f"  Skipping {src}: {e}", err=True)
+            continue
+
+        typer.echo(f"  {stats['written']} files written, {stats['skipped']} skipped")
+        total_written += stats["written"]
+        total_skipped += stats["skipped"]
+
+    typer.echo(f"\nTotal: {total_written} files written, {total_skipped} skipped")
 
 
 @app.command()
@@ -166,3 +184,27 @@ def index(
             build_fts_index(conv_dir)
         else:
             typer.echo(f"Unknown backend: {b} (use: bm25, fts5)", err=True)
+
+
+@app.command()
+def warmup() -> None:
+    """Pre-load model and cache embeddings for fast query expansion."""
+
+    import time
+
+    from ..conversations.query_expansion import ConceptSearch, _cache_dir
+
+    config = MemoryConfig()
+    cache = _cache_dir(config.model_name)
+
+    if (cache / "embeddings.pt").exists():
+        typer.echo(f"Cache already exists: {cache}")
+        typer.echo("Use --expand on search/benchmark to use it.")
+        return
+
+    typer.echo(f"Loading model {config.model_name}...")
+    t0 = time.perf_counter()
+    ConceptSearch(model_name=config.model_name)
+    elapsed = time.perf_counter() - t0
+
+    typer.echo(f"Done in {elapsed:.1f}s — cache saved to {cache}")
