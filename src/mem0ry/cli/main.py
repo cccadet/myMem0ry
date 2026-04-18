@@ -18,6 +18,20 @@ app = typer.Typer(help="myMem0ry — personal memory search system")
 _DEFAULT_SOURCES = [Path("data/openai/export"), Path("data/Gemini")]
 
 
+def _get_expander(config: MemoryConfig, method: str = ""):
+    """Instantiate the right concept search backend."""
+    from ..conversations.query_expansion import ConceptSearch
+
+    method = method or config.expand_method
+    if method == "spacy":
+        from ..conversations.spacy_expand import SpacyConceptSearch
+
+        typer.echo(f"[expand] Carregando spaCy ({config.spacy_model})...")
+        return SpacyConceptSearch(model_name=config.spacy_model)
+    typer.echo(f"[expand] Carregando modelo {config.model_name}...")
+    return ConceptSearch(model_name=config.model_name)
+
+
 @app.command()
 def dataset(
     source: Path = Path("data/openai/export"),
@@ -85,6 +99,7 @@ def search(
     backend: str = typer.Option("ripgrep", "--backend", "-b", help="Backend: ripgrep, bm25, fts5"),
     top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results"),
     expand: bool = typer.Option(False, "--expand", "-e", help="Expand query with semantically similar tokens"),
+    method: str = typer.Option("", "--method", "-m", help="Expansion method: ffn, spacy (default from config)"),
     conversations: Path = Path(""),
 ) -> None:
     """Search conversations without model inference."""
@@ -103,10 +118,9 @@ def search(
     # Optionally expand query with semantically similar tokens
     effective_query = query
     if expand:
-        from ..conversations.query_expansion import ConceptSearch, expand_query
+        from ..conversations.query_expansion import expand_query
 
-        typer.echo(f"[expand] Carregando modelo {config.model_name}...")
-        cs = ConceptSearch(model_name=config.model_name)
+        cs = _get_expander(config, method)
         effective_query = expand_query(query, cs, top_k=config.expand_top_k)
         typer.echo(f"[expand] Query expandida: {effective_query}")
 
@@ -135,6 +149,7 @@ def benchmark(
     question: str = typer.Argument(..., help="Query to benchmark"),
     top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results per backend"),
     expand: bool = typer.Option(False, "--expand", "-e", help="Expand query with semantically similar tokens"),
+    method: str = typer.Option("", "--method", "-m", help="Expansion method: ffn, spacy (default from config)"),
     conversations: Path = Path(""),
 ) -> None:
     """Compare search backends side by side."""
@@ -149,10 +164,9 @@ def benchmark(
     # Optionally expand query
     effective_query = question
     if expand:
-        from ..conversations.query_expansion import ConceptSearch, expand_query
+        from ..conversations.query_expansion import expand_query
 
-        typer.echo(f"[expand] Carregando modelo {config.model_name}...")
-        cs = ConceptSearch(model_name=config.model_name)
+        cs = _get_expander(config, method)
         effective_query = expand_query(question, cs, top_k=config.expand_top_k)
         typer.echo(f"[expand] Query expandida: {effective_query}\n")
 
@@ -166,14 +180,13 @@ def expand(
     query: str = typer.Argument(..., help="Query to expand"),
     top_k: int = typer.Option(10, "--top-k", "-k", help="Number of similar tokens"),
     gate_k: int = typer.Option(32, "--gate-k", "-g", help="Number of gate features to activate per layer"),
+    method: str = typer.Option("", "--method", "-m", help="Expansion method: ffn, spacy (default from config)"),
     debug: bool = typer.Option(False, "--debug", "-d", help="Show debug info (gate scores, feature tokens)"),
 ) -> None:
     """Show semantically related tokens for a query."""
 
-    from ..conversations.query_expansion import ConceptSearch
-
     config = MemoryConfig()
-    cs = ConceptSearch(model_name=config.model_name)
+    cs = _get_expander(config, method)
 
     results = cs.similar_tokens_with_layers(query, top_k=top_k, gate_k=gate_k, debug=debug)
     if not results:

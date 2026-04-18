@@ -24,6 +24,7 @@ src/mem0ry/
 │   ├── search_bm25.py       # search_bm25() — busca via BM25 (rank-bm25)
 │   ├── search_fts.py        # search_fts() — busca via SQLite FTS5
 │   ├── query_expansion.py   # ConceptSearch + expand_query — expansão semântica via FFN walk (cache em disco)
+│   ├── spacy_expand.py      # SpacyConceptSearch — expansão semântica via spaCy word vectors
 │   └── benchmark.py         # run_benchmark() — compara backends
 ├── dataset/                 # Pipeline legado de fine-tuning (builder, temporal, splitter, etc.)
 └── pipeline/dataset.py      # Dataset JSONL legado
@@ -35,7 +36,7 @@ src/mem0ry/
 # Pipeline de conversas
 mymem0ry split                        # Export (OpenAI/Gemini) → .md por data em data/conversations/
 mymem0ry search "qdrant"              # Busca em conversas (ripgrep, bm25 ou fts5)
-mymem0ry search "qdrant" --expand     # Busca com expansão semântica da query
+mymem0ry search "qdrant" --expand     # Busca com expansão semântica (EXPAND_METHOD: ffn ou spacy)
 mymem0ry benchmark "python"           # Compara backends lado a lado
 mymem0ry benchmark "python" --expand  # Benchmark com query expansion
 mymem0ry warmup                       # Pré-carrega modelo e cacheia embeddings
@@ -109,6 +110,8 @@ Variáveis de ambiente (ou `.env` na raiz do projeto):
 | `CONVERSATIONS_DIR` | `data/conversations` | Diretório das conversas em .md |
 | `SEARCH_TOP_K` | `3` | Quantos arquivos recuperar na busca |
 | `SEARCH_BACKEND` | `ripgrep` | Backend padrão: ripgrep, bm25, fts5 |
+| `EXPAND_METHOD` | `ffn` | Método de expansão: ffn (FFN walk), spacy (word vectors) |
+| `SPACY_MODEL` | `pt_core_news_lg` | Modelo spaCy para expansão (quando EXPAND_METHOD=spacy) |
 
 ## Dados
 

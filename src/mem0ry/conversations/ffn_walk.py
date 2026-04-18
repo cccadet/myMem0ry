@@ -14,6 +14,7 @@ Cache layout (data/.cache/ffn/<model>/):
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import torch
@@ -35,6 +36,28 @@ _GATE_TOP_K = 32
 def _cache_dir(model_name: str) -> Path:
     safe = model_name.replace("/", "--")
     return _CACHE_ROOT / safe
+
+
+# BPE word-initial tokens (Ġ prefix, like GPT/Qwen/Llama) — at least 4 alpha chars
+_BPE_WORD_RE = re.compile(r"^Ġ[a-zA-ZáàãâéêíóôõúüçÁÀÃÂÉÊÍÓÔÕÚÜÇ]{4,}$")
+
+# SentencePiece word tokens (no special prefix, like Gemma) — at least 4 alpha chars
+_SP_WORD_RE = re.compile(r"^[a-zA-ZáàãâéêíóôõúüçÁÀÃÂÉÊÍÓÔÕÚÜÇ]{4,}$")
+
+
+def _build_word_token_ids(tokenizer) -> tuple[torch.Tensor, int]:
+    """Build a tensor of token IDs that represent real word-initial tokens.
+
+    BPE tokenizers use Ġ prefix for word-initial tokens; SentencePiece uses
+    plain alpha tokens.  Only tokens with 4+ alpha characters are included.
+    """
+    vocab = tokenizer.get_vocab()
+
+    has_g0 = sum(1 for tok in vocab if tok.startswith("Ġ"))
+    regex = _BPE_WORD_RE if has_g0 > 100 else _SP_WORD_RE
+
+    ids = sorted(idx for tok, idx in vocab.items() if regex.match(tok))
+    return torch.tensor(ids, dtype=torch.long), len(ids)
 
 
 def _word_like(token_str: str) -> bool:
@@ -103,6 +126,14 @@ def build_ffn_cache(
 
     lm_head_f = lm_head.weight.detach().float()
 
+    # Pre-filter: only compute feature tokens for word-initial vocab entries.
+    # BPE subword fragments (like "iest", "ocket") are excluded at the source.
+    word_ids, num_words = _build_word_token_ids(tokenizer)
+    vocab_total = lm_head_f.shape[0]
+    lm_head_words = lm_head_f[word_ids]  # (num_words, hidden)
+    del lm_head_f
+    print(f"  Vocabulary filter: {num_words} word-initial tokens (out of {vocab_total})")
+
     for li in layer_range:
         if li >= num_layers_total:
             continue
@@ -127,12 +158,13 @@ def build_ffn_cache(
 
         for fs in range(0, layer_intermediate, feat_chunk):
             fe = min(fs + feat_chunk, layer_intermediate)
-            # lm_head: (vocab, hidden) @ down_w[:, fs:fe]: (hidden, chunk) → (vocab, chunk)
-            logits_chunk = lm_head_f @ down_w[:, fs:fe]
-            topv, topi = torch.topk(logits_chunk, top_n, dim=0)
-            top_ids[:, fs:fe] = topi
+            # lm_head_words: (num_words, hidden) @ down_w[:, fs:fe]: (hidden, chunk) → (num_words, chunk)
+            logits_chunk = lm_head_words @ down_w[:, fs:fe]
+            topv, topi_local = torch.topk(logits_chunk, top_n, dim=0)
+            # Map local word indices back to global token IDs
+            top_ids[:, fs:fe] = word_ids[topi_local]
             top_vals[:, fs:fe] = topv
-            del logits_chunk, topv, topi
+            del logits_chunk, topv, topi_local
 
         del down_w
 

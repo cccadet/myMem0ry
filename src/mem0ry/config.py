@@ -18,3 +18,5 @@ class MemoryConfig:
     conversations_dir: str = os.environ.get("CONVERSATIONS_DIR", "data/conversations")
     search_top_k: int = int(os.environ.get("SEARCH_TOP_K", "3"))
     search_backend: str = os.environ.get("SEARCH_BACKEND", "ripgrep")
+    expand_method: str = os.environ.get("EXPAND_METHOD", "ffn")
+    spacy_model: str = os.environ.get("SPACY_MODEL", "pt_core_news_lg")
