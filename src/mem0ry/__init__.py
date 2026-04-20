@@ -1,4 +1,4 @@
-"""Platform for the myMem0ry dataset & training pipeline."""
+"""Platform for the myMem0ry KV cache memory system."""
 
 from .cli.main import app
 

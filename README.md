@@ -1,142 +1,120 @@
 # myMem0ry
 
-Fine-tune `unsloth/Qwen3-0.6B-unsloth-bnb-4bit` with LoRA adapters so your exported conversations become a personal memory model.
+Personal memory search system with semantic query expansion.
 
-## Architecture
-
-1. **Parser & extractor** – `src/mem0ry/parsers/openai.py` walks the OpenAI `mapping` tree, filters `user`/`assistant` turns, and normalizes multi-part messages into `ParsedConversation` objects.
-2. **ChatML builder** – `src/mem0ry/dataset` handles chunking, quality filtering, deduplication, and statistics before producing `train.jsonl` / `val.jsonl` outputs.
-3. **LoRA training** – `src/mem0ry/training/train.py` wires `FastLanguageModel`, `SFTTrainer`, and the dataset to run the fine-tuning job.
-4. **Export** – `src/mem0ry/training/export.py` emits a GGUF bundle compatible with Ollama and `llama.cpp`.
-
-Supporting helpers live under `src/mem0ry/utils` and the CLI entry point is `src/mem0ry/cli/main.py`.
+Searches through your ChatGPT and Gemini conversations using multiple backends (ripgrep, BM25, FTS5), with optional semantic query expansion that finds related terms using a language model's embedding space.
 
 ## Setup
 
 ```bash
-# Initialize the uv project & install dependencies
-uv init --name myMem0ry --package
-uv add unsloth unsloth_zoo torch transformers trl peft datasets typer pydantic
-uv add --dev pytest ruff
+uv sync
 ```
 
-## Commands
+## Usage
 
 ```bash
-mymem0ry build --source data/openai/export --output data/processed
-mymem0ry train --dataset data/processed/train.jsonl --output output/memory_model
-mymem0ry export --model output/memory_model/memory_model_lora --output output/memory_model
-ollama create qwen3-memory -f output/memory_model_gguf/Modelfile
-mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
+# Split conversations into .md files organized by date
+mymem0ry split                        # auto-detects OpenAI and/or Gemini exports
+
+# Search conversations
+mymem0ry search "qdrant"              # ripgrep (default)
+mymem0ry search "qdrant" --backend bm25
+mymem0ry search "qdrant" --backend fts5
+
+# Search with semantic query expansion
+mymem0ry warmup                       # pre-cache FFN walk weights (run once)
+mymem0ry search "qdrant" --expand     # expands query with similar tokens
+
+# Show semantically related tokens
+mymem0ry expand "france"              # top-10 related tokens
+mymem0ry expand "france" -k 20 -g 256 # more results, more features
+
+# Compare backends side by side
+mymem0ry benchmark "python"
+mymem0ry benchmark "python" --expand
+
+# Build search indexes
+mymem0ry index                        # all backends
+mymem0ry index --backend bm25
+mymem0ry index --backend fts5
 ```
 
-# Build normal (incremental - só processa conversas novas)
-mymem0ry build --source data/openai/export --output data/processed
-# Forçar regeneração de todo Q&A
-mymem0ry build --source data/openai/export --output data/processed --force-qa
-# Regenerar Q&A de conversas específicas
-mymem0ry build --source data/openai/export --output data/processed --regen-qa abc-123 def-456
-# Build sem Q&A (só chunks de conversa com datas)
-mymem0ry build --source data/openai/export --output data/processed --no-qa
-# Extrair Q&A diretamente dos turnos da conversa (sem modelo)
-mymem0ry build --source data/openai/export --output data/processed --qa-backend turns
+## How it works
 
-Typer-powered CLI (installed as `mymem0ry`) mirrors the same functionality plus `stats` and `pipeline` shortcuts:
+### Conversation pipeline
+
+1. **Split** — Parses exports (OpenAI JSON or Gemini Takeout JSON) and writes each conversation as a `.md` file organized by date in `data/conversations/YYYY-MM-DD/`.
+2. **Search** — Searches across all `.md` files using ripgrep, BM25, or SQLite FTS5.
+
+### Query expansion
+
+The `--expand` flag uses FFN walk (LARQL-inspired) to find semantically related concepts. Instead of surface-level embedding similarity, it computes GeGLU activations (`silu(gate) * up`) on the model's FFN layers to access the semantic knowledge stored in the weights.
 
 ```
-mymem0ry build --source data/openai/export --output data/processed
-mymem0ry stats --target data/processed
-mymem0ry train --dataset data/processed/train.jsonl --output output/memory_model
-mymem0ry export --model output/memory_model/memory_model_lora --output output/memory_model
-mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
-mymem0ry pipeline --source data/openai/export --processed data/processed --model-output output/memory_model
+$ mymem0ry expand "france"
+Query: france
+
+Token                             Score  Layer
+--------------------------------------------------
+paris                              0.63    L16
+french                             0.61    L16
+usa                                0.60    L22
+parisian                           0.58    L16
+america                            0.53    L22
 ```
 
-### QA Backends (`--qa-backend`)
-
-The `build` command supports multiple backends for generating Q&A training examples:
-
-| Backend | Description | Requirements |
-|---------|-------------|--------------|
-| `turns` | Extrai pares pergunta/resposta diretamente dos turnos `user` → `assistant` das conversas. Sem chamadas de API, sem custo, instantâneo. | Nenhum |
-| `api` | Gera Q&A sintético usando a API Z AI (padrão). | `ZAI_API_KEY` no `.env` |
-| `ollama` | Gera Q&A sintético via servidor Ollama local. | Ollama rodando localmente com modelo instalado |
-| `llamacpp` | Gera Q&A sintético via llama.cpp direto (GPU/CPU). | `--llamacpp-model` ou `LLAMACPP_MODEL_PATH` |
-
-Exemplos:
+Run `mymem0ry warmup` once to build the FFN cache. You can control which layers are cached with `--layers`:
 
 ```bash
-# Turns (sem modelo, extrai dos turnos)
-mymem0ry build --qa-backend turns --source data/openai/export --output data/processed
-
-# API Z AI (padrão)
-mymem0ry build --qa-backend api --qa-model glm-4.7-flashx --source data/openai/export --output data/processed
-
-# Ollama local
-mymem0ry build --qa-backend ollama --ollama-model qwen3:0.6b --source data/openai/export --output data/processed
-
-# llama.cpp direto
-mymem0ry build --qa-backend llamacpp --llamacpp-model models/qwen3-0.6b.gguf --source data/openai/export --output data/processed
+mymem0ry warmup -l 14-27            # knowledge band (recommended for Gemma 3 4B)
 ```
 
-### Outras opções do build
+Middle layers hold semantic knowledge (concept relations). Final layers are in token-prediction mode and produce poor results. The knowledge band follows the LARQL segmentation: syntax → **knowledge** → output.
 
-| Flag | Descrição | Padrão |
-|------|-----------|--------|
-| `--max-seq-length` | Comprimento máximo de sequência por chunk | `2048` |
-| `--overlap-turns` | Turnos de sobreposição entre chunks | `2` |
-| `--min-turns` | Mínimo de turnos para manter um exemplo | `2` |
-| `--val-ratio` | Proporção do conjunto de validação | `0.05` |
-| `--qa-pairs` | Pares Q&A por conversa (backends api/ollama/llamacpp) | `4` |
-| `--qa-cache` | Caminho do cache Q&A (JSONL) | `data/qa_cache.jsonl` |
-| `--force-qa` | Força regeneração de todo o cache Q&A | `false` |
-| `--regen-qa` | Regenera Q&A apenas para IDs específicos | — |
-| `--no-qa` | Desabilita geração de Q&A (só chunks) | `false` |
-| `--no-temporal` | Desabilita enriquecimento temporal nos prompts | `false` |
+| Model | Total layers | Knowledge band | hidden | intermediate | Cache size |
+|-------|-------------|----------------|--------|-------------|------------|
+| google/gemma-3-4b-it | 34 | L14-L27 | 2560 | 10240 | ~1.7 GB |
+| google/gemma-4-E4B | 42 | L18-L32 | 2560 | 10240 | ~1.7 GB |
+| Qwen/Qwen3.5-0.8B | 24 | L10-L18 | 896 | 4864 | ~80 MB |
 
-The `export` command now defaults to **F16** (no quantization loss). Add `--quantization q4_k_m` if you want to quantize during export.
-
-## Ollama deployment
-
-### Test with F16 (recommended first step)
-
-`mymem0ry export` produces an F16 GGUF by default, preserving full model quality. After exporting, rebuild the Ollama model:
+The expand command supports tuning:
 
 ```bash
-ollama build -f output/memory_model_gguf/Modelfile qwen3-0.6-memory output/memory_model_gguf
+mymem0ry expand "france" -k 20       # more results
+mymem0ry expand "france" -g 256      # more features per layer (default: 32)
+mymem0ry expand "france" --debug     # show gate scores and feature details
 ```
 
-Then test it:
+If no FFN cache exists, falls back to embedding cosine similarity.
 
-```bash
-ollama run qwen3-0.6-memory:latest
-```
+### Supported sources
 
-### Optional: Quantize for production
+| Source | Directory | Format |
+|--------|-----------|--------|
+| OpenAI (ChatGPT) | `data/openai/export/` | JSON with `mapping` tree |
+| Gemini (Google Takeout) | `data/Gemini/` | `Minhaatividade.json` |
 
-If you're happy with the model and want a smaller, faster version, quantize the F16 GGUF:
+Auto-detected on `mymem0ry split` — both sources write to the same `data/conversations/` output.
 
-```bash
-mymem0ry quantize output/memory_model/unsloth.F16.gguf --method q4_k_m
-```
+## Search backends
 
-Then rebuild the Ollama model with the quantized GGUF:
+| Backend | Description | Index |
+|---------|-------------|-------|
+| `ripgrep` | Regex keyword search (default) | None |
+| `bm25` | TF-IDF ranking with BM25Okapi | `.bm25_index.pkl` |
+| `fts5` | SQLite full-text search | `.fts5_index.db` |
 
-```bash
-ollama build -f output/memory_model_gguf/Modelfile qwen3-0.6-memory output/memory_model_gguf
-ollama run qwen3-0.6-memory:latest
-```
+## Environment Variables
 
-The export command also supports `--quantization q4_k_m` to skip the F16 step entirely, and `--no-patch-modelfile` if you need to skip the Modelfile rewrite.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODEL_NAME` | `Qwen/Qwen3.5-0.8B` | Model for query expansion |
+| `EXPAND_TOP_K` | `10` | Number of similar tokens to generate |
+| `CONVERSATIONS_DIR` | `data/conversations` | Directory with .md conversations |
+| `SEARCH_TOP_K` | `3` | Number of results to retrieve |
+| `SEARCH_BACKEND` | `ripgrep` | Default search backend: ripgrep, bm25, fts5 |
 
-## Outputs
-
-- `data/processed/train.jsonl`, `data/processed/val.jsonl`, `data/processed/stats.json`
-- `output/memory_model/memory_model_lora` (LoRA weights)
-- `output/memory_model/unsloth.F16.gguf` (GGUF export, default)
-- `output/memory_model/unsloth.Q4_K_M.gguf` (if quantized via `--quantization` or `mymem0ry quantize`)
-
-## Testing & Formatting
+## Testing & Linting
 
 ```bash
 uv run pytest
