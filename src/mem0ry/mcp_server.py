@@ -55,7 +55,9 @@ def _preview_text(path: Path) -> str:
     return preview
 
 
-# Lazy-loaded spaCy expander (shared across calls)
+_session_id: str | None = None
+_session_title: str = "session"
+
 _expander = None
 
 
@@ -70,8 +72,50 @@ def _get_expander():
 
 
 @mcp.tool()
+def log_message(role: str, content: str) -> str:
+    """MANDATORY: Log a single message to the current conversation session.
+
+    You MUST call this tool after EVERY message exchange — once for the
+    user's message (role="user") and once for your response (role="assistant").
+    Each call appends to the same session file. A new file is created per
+    conversation automatically.
+
+    Args:
+        role: Who sent the message — "user" or "assistant".
+        content: The message text.
+    """
+    global _session_id, _session_title
+
+    conv_dir = _conversations_dir()
+    today = date.today().isoformat()
+    dir_path = conv_dir / today
+    dir_path.mkdir(parents=True, exist_ok=True)
+
+    if _session_id is None:
+        _session_id = uuid.uuid4().hex[:8]
+
+    safe_title = _sanitize_title(_session_title)
+    filename = f"{safe_title}-{_session_id}.md"
+    file_path = dir_path / filename
+
+    if not file_path.exists():
+        header = f"# {safe_title}\n> id: {_session_id} | date: {today}\n\n"
+        file_path.write_text(header, encoding="utf-8")
+
+    with open(file_path, "a", encoding="utf-8") as f:
+        f.write(f"[{role}]: {content}\n\n")
+
+    rel = file_path.relative_to(conv_dir)
+    return f"Logged ({role}) to {rel}"
+
+
+@mcp.tool()
 def save_memory(title: str, content: str, dt: str = "") -> str:
-    """Save a single memory entry (fact, note, or message).
+    """CRITICAL: Save a single memory entry (fact, note, or message).
+
+    IMPORTANT: You MUST call this tool to save any important information
+    discussed in this conversation. Do not wait for the user to ask —
+    proactively save relevant facts, decisions, and insights as they arise.
 
     Args:
         title: Title for the memory (becomes the filename).
@@ -101,7 +145,11 @@ def save_memory(title: str, content: str, dt: str = "") -> str:
 
 @mcp.tool()
 def save_conversation(title: str, messages: list[dict[str, str]], dt: str = "") -> str:
-    """Save a full conversation with multiple messages.
+    """CRITICAL: Save a full conversation with multiple messages.
+
+    MANDATORY: You MUST call this tool at the END of every conversation to
+    archive the full exchange. Do NOT skip this step. Always save the
+    complete conversation including all user messages and your responses.
 
     Args:
         title: Title for the conversation.
@@ -196,6 +244,52 @@ def read_memory(path: str) -> str:
         return "Invalid path"
 
     return file_path.read_text(encoding="utf-8")
+
+
+@mcp.prompt()
+def auto_save_instructions() -> str:
+    """System instructions that force automatic conversation saving.
+
+    Use this prompt at the start of every conversation to ensure all
+    exchanges are automatically archived.
+    """
+    return (
+        "MANDATORY BEHAVIOR — myMem0ry Auto-Save Protocol:\n"
+        "\n"
+        "You are connected to the myMem0ry memory system. You MUST follow these rules:\n"
+        "\n"
+        "1. After EVERY user message, call log_message(role='user', content='<user message>').\n"
+        "2. After EVERY response you give, call log_message(role='assistant', content='<your response>').\n"
+        "3. This creates a running log of the entire conversation, appending to the same file.\n"
+        "4. A new session file is created automatically — no need to manage session IDs.\n"
+        "5. Optionally, call save_memory for specific facts/decisions worth bookmarking.\n"
+        "\n"
+        "NEVER skip calling log_message. It must be called for EVERY exchange.\n"
+        "\n"
+        "Example:\n"
+        "  log_message(role='user', content='What is the capital of France?')\n"
+        "  log_message(role='assistant', content='The capital of France is Paris.')\n"
+        "\n"
+        "These rules are NON-NEGOTIABLE."
+    )
+
+
+@mcp.prompt()
+def conversation_logger(topic: str = "") -> str:
+    """Log the current conversation to myMem0ry immediately.
+
+    Args:
+        topic: Brief topic/title for the conversation being logged.
+    """
+    instructions = (
+        "Immediately log the conversation using log_message.\n"
+        "Call log_message(role='user', content='...') for each user message\n"
+        "and log_message(role='assistant', content='...') for each assistant response.\n"
+        "Do not respond without calling log_message for every message."
+    )
+    if topic:
+        instructions = f"Conversation topic: {topic}\n\n{instructions}"
+    return instructions
 
 
 def main():
