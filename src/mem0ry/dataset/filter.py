@@ -9,20 +9,23 @@ def apply_quality_filters(
     examples: Sequence[dict], *, min_turns: int = 2, min_length: int = 8
 ) -> list[dict]:
     """Drop examples that are too short, empty, or system-only."""
-    result: list[dict] = []
-    for example in examples:
-        roles = [
-            msg.get("role") for msg in example.get("messages", []) if msg.get("content")
-        ]
-        contents = [msg.get("content", "") for msg in example.get("messages", [])]
-        if len(roles) < min_turns:
-            continue
-        trimmed = [
-            content.strip() for content in contents if content and content.strip()
-        ]
-        if not trimmed:
-            continue
-        if max(len(piece) for piece in trimmed) < min_length:
-            continue
-        result.append(example)
-    return result
+    return [
+        ex for ex in examples if _has_quality_content(ex, min_turns, min_length)
+    ]
+
+
+def _has_quality_content(
+    example: dict, min_turns: int, min_length: int
+) -> bool:
+    """Check whether a single example meets quality thresholds."""
+    messages = example.get("messages", [])
+    roles = [m.get("role") for m in messages if m.get("content")]
+    if len(roles) < min_turns:
+        return False
+    trimmed = [
+        c.strip() for c in (m.get("content", "") for m in messages)
+        if c and c.strip()
+    ]
+    if not trimmed:
+        return False
+    return max(len(p) for p in trimmed) >= min_length

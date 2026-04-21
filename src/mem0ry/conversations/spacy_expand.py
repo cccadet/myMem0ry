@@ -57,7 +57,12 @@ class SpacyConceptSearch:
         query = query / norm
 
         sims = self._vocab_matrix @ query
-        # Exclude query words and their morphological variants (shared prefix)
+        self._mask_query_variants(sims, doc)
+
+        return self._select_unique_top_k(sims, top_k)
+
+    def _mask_query_variants(self, sims: np.ndarray, doc) -> None:
+        """Zero-out query words and morphological variants (shared prefix)."""
         query_lower = {t.text.lower() for t in doc}
         prefixes = {w[:4] for w in query_lower if len(w) >= 4}
         for i, w in enumerate(self._vocab_words):
@@ -66,10 +71,13 @@ class SpacyConceptSearch:
             elif any(w.startswith(p) for p in prefixes):
                 sims[i] = -1.5
 
+    def _select_unique_top_k(
+        self, sims: np.ndarray, top_k: int
+    ) -> list[tuple[str, float]]:
+        """Pick the top-k unique words from a similarity array."""
         top_indices = np.argsort(sims)[::-1]
         seen: set[str] = set()
         results: list[tuple[str, float]] = []
-
         for idx in top_indices:
             word = self._vocab_words[idx]
             if word in seen:
@@ -78,7 +86,6 @@ class SpacyConceptSearch:
             results.append((word, float(sims[idx])))
             if len(results) == top_k:
                 break
-
         return results
 
     def similar_tokens_with_layers(

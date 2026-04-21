@@ -76,20 +76,32 @@ def _detect_source_type(source: Path) -> str | None:
         except (json.JSONDecodeError, UnicodeDecodeError):
             return None
 
-    if isinstance(payload, list) and payload:
-        first = payload[0]
-        if "safeHtmlItem" in first:
-            return "gemini"
+    return _classify_payload(payload)
 
-    if isinstance(payload, dict):
-        if "conversations" in payload or "mapping" in payload:
-            return "openai"
-    if isinstance(payload, list) and payload:
-        first = payload[0]
-        if "mapping" in first:
-            return "openai"
 
+def _classify_payload(payload) -> str | None:
+    """Identify export format from parsed JSON structure."""
+    detectors = [
+        (_is_gemini_list, "gemini"),
+        (_is_openai_dict, "openai"),
+        (_is_openai_list, "openai"),
+    ]
+    for detector_fn, source_type in detectors:
+        if detector_fn(payload):
+            return source_type
     return None
+
+
+def _is_gemini_list(payload) -> bool:
+    return isinstance(payload, list) and bool(payload) and "safeHtmlItem" in payload[0]
+
+
+def _is_openai_dict(payload) -> bool:
+    return isinstance(payload, dict) and ("conversations" in payload or "mapping" in payload)
+
+
+def _is_openai_list(payload) -> bool:
+    return isinstance(payload, list) and bool(payload) and "mapping" in payload[0]
 
 
 def split_conversations(
