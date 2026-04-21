@@ -8,7 +8,7 @@ from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 
-from .search import _STOP_WORDS, _extract_keywords
+from .search import _STOP_WORDS
 
 
 def _tokenize(text: str) -> list[str]:

@@ -208,7 +208,7 @@ def search_memory(query: str, top_k: int = 5) -> list[dict[str, Any]]:
         query: Natural language search query.
         top_k: Maximum number of results. Defaults to 5.
     """
-    from .conversations.query_expansion import expand_query
+    from .conversations.spacy_expand import expand_query_spacy
     from .conversations.search import search as rg_search
 
     conv_dir = _conversations_dir()
@@ -217,9 +217,8 @@ def search_memory(query: str, top_k: int = 5) -> list[dict[str, Any]]:
 
     config = MemoryConfig()
 
-    # Expand query with spaCy
     expander = _get_expander()
-    effective_query = expand_query(query, expander, top_k=config.expand_top_k)
+    effective_query = expand_query_spacy(query, expander, top_k=config.expand_top_k)
 
     # Search with ripgrep
     paths = rg_search(effective_query, conv_dir, top_k=top_k)

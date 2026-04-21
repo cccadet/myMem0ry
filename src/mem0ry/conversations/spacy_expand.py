@@ -86,3 +86,30 @@ class SpacyConceptSearch:
     ) -> list[tuple[str, float, int]]:
         """Same as similar_tokens but with placeholder layer info for CLI compat."""
         return [(tok, sc, -1) for tok, sc in self.similar_tokens(text, top_k)]
+
+
+def expand_query_spacy(
+    query: str,
+    concept_search: SpacyConceptSearch,
+    top_k: int = 10,
+) -> str:
+    """Expand a query with semantically similar words using spaCy vectors."""
+    similar = concept_search.similar_tokens(query, top_k=top_k)
+
+    query_lower = query.lower()
+    extra_tokens: list[str] = []
+    seen: set[str] = set()
+
+    for token, _ in similar:
+        t_lower = token.lower()
+        if t_lower in seen or t_lower in query_lower:
+            continue
+        if len(t_lower) <= 1:
+            continue
+        seen.add(t_lower)
+        extra_tokens.append(token)
+
+    if not extra_tokens:
+        return query
+
+    return f"{query} {' '.join(extra_tokens)}"
