@@ -182,13 +182,13 @@ def expand(
         return
 
     max_score = max(abs(s) for _, s in results) if results else 1.0
-    score_fmt = ">8.4f" if max_score < 10 else ">10.2f"
+    score_width = 8 if max_score < 10 else 10
 
     typer.echo(f"Query: {query}\n")
-    typer.echo(f"{'Token':<30} {'Score':{score_fmt}}")
-    typer.echo("-" * 40)
+    typer.echo(f"{'Token':<30} {'Score':>{score_width}}")
+    typer.echo("-" * (30 + score_width + 1))
     for token, score in results:
-        typer.echo(f"{token:<30} {score:{score_fmt}}")
+        typer.echo(f"{token:<30} {score:>{score_width}.4f}")
 
 
 @app.command()
