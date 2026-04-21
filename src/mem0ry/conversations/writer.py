@@ -26,10 +26,16 @@ def _sanitize_title(text: str) -> str:
     return text[:120] or "untitled"
 
 
-def _extract_date(create_time: str | None) -> str:
+def _extract_date(create_time: str | float | None) -> str:
     """Extract YYYY-MM-DD from a create_time string, or return 'unknown'."""
     if not create_time:
         return "unknown"
+    if isinstance(create_time, (int, float)):
+        try:
+            dt = datetime.fromtimestamp(float(create_time), tz=timezone.utc)
+            return dt.strftime("%Y-%m-%d")
+        except (ValueError, OSError):
+            return "unknown"
     # Try ISO 8601 format first (Gemini: "2026-04-03T14:06:31.934Z")
     try:
         dt = datetime.fromisoformat(create_time.replace("Z", "+00:00"))

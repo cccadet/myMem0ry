@@ -17,6 +17,16 @@ mcp = FastMCP("myMem0ry")
 _UNSAFE_FS_CHARS = re.compile(r'[/\\:*?"<>|\n\r]')
 _PREVIEW_LINES = 5
 _PREVIEW_MAX_CHARS = 500
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _resolve_within(base: Path, *parts: str) -> Path:
+    resolved = base.joinpath(*parts).resolve()
+    try:
+        resolved.relative_to(base.resolve())
+    except ValueError:
+        raise ValueError("Invalid path")
+    return resolved
 
 
 def _sanitize_title(text: str) -> str:
@@ -232,16 +242,13 @@ def read_memory(path: str) -> str:
         path: Relative path returned by search_memory (e.g. "2026-04-17/test.md").
     """
     conv_dir = _conversations_dir()
-    file_path = conv_dir / path
+    try:
+        file_path = _resolve_within(conv_dir, path)
+    except ValueError:
+        return "Invalid path"
 
     if not file_path.exists():
         return f"File not found: {path}"
-
-    # Prevent path traversal
-    try:
-        file_path.resolve().relative_to(conv_dir.resolve())
-    except ValueError:
-        return "Invalid path"
 
     return file_path.read_text(encoding="utf-8")
 

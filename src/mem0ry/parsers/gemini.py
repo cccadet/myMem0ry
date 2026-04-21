@@ -42,6 +42,48 @@ def _strip_html(html: str) -> str:
 _PROMPTED_PREFIX = "Prompted "
 
 
+def _parse_entry(raw: dict, index: int, source_file: str) -> ParsedConversation | None:
+    title = raw.get("title", "")
+    time_str = raw.get("time")
+    html_items = raw.get("safeHtmlItem", [])
+
+    user_content = ""
+    if title.startswith(_PROMPTED_PREFIX):
+        user_content = title[len(_PROMPTED_PREFIX) :].strip()
+
+    assistant_parts: list[str] = []
+    for item in html_items:
+        html = item.get("html", "")
+        text = _strip_html(html)
+        if text:
+            assistant_parts.append(text)
+
+    if not user_content and not assistant_parts:
+        return None
+
+    messages: list[ParsedMessage] = []
+    if user_content:
+        messages.append(
+            ParsedMessage(role="user", content=user_content, created_at=time_str)
+        )
+    if assistant_parts:
+        messages.append(
+            ParsedMessage(
+                role="assistant",
+                content="\n\n".join(assistant_parts),
+                created_at=time_str,
+            )
+        )
+
+    return ParsedConversation(
+        conversation_id=f"gemini-{index}",
+        title=title or None,
+        create_time=time_str,
+        messages=messages,
+        metadata={"source_file": source_file},
+    )
+
+
 class GeminiParser(BaseParser):
     """Normalize Gemini Takeout exports into conversations."""
 
@@ -53,53 +95,8 @@ class GeminiParser(BaseParser):
         conversations: list[ParsedConversation] = []
 
         for i, raw in enumerate(entries):
-            title = raw.get("title", "")
-            time_str = raw.get("time")
-            html_items = raw.get("safeHtmlItem", [])
-
-            # Extract user prompt from title
-            user_content = ""
-            if title.startswith(_PROMPTED_PREFIX):
-                user_content = title[len(_PROMPTED_PREFIX) :].strip()
-
-            # Collect assistant responses
-            assistant_parts: list[str] = []
-            for item in html_items:
-                html = item.get("html", "")
-                text = _strip_html(html)
-                if text:
-                    assistant_parts.append(text)
-
-            if not user_content and not assistant_parts:
-                continue
-
-            messages: list[ParsedMessage] = []
-            if user_content:
-                messages.append(
-                    ParsedMessage(
-                        role="user",
-                        content=user_content,
-                        created_at=time_str,
-                    )
-                )
-            if assistant_parts:
-                messages.append(
-                    ParsedMessage(
-                        role="assistant",
-                        content="\n\n".join(assistant_parts),
-                        created_at=time_str,
-                    )
-                )
-
-            conv_id = f"gemini-{i}"
-            conversations.append(
-                ParsedConversation(
-                    conversation_id=conv_id,
-                    title=title or None,
-                    create_time=time_str,
-                    messages=messages,
-                    metadata={"source_file": path.name},
-                )
-            )
+            conv = _parse_entry(raw, i, path.name)
+            if conv is not None:
+                conversations.append(conv)
 
         return conversations

@@ -22,6 +22,7 @@ import torch
 from .search import _STOP_WORDS
 
 _CACHE_ROOT = Path("data/.cache/ffn")
+_GATE_PROJS_FILE = "gate_projs.pt"
 
 # Default "knowledge band" — middle-to-late layers hold semantic knowledge
 _DEFAULT_LAYER_RANGE = range(20, 36)
@@ -175,7 +176,7 @@ def build_ffn_cache(
 
         print(f"  Layer {li}: gate/up_proj saved, {top_n} top-tokens per feature computed")
 
-    torch.save(gate_projs, cache / "gate_projs.pt")
+    torch.save(gate_projs, cache / _GATE_PROJS_FILE)
     torch.save(up_projs, cache / "up_projs.pt")
     torch.save(feature_tokens, cache / "feature_tokens.pt")
 
@@ -215,7 +216,7 @@ class FFNCache:
 
     def __init__(self, model_name: str) -> None:
         cache = _cache_dir(model_name)
-        if not (cache / "gate_projs.pt").exists():
+        if not (cache / _GATE_PROJS_FILE).exists():
             raise FileNotFoundError(
                 f"FFN cache not found for {model_name}. Run `mymem0ry warmup` first."
             )
@@ -229,7 +230,7 @@ class FFNCache:
         cfg = json.loads((cache / "config.json").read_text(encoding="utf-8"))
         self._embed_scale = cfg.get("embed_scale", 1.0)
         self._gate_projs: dict[int, torch.Tensor] = torch.load(
-            cache / "gate_projs.pt", weights_only=True
+            cache / _GATE_PROJS_FILE, weights_only=True
         )
         # Load up_proj weights for GeGLU activation (silu(gate) * up)
         up_path = cache / "up_projs.pt"
@@ -278,19 +279,11 @@ class FFNCache:
         which correctly amplifies semantic features over morphological ones.
         Falls back to raw gate scores for old caches without up_proj.
         """
-        import torch.nn.functional as F
-
-        # Encode query → pick tokenization with fewest tokens (best signal)
-        # BPE tokenizers like Llama's split "france" → ["fr", "ance"] (2 tokens)
-        # while "France" stays as 1 token. Fewer tokens = stronger concept signal.
         token_ids = self._best_token_ids(text)
         ids_tensor = torch.tensor(token_ids)
-        query_vec = self._embeddings[ids_tensor].mean(dim=0)  # (hidden,)
+        query_vec = self._embeddings[ids_tensor].mean(dim=0)
         query_vec = query_vec * self._embed_scale
 
-        # Normalize to post-RMSNorm scale — gate_proj expects input at residual stream
-        # magnitude (~sqrt(hidden_size)), not raw embedding magnitude.
-        # Gemma's embed_scale already handles this; other models need explicit normalization.
         hidden_size = query_vec.shape[0]
         query_vec = query_vec / query_vec.norm() * (hidden_size ** 0.5)
 
@@ -301,63 +294,78 @@ class FFNCache:
             print(f"  [debug] query_vec norm={query_vec.norm().item():.4f}")
             print(f"  [debug] using GeGLU: {has_up}")
 
-        # Walk through cached layers
         candidates: list[tuple[str, float, int]] = []
-
         for li in self._layers:
-            gate_proj = self._gate_projs[li].float()  # (intermediate, hidden)
-            ft_ids = self._ft_ids[li]  # (intermediate, top_n)
-            ft_scores = self._ft_scores[li]  # (intermediate, top_n)
+            candidates.extend(
+                self._process_layer(li, query_vec, gate_k, has_up, debug)
+            )
 
-            # Compute gate and (optionally) up projections
-            gate_scores = gate_proj @ query_vec  # (intermediate,)
+        return self._deduplicate(candidates, top_k)
 
-            if has_up and li in self._up_projs:
-                up_proj = self._up_projs[li].float()  # (intermediate, hidden)
-                up_scores = up_proj @ query_vec  # (intermediate,)
-                # GeGLU activation: silu(gate) * up
-                activations = F.silu(gate_scores) * up_scores
-            else:
-                # Fallback: raw gate scores (no GeGLU)
-                activations = gate_scores
+    def _process_layer(
+        self, li: int, query_vec: torch.Tensor, gate_k: int,
+        has_up: bool, debug: bool,
+    ) -> list[tuple[str, float, int]]:
+        import torch.nn.functional as F
 
-            if debug:
-                top_debug = torch.topk(activations.abs(), min(5, activations.shape[0]))
-                print(f"  [debug] L{li} top-5 activations: {[f'{v.item():.4f}' for v in top_debug.values]}")
-                for fi in top_debug.indices[:3]:
-                    top_tok = self._tokenizer.decode([ft_ids[fi][0].item()]).strip()
-                    print(f"    feat {fi.item()}: act={activations[fi].item():.4f}, top_tok='{top_tok}' (score={ft_scores[fi][0].item():.2f})")
+        gate_proj = self._gate_projs[li].float()
+        ft_ids = self._ft_ids[li]
+        ft_scores = self._ft_scores[li]
 
-            # Select top-K features by activation magnitude
-            topk = torch.topk(activations.abs(), min(gate_k, activations.shape[0]))
+        gate_scores = gate_proj @ query_vec
 
-            for feat_idx in topk.indices:
-                act_score = activations[feat_idx]
-                # Lookup pre-computed top tokens for this feature
-                ids = ft_ids[feat_idx]  # (top_n,)
-                scores = ft_scores[feat_idx]  # (top_n,)
+        if has_up and li in self._up_projs:
+            up_proj = self._up_projs[li].float()
+            up_scores = up_proj @ query_vec
+            activations = F.silu(gate_scores) * up_scores
+        else:
+            activations = gate_scores
 
-                for tok_id, tok_score in zip(ids, scores):
-                    token_str = self._tokenizer.decode([tok_id.item()]).strip()
-                    if not token_str or not _word_like(token_str):
-                        continue
-                    if token_str.lower() in _STOP_WORDS:
-                        continue
-                    # Combine activation × feature token logit contribution
-                    combined = act_score.item() * tok_score.item()
-                    candidates.append((token_str, combined, li))
+        if debug:
+            self._print_debug_layer(li, activations, ft_ids, ft_scores)
 
+        topk = torch.topk(activations.abs(), min(gate_k, activations.shape[0]))
+
+        candidates: list[tuple[str, float, int]] = []
+        for feat_idx in topk.indices:
+            act_score = activations[feat_idx]
+            ids = ft_ids[feat_idx]
+            scores = ft_scores[feat_idx]
+
+            for tok_id, tok_score in zip(ids, scores):
+                token_str = self._tokenizer.decode([tok_id.item()]).strip()
+                if not token_str or not _word_like(token_str):
+                    continue
+                if token_str.lower() in _STOP_WORDS:
+                    continue
+                combined = act_score.item() * tok_score.item()
+                candidates.append((token_str, combined, li))
+
+        return candidates
+
+    def _print_debug_layer(
+        self, li: int, activations: torch.Tensor,
+        ft_ids: torch.Tensor, ft_scores: torch.Tensor,
+    ) -> None:
+        top_debug = torch.topk(activations.abs(), min(5, activations.shape[0]))
+        print(f"  [debug] L{li} top-5 activations: {[f'{v.item():.4f}' for v in top_debug.values]}")
+        for fi in top_debug.indices[:3]:
+            top_tok = self._tokenizer.decode([ft_ids[fi][0].item()]).strip()
+            print(f"    feat {fi.item()}: act={activations[fi].item():.4f}, top_tok='{top_tok}' (score={ft_scores[fi][0].item():.2f})")
+
+    @staticmethod
+    def _deduplicate(
+        candidates: list[tuple[str, float, int]], top_k: int,
+    ) -> list[tuple[str, float, int]]:
         if not candidates:
             return []
 
-        # Deduplicate: keep highest score per token
         best: dict[str, tuple[float, int]] = {}
         for token, score, layer in candidates:
             t_lower = token.lower()
             if t_lower not in best or score > best[t_lower][0]:
                 best[t_lower] = (score, layer)
 
-        # Sort by score descending
         results = [(tok, sc, ly) for tok, (sc, ly) in best.items()]
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:top_k]

@@ -15,7 +15,8 @@ from ..pipeline.dataset import build_dataset_from_openai
 
 app = typer.Typer(help="myMem0ry — personal memory search system")
 
-_DEFAULT_SOURCES = [Path("data/openai/export"), Path("data/Gemini")]
+_DEFAULT_SOURCES = [Path("data/openai/export"), Path("data/gemini")]
+_METHOD_HELP = "Expansion method: ffn, spacy (default from config)"
 
 
 def _get_expander(config: MemoryConfig, method: str = ""):
@@ -99,7 +100,7 @@ def search(
     backend: str = typer.Option("ripgrep", "--backend", "-b", help="Backend: ripgrep, bm25, fts5"),
     top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results"),
     expand: bool = typer.Option(False, "--expand", "-e", help="Expand query with semantically similar tokens"),
-    method: str = typer.Option("", "--method", "-m", help="Expansion method: ffn, spacy (default from config)"),
+    method: str = typer.Option("", "--method", "-m", help=_METHOD_HELP),
     conversations: Path = Path(""),
 ) -> None:
     """Search conversations without model inference."""
@@ -149,7 +150,7 @@ def benchmark(
     question: str = typer.Argument(..., help="Query to benchmark"),
     top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results per backend"),
     expand: bool = typer.Option(False, "--expand", "-e", help="Expand query with semantically similar tokens"),
-    method: str = typer.Option("", "--method", "-m", help="Expansion method: ffn, spacy (default from config)"),
+    method: str = typer.Option("", "--method", "-m", help=_METHOD_HELP),
     conversations: Path = Path(""),
 ) -> None:
     """Compare search backends side by side."""
@@ -180,7 +181,7 @@ def expand(
     query: str = typer.Argument(..., help="Query to expand"),
     top_k: int = typer.Option(10, "--top-k", "-k", help="Number of similar tokens"),
     gate_k: int = typer.Option(32, "--gate-k", "-g", help="Number of gate features to activate per layer"),
-    method: str = typer.Option("", "--method", "-m", help="Expansion method: ffn, spacy (default from config)"),
+    method: str = typer.Option("", "--method", "-m", help=_METHOD_HELP),
     debug: bool = typer.Option(False, "--debug", "-d", help="Show debug info (gate scores, feature tokens)"),
 ) -> None:
     """Show semantically related tokens for a query."""
