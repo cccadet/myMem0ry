@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from datetime import date
@@ -44,15 +45,28 @@ def _conversations_dir() -> Path:
     return Path(config.conversations_dir)
 
 
-def _write_md(path: Path, title: str, content: str, dt: str) -> None:
-    """Write a .md file in the standard myMem0ry format."""
+def _write_md(base: Path, date_str: str, filename: str, title: str, content: str) -> Path:
+    """Write a .md file in the standard myMem0ry format. Returns the resolved path."""
+    safe_date = os.path.basename(date_str)
+    safe_name = os.path.basename(filename)
+    dir_path = base / safe_date
+    dir_path.mkdir(parents=True, exist_ok=True)
+    file_path = _resolve_within(dir_path, safe_name)
+
+    counter = 1
+    stem = Path(safe_name).stem
+    while file_path.exists():
+        file_path = _resolve_within(dir_path, f"{stem}-{counter}.md")
+        counter += 1
+
     lines = [
         f"# {title}",
-        f"> id: {uuid.uuid4().hex[:12]} | date: {dt}",
+        f"> id: {uuid.uuid4().hex[:12]} | date: {date_str}",
         "",
         content,
     ]
-    path.write_text("\n".join(lines), encoding="utf-8")
+    file_path.write_text("\n".join(lines), encoding="utf-8")
+    return file_path
 
 
 def _preview_text(path: Path) -> str:
@@ -139,18 +153,7 @@ def save_memory(title: str, content: str, dt: str = "") -> str:
     mem_date = _validate_date(dt) if dt else date.today().isoformat()
     safe_title = sanitize_title(title)
 
-    dir_path = _resolve_within(conv_dir, mem_date)
-    dir_path.mkdir(parents=True, exist_ok=True)
-
-    filename = f"{safe_title}.md"
-    file_path = _resolve_within(dir_path, filename)
-
-    counter = 1
-    while file_path.exists():
-        file_path = _resolve_within(dir_path, f"{safe_title}-{counter}.md")
-        counter += 1
-
-    _write_md(file_path, title, content, mem_date)
+    file_path = _write_md(conv_dir, mem_date, f"{safe_title}.md", title, content)
     rel = file_path.relative_to(conv_dir)
     return f"Saved: {rel}"
 
@@ -172,15 +175,16 @@ def save_conversation(title: str, messages: list[dict[str, str]], dt: str = "") 
     mem_date = _validate_date(dt) if dt else date.today().isoformat()
     safe_title = sanitize_title(title)
 
-    dir_path = _resolve_within(conv_dir, mem_date)
+    safe_date = os.path.basename(mem_date)
+    safe_name = os.path.basename(f"{safe_title}.md")
+    dir_path = conv_dir / safe_date
     dir_path.mkdir(parents=True, exist_ok=True)
-
-    filename = f"{safe_title}.md"
-    file_path = _resolve_within(dir_path, filename)
+    file_path = _resolve_within(dir_path, safe_name)
 
     counter = 1
+    stem = Path(safe_name).stem
     while file_path.exists():
-        file_path = _resolve_within(dir_path, f"{safe_title}-{counter}.md")
+        file_path = _resolve_within(dir_path, f"{stem}-{counter}.md")
         counter += 1
 
     # Format as standard myMem0ry conversation
