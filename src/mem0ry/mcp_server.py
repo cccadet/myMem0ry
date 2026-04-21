@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date
 from pathlib import Path
@@ -18,6 +19,13 @@ mcp = FastMCP("myMem0ry")
 
 _PREVIEW_LINES = 5
 _PREVIEW_MAX_CHARS = 500
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validate_date(dt: str) -> str:
+    if not _DATE_RE.match(dt):
+        raise ValueError(f"Invalid date format: '{dt}'. Expected YYYY-MM-DD.")
+    return dt
 
 
 def _resolve_within(base: Path, *parts: str) -> Path:
@@ -128,19 +136,18 @@ def save_memory(title: str, content: str, dt: str = "") -> str:
         dt: Optional date in YYYY-MM-DD format. Defaults to today.
     """
     conv_dir = _conversations_dir()
-    mem_date = dt or date.today().isoformat()
+    mem_date = _validate_date(dt) if dt else date.today().isoformat()
     safe_title = sanitize_title(title)
 
-    dir_path = conv_dir / mem_date
+    dir_path = _resolve_within(conv_dir, mem_date)
     dir_path.mkdir(parents=True, exist_ok=True)
 
     filename = f"{safe_title}.md"
-    file_path = dir_path / filename
+    file_path = _resolve_within(dir_path, filename)
 
-    # Avoid overwriting
     counter = 1
     while file_path.exists():
-        file_path = dir_path / f"{safe_title}-{counter}.md"
+        file_path = _resolve_within(dir_path, f"{safe_title}-{counter}.md")
         counter += 1
 
     _write_md(file_path, title, content, mem_date)
@@ -162,18 +169,18 @@ def save_conversation(title: str, messages: list[dict[str, str]], dt: str = "") 
         dt: Optional date in YYYY-MM-DD format. Defaults to today.
     """
     conv_dir = _conversations_dir()
-    mem_date = dt or date.today().isoformat()
+    mem_date = _validate_date(dt) if dt else date.today().isoformat()
     safe_title = sanitize_title(title)
 
-    dir_path = conv_dir / mem_date
+    dir_path = _resolve_within(conv_dir, mem_date)
     dir_path.mkdir(parents=True, exist_ok=True)
 
     filename = f"{safe_title}.md"
-    file_path = dir_path / filename
+    file_path = _resolve_within(dir_path, filename)
 
     counter = 1
     while file_path.exists():
-        file_path = dir_path / f"{safe_title}-{counter}.md"
+        file_path = _resolve_within(dir_path, f"{safe_title}-{counter}.md")
         counter += 1
 
     # Format as standard myMem0ry conversation

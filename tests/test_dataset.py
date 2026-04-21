@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from mem0ry.dataset.dedupe import deduplicate_examples
 from mem0ry.dataset.filter import apply_quality_filters
 from mem0ry.dataset.splitter import train_val_split
@@ -65,7 +67,7 @@ def test_compute_stats() -> None:
     stats = compute_stats(examples)
     assert isinstance(stats, DatasetStats)
     assert stats.total_examples == 1
-    assert stats.avg_messages == 2.0
+    assert stats.avg_messages == pytest.approx(2.0)
     d = stats.to_dict()
     assert d["total_examples"] == 1
 
