@@ -2,28 +2,18 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ..parsers.base import BaseParser
 from ..parsers.gemini import GeminiParser
 from ..parsers.openai import OpenAIParser
+from ..utils.filenames import sanitize_title
 
 _PARSERS: dict[str, type[BaseParser]] = {
     "openai": OpenAIParser,
     "gemini": GeminiParser,
 }
-
-
-_UNSAFE_FS_CHARS = re.compile(r'[/\\:*?"<>|\n\r]')
-
-
-def _sanitize_title(text: str) -> str:
-    """Strip characters illegal in filenames, keep unicode intact."""
-    text = text.strip().replace("\n", " ")
-    text = _UNSAFE_FS_CHARS.sub("", text)
-    return text[:120] or "untitled"
 
 
 def _extract_date(create_time: str | float | None) -> str:
@@ -136,7 +126,7 @@ def split_conversations(
             continue
 
         date_dir = _extract_date(conv.create_time)
-        safe_title = _sanitize_title(conv.title or conv.conversation_id)
+        safe_title = sanitize_title(conv.title or conv.conversation_id)
 
         dir_path = output / date_dir
         dir_path.mkdir(parents=True, exist_ok=True)

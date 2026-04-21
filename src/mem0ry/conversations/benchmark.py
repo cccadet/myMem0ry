@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any
 
 from .search import search
 from .search_bm25 import search_bm25
@@ -14,7 +15,7 @@ def run_benchmark(
     query: str,
     conversations_dir: Path,
     top_k: int = 3,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Run query across all backends and collect timing + results.
 
     Returns a list of dicts with keys: backend, time_ms, n_files, paths.
@@ -47,7 +48,7 @@ def run_benchmark(
     return results
 
 
-def format_table(results: list[dict]) -> str:
+def format_table(results: list[dict[str, Any]]) -> str:
     """Format benchmark results as a terminal table."""
     header = f"{'Backend':<10} {'Tempo (ms)':>10} {'Arquivos':>9}  Top match"
     sep = "-" * len(header)

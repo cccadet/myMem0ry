@@ -25,8 +25,9 @@ def _check_rg() -> None:
     """Raise if ripgrep is not installed."""
     if not shutil.which("rg"):
         raise FileNotFoundError(
-            "ripgrep (rg) not found. Install it: "
-            "https://github.com/BurntSushi/ripgrep#installation"
+            "ripgrep (rg) not found in PATH. Install it: "
+            "https://github.com/BurntSushi/ripgrep#installation — "
+            "search() requires rg to perform keyword search."
         )
 
 

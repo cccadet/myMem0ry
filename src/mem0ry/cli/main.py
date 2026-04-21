@@ -13,12 +13,14 @@ from ..conversations.search_fts import build_fts_index
 from ..conversations.writer import split_conversations
 from ..pipeline.dataset import build_dataset_from_openai
 
+from ..conversations.spacy_expand import SpacyConceptSearch
+
 app = typer.Typer(help="myMem0ry — personal memory search system")
 
 _DEFAULT_SOURCES = [Path("data/openai/export"), Path("data/gemini")]
 
 
-def _get_expander(config: MemoryConfig):
+def _get_expander(config: MemoryConfig) -> SpacyConceptSearch:
     """Instantiate the spaCy concept search backend."""
     from ..conversations.spacy_expand import SpacyConceptSearch
 

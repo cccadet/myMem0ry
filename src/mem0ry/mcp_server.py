@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from datetime import date
 from pathlib import Path
@@ -11,13 +10,14 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .config import MemoryConfig
+from .utils.filenames import sanitize_title
+
+from .conversations.spacy_expand import SpacyConceptSearch
 
 mcp = FastMCP("myMem0ry")
 
-_UNSAFE_FS_CHARS = re.compile(r'[/\\:*?"<>|\n\r]')
 _PREVIEW_LINES = 5
 _PREVIEW_MAX_CHARS = 500
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _resolve_within(base: Path, *parts: str) -> Path:
@@ -25,15 +25,10 @@ def _resolve_within(base: Path, *parts: str) -> Path:
     try:
         resolved.relative_to(base.resolve())
     except ValueError:
-        raise ValueError("Invalid path")
+        raise ValueError(
+            f"Path traversal blocked: '{'/'.join(parts)}' escapes base directory '{base}'"
+        )
     return resolved
-
-
-def _sanitize_title(text: str) -> str:
-    """Strip characters illegal in filenames."""
-    text = text.strip().replace("\n", " ")
-    text = _UNSAFE_FS_CHARS.sub("", text)
-    return text[:120] or "untitled"
 
 
 def _conversations_dir() -> Path:
@@ -68,10 +63,10 @@ def _preview_text(path: Path) -> str:
 _session_id: str | None = None
 _session_title: str = "session"
 
-_expander = None
+_expander: SpacyConceptSearch | None = None
 
 
-def _get_expander():
+def _get_expander() -> SpacyConceptSearch:
     global _expander
     if _expander is None:
         from .conversations.spacy_expand import SpacyConceptSearch
@@ -104,7 +99,7 @@ def log_message(role: str, content: str) -> str:
     if _session_id is None:
         _session_id = uuid.uuid4().hex[:8]
 
-    safe_title = _sanitize_title(_session_title)
+    safe_title = sanitize_title(_session_title)
     filename = f"{safe_title}-{_session_id}.md"
     file_path = dir_path / filename
 
@@ -134,7 +129,7 @@ def save_memory(title: str, content: str, dt: str = "") -> str:
     """
     conv_dir = _conversations_dir()
     mem_date = dt or date.today().isoformat()
-    safe_title = _sanitize_title(title)
+    safe_title = sanitize_title(title)
 
     dir_path = conv_dir / mem_date
     dir_path.mkdir(parents=True, exist_ok=True)
@@ -168,7 +163,7 @@ def save_conversation(title: str, messages: list[dict[str, str]], dt: str = "") 
     """
     conv_dir = _conversations_dir()
     mem_date = dt or date.today().isoformat()
-    safe_title = _sanitize_title(title)
+    safe_title = sanitize_title(title)
 
     dir_path = conv_dir / mem_date
     dir_path.mkdir(parents=True, exist_ok=True)

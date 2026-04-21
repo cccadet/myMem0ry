@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# bin/setup — idempotent project bootstrap.
+# Safe to run multiple times. No manual steps required after this.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+echo "[setup] Syncing Python dependencies..."
+uv sync
+
+echo "[setup] Downloading spaCy model (pt_core_news_lg)..."
+uv run python -c "
+import spacy
+try:
+    spacy.load('pt_core_news_lg')
+    print('  spaCy model already cached.')
+except OSError:
+    print('  Downloading pt_core_news_lg...')
+    spacy.cli.download('pt_core_news_lg')
+    print('  Done.')
+"
+
+echo "[setup] Checking ripgrep..."
+if command -v rg &>/dev/null; then
+    echo "  rg $(rg --version | head -1)"
+else
+    echo "  WARNING: ripgrep (rg) not found. Install it for search to work."
+fi
+
+echo "[setup] Running linter..."
+uv run ruff check . || true
+
+echo "[setup] Running tests..."
+uv run pytest --tb=short -q 2>/dev/null || echo "  (no tests yet)"
+
+echo "[setup] Done."

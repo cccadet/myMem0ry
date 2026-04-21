@@ -93,7 +93,7 @@ def build_dataset_from_openai(
     }
 
 
-def _write_jsonl(examples, path: Path) -> None:
+def _write_jsonl(examples: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as stream:
         for example in examples:
