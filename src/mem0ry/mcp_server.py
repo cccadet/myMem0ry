@@ -45,23 +45,16 @@ def _conversations_dir() -> Path:
     return Path(config.conversations_dir)
 
 
-def _write_md(base: Path, date_str: str, filename: str, title: str, content: str) -> Path:
+def _write_md(base: Path, date_str: str, title: str, content: str) -> Path:
     """Write a .md file in the standard myMem0ry format. Returns the resolved path."""
+    file_id = uuid.uuid4().hex[:12]
     safe_date = os.path.basename(date_str)
-    safe_name = os.path.basename(filename)
     dir_path = base / safe_date
     dir_path.mkdir(parents=True, exist_ok=True)
-    file_path = _resolve_within(dir_path, safe_name)
-
-    counter = 1
-    stem = Path(safe_name).stem
-    while file_path.exists():
-        file_path = _resolve_within(dir_path, f"{stem}-{counter}.md")
-        counter += 1
-
+    file_path = dir_path / f"{file_id}.md"
     lines = [
         f"# {title}",
-        f"> id: {uuid.uuid4().hex[:12]} | date: {date_str}",
+        f"> id: {file_id} | date: {date_str}",
         "",
         content,
     ]
@@ -151,9 +144,8 @@ def save_memory(title: str, content: str, dt: str = "") -> str:
     """
     conv_dir = _conversations_dir()
     mem_date = _validate_date(dt) if dt else date.today().isoformat()
-    safe_title = sanitize_title(title)
 
-    file_path = _write_md(conv_dir, mem_date, f"{safe_title}.md", title, content)
+    file_path = _write_md(conv_dir, mem_date, title, content)
     rel = file_path.relative_to(conv_dir)
     return f"Saved: {rel}"
 
@@ -173,24 +165,17 @@ def save_conversation(title: str, messages: list[dict[str, str]], dt: str = "") 
     """
     conv_dir = _conversations_dir()
     mem_date = _validate_date(dt) if dt else date.today().isoformat()
-    safe_title = sanitize_title(title)
 
+    file_id = uuid.uuid4().hex[:12]
     safe_date = os.path.basename(mem_date)
-    safe_name = os.path.basename(f"{safe_title}.md")
     dir_path = conv_dir / safe_date
     dir_path.mkdir(parents=True, exist_ok=True)
-    file_path = _resolve_within(dir_path, safe_name)
-
-    counter = 1
-    stem = Path(safe_name).stem
-    while file_path.exists():
-        file_path = _resolve_within(dir_path, f"{stem}-{counter}.md")
-        counter += 1
+    file_path = dir_path / f"{file_id}.md"
 
     # Format as standard myMem0ry conversation
     lines = [
         f"# {title}",
-        f"> id: {uuid.uuid4().hex[:12]} | date: {mem_date}",
+        f"> id: {file_id} | date: {mem_date}",
         "",
     ]
     for msg in messages:
