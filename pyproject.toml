@@ -31,7 +31,26 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-cov>=6.0.0",
+    "mutmut>=2.5.0",
     "ruff>=0.15.9",
     "bandit>=1.7.0",
     "mypy>=1.15.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["mem0ry"]
+branch = true
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
+
+[tool.mutmut]
+paths_to_mutate = "src/mem0ry"
+tests_dir = "tests"
+runner = "pytest -x --tb=short"

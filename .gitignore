@@ -22,3 +22,4 @@ memoria.kvcache
 uv.lock
 .claude/settings.json
 .vscode/settings.json
+.coverage
