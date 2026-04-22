@@ -2,26 +2,23 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
 
 from mem0ry.conversations.spacy_expand import expand_query_spacy, SpacyConceptSearch
 
 
-class FakeSpacyConceptSearch:
-    """Lightweight fake that doesn't require loading the real spaCy model."""
-
-    def __init__(self, results: list[tuple[str, float]] | None = None) -> None:
-        self._results = results or []
-
-    def similar_tokens(self, text: str, top_k: int = 10) -> list[tuple[str, float]]:
-        return self._results
+def _fake_expander(
+    results: list[tuple[str, float]] | None = None,
+) -> MagicMock:
+    fake = MagicMock(spec=SpacyConceptSearch)
+    fake.similar_tokens.return_value = results or []
+    return fake
 
 
 def test_expand_query_appends_similar_tokens() -> None:
-    fake = FakeSpacyConceptSearch([("programação", 0.8), ("código", 0.6)])
+    fake = _fake_expander([("programação", 0.8), ("código", 0.6)])
     result = expand_query_spacy("python", fake, top_k=5)
     assert result.startswith("python")
     assert "programação" in result
@@ -29,13 +26,13 @@ def test_expand_query_appends_similar_tokens() -> None:
 
 
 def test_expand_query_no_results_returns_original() -> None:
-    fake = FakeSpacyConceptSearch([])
+    fake = _fake_expander([])
     result = expand_query_spacy("python", fake)
     assert result == "python"
 
 
 def test_expand_query_deduplicates() -> None:
-    fake = FakeSpacyConceptSearch([("python", 0.9), ("Python", 0.8)])
+    fake = _fake_expander([("python", 0.9), ("Python", 0.8)])
     result = expand_query_spacy("python", fake)
     tokens = result.split()
     lower_tokens = [t.lower() for t in tokens]
@@ -43,14 +40,14 @@ def test_expand_query_deduplicates() -> None:
 
 
 def test_expand_query_filters_single_char() -> None:
-    fake = FakeSpacyConceptSearch([("x", 0.5), ("código", 0.7)])
+    fake = _fake_expander([("x", 0.5), ("código", 0.7)])
     result = expand_query_spacy("python", fake)
     assert " x " not in result
     assert "código" in result
 
 
 def test_expand_query_excludes_tokens_in_query() -> None:
-    fake = FakeSpacyConceptSearch([("python", 0.9), ("snake", 0.5)])
+    fake = _fake_expander([("python", 0.9), ("snake", 0.5)])
     result = expand_query_spacy("python", fake)
     tokens = result.split()[1:]
     assert "python" not in tokens
@@ -74,15 +71,11 @@ def test_mask_query_variants_zeros_self() -> None:
     sims = np.array([0.9, 0.8, 0.7], dtype=np.float32)
     words = np.array(["python", "programação", "código"])
 
-    class FakeDoc:
-        text = "python"
-
-    class FakeToken:
-        def __init__(self, text: str) -> None:
-            self.text = text
+    fake_token = MagicMock()
+    fake_token.text = "python"
 
     doc = MagicMock()
-    doc.__iter__ = lambda self_iter: iter([FakeToken("python")])
+    doc.__iter__ = lambda self_iter: iter([fake_token])
 
     fake_search = MagicMock(spec=SpacyConceptSearch)
     fake_search._vocab_words = words
