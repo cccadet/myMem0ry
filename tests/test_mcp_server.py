@@ -50,7 +50,7 @@ def test_resolve_within_valid(tmp_path: Path) -> None:
 
 
 def test_resolve_within_traversal_blocked(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="Path traversal blocked"):
+    with pytest.raises(ValueError, match=r"Path traversal blocked.*\.\./etc"):
         _resolve_within(tmp_path, "..", "etc", "passwd")
 
 
@@ -237,3 +237,77 @@ def test_conversation_logger_without_topic() -> None:
     result = conversation_logger()
     assert "Conversation topic" not in result
     assert "log_message" in result
+
+
+def test_write_md_file_id_is_12_chars(tmp_path: Path) -> None:
+    path = _write_md(tmp_path, "2026-04-21", "ID Check", "content")
+    text = path.read_text(encoding="utf-8")
+    import re
+    match = re.search(r"id: ([a-f0-9]+) \|", text)
+    assert match is not None
+    assert len(match.group(1)) == 12
+
+
+def test_write_md_creates_nested_date_dir(tmp_path: Path) -> None:
+    base = tmp_path / "deep"
+    base.mkdir()
+    path = _write_md(base, "2026-04-21", "Nested", "data")
+    assert (base / "2026-04-21").is_dir()
+    assert path.parent == base / "2026-04-21"
+
+
+def test_write_md_file_has_exactly_4_lines_joined_by_newline(tmp_path: Path) -> None:
+    path = _write_md(tmp_path, "2026-04-21", "Fmt", "body")
+    text = path.read_text(encoding="utf-8")
+    parts = text.split("\n")
+    assert parts[0] == "# Fmt"
+    assert parts[1].startswith("> id:")
+    assert parts[2] == ""
+    assert parts[3] == "body"
+
+
+def test_write_md_encoding_is_utf8(tmp_path: Path) -> None:
+    path = _write_md(tmp_path, "2026-04-21", "Ação", "Conteúdo com açentos é spécial")
+    text = path.read_text(encoding="utf-8")
+    assert "Ação" in text
+    assert "açentos" in text
+
+
+def test_preview_text_exact_5_lines(tmp_path: Path) -> None:
+    f = tmp_path / "exact.md"
+    f.write_text("a\nb\nc\nd\ne", encoding="utf-8")
+    result = _preview_text(f)
+    assert result == "a\nb\nc\nd\ne"
+
+
+def test_preview_text_truncation_boundary(tmp_path: Path) -> None:
+    content = "x" * 498
+    f = tmp_path / "boundary.md"
+    f.write_text(content, encoding="utf-8")
+    result = _preview_text(f)
+    assert len(result) == 498
+    assert not result.endswith("...")
+
+
+def test_preview_text_truncation_triggers_at_501(tmp_path: Path) -> None:
+    content = "x" * 501
+    f = tmp_path / "over.md"
+    f.write_text(content, encoding="utf-8")
+    result = _preview_text(f)
+    assert result.endswith("...")
+    assert len(result) == 503
+
+
+def test_preview_text_encoding_utf8(tmp_path: Path) -> None:
+    f = tmp_path / "accents.md"
+    f.write_text("acentos: ção, é, ã", encoding="utf-8")
+    result = _preview_text(f)
+    assert "ção" in result
+    assert "é" in result
+
+
+def test_preview_text_returns_empty_string_for_empty_file(tmp_path: Path) -> None:
+    f = tmp_path / "empty.md"
+    f.write_text("", encoding="utf-8")
+    result = _preview_text(f)
+    assert result == ""

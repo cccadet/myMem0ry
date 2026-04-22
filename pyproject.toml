@@ -51,6 +51,7 @@ show_missing = true
 fail_under = 80
 
 [tool.mutmut]
-paths_to_mutate = "src/mem0ry"
-tests_dir = "tests"
-runner = "pytest -x --tb=short"
+paths_to_mutate = ["src/mem0ry"]
+tests_dir = ["tests"]
+runner = "uv run pytest -x --tb=short -q"
+do_not_mutate = ["test_*", "__init__.py"]
