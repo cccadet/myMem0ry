@@ -122,6 +122,7 @@ Conversas históricas (ChatGPT, Gemini, Claude)
 
 ## Próximos passos (pós-v1.0)
 
+1. **MCP via stdio** — suporte ao transporte stdio no MCP server (além do SSE actual), para compatibilidade com mais clientes
 - Publicar no PyPI como `mymem0ry` (testar `uvx mymem0ry`)
 - Dashboard web / viewer para memorias
 - Sync entre máquinas
