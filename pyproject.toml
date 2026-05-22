@@ -1,14 +1,23 @@
 [project]
 name = "mymem0ry"
-version = "0.2.0"
+version = "0.3.0"
 description = "Personal memory search system with semantic query expansion"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "cccadet", email = "perestra.ccds@gmail.com" }
 ]
 requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Utilities",
+]
+keywords = ["memory", "mcp", "spacy", "semantic-search", "ai-agent"]
 dependencies = [
-    "openai>=1.0",
     "python-dotenv>=1.0",
     "pydantic>=2.12.5",
     "typer>=0.24.1",
@@ -16,7 +25,13 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "spacy>=3.8",
     "mcp[cli]>=1.0",
+    "sqlite-vec>=0.1.9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/cccadet/myMem0ry"
+Issues = "https://github.com/cccadet/myMem0ry/issues"
+Changelog = "https://github.com/cccadet/myMem0ry/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 
@@ -55,3 +70,7 @@ paths_to_mutate = ["src/mem0ry"]
 tests_dir = ["tests"]
 runner = "uv run pytest -x --tb=short -q"
 do_not_mutate = ["test_*", "__init__.py"]
+
+[[tool.mypy.overrides]]
+module = ["sqlite_vec", "rank_bm25", "spacy.*"]
+ignore_missing_imports = true

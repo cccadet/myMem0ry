@@ -37,7 +37,7 @@ def test_configure_logging_json_output(capfd) -> None:
     logger.info("test_structured_log")
     logger.handlers.clear()
     captured = capfd.readouterr()
-    lines = [l for l in captured.err.strip().split("\n") if l.strip()]
+    lines = [line for line in captured.err.strip().split("\n") if line.strip()]
     assert lines, "Expected JSON log output on stderr"
     data = json.loads(lines[-1])
     assert data["msg"] == "test_structured_log"

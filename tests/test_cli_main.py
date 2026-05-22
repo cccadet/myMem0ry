@@ -104,12 +104,14 @@ def test_dataset_missing_source(tmp_path: Path) -> None:
 @patch("mem0ry.cli.main.build_fts_index")
 def test_index_command(mock_fts: MagicMock, mock_bm25: MagicMock, tmp_path: Path) -> None:
     (tmp_path / "test.md").write_text("content", encoding="utf-8")
-    result = runner.invoke(
-        app, ["index", "--conversations", str(tmp_path)]
-    )
-    assert result.exit_code == 0
-    mock_bm25.assert_called_once()
-    mock_fts.assert_called_once()
+    with patch("mem0ry.cli.main._build_vector_index") as mock_vec:
+        result = runner.invoke(
+            app, ["index", "--conversations", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+        mock_bm25.assert_called_once()
+        mock_fts.assert_called_once()
+        mock_vec.assert_called_once()
 
 
 @patch("mem0ry.cli.main.build_bm25_index")

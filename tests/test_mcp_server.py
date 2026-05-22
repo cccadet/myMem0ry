@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
@@ -22,7 +21,7 @@ from mem0ry.mcp_server import (
     auto_save_instructions,
     conversation_logger,
 )
-from mem0ry.mcp_server import _session_id, _session_title
+
 
 
 def test_validate_date_valid() -> None:

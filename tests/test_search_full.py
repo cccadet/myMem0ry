@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from mem0ry.conversations.search import search, _check_rg, _extract_keywords
+from mem0ry.conversations.search import search, _check_rg
 
 
 def test_check_rg_raises_when_missing() -> None:

@@ -1,107 +1,103 @@
 # myMem0ry
 
-Personal memory search system with semantic query expansion.
+> Personal memory for AI agents. Zero API keys. Offline. Pure Python.
 
-Searches through your ChatGPT and Gemini conversations using multiple backends (ripgrep, BM25, FTS5), with optional semantic query expansion using spaCy word vectors.
+[![CI](https://github.com/cccadet/myMem0ry/actions/workflows/ci.yml/badge.svg)](https://github.com/cccadet/myMem0ry/actions/workflows/ci.yml)
 
-## Setup
+## What it does
 
-```bash
-uv sync
-uv run spacy download pt_core_news_lg   # download word vectors (run once)
-```
+- Ingests conversations from ChatGPT, Gemini, Claude → indexed `.md` files
+- Semantic search (spaCy + sqlite-vec + BM25/FTS5/hybrid)
+- MCP server with scoped memory (global/project/session)
+- Works with Claude Code, OpenCode, Cursor
 
-## Usage
-
-```bash
-# Split conversations into .md files organized by date
-mymem0ry split                        # auto-detects OpenAI and/or Gemini exports
-
-# Search conversations
-mymem0ry search "qdrant"              # ripgrep (default)
-mymem0ry search "qdrant" --backend bm25
-mymem0ry search "qdrant" --backend fts5
-
-# Search with semantic query expansion
-mymem0ry search "qdrant" --expand     # expands query with spaCy similar tokens
-
-# Show semantically related tokens
-mymem0ry expand "france"              # top-10 related tokens
-mymem0ry expand "france" -k 20        # more results
-
-# Compare backends side by side
-mymem0ry benchmark "python"
-mymem0ry benchmark "python" --expand
-
-# Build search indexes
-mymem0ry index                        # all backends
-mymem0ry index --backend bm25
-mymem0ry index --backend fts5
-```
-
-## How it works
-
-### Conversation pipeline
-
-1. **Split** — Parses exports (OpenAI JSON or Gemini Takeout JSON) and writes each conversation as a `.md` file organized by date in `data/conversations/YYYY-MM-DD/`.
-2. **Search** — Searches across all `.md` files using ripgrep, BM25, or SQLite FTS5.
-
-### Query expansion
-
-The `--expand` flag uses spaCy word vectors (`pt_core_news_lg`) to find semantically related words. It operates at the word level — no BPE/subword fragmentation.
-
-```
-$ mymem0ry expand "france"
-Query: france
-
-Token                             Score
-----------------------------------------
-paris                              0.63
-french                             0.61
-...
-```
-
-### MCP Server
-
-myMem0ry also runs as an MCP server with tools for saving and searching memories:
+## Quick start
 
 ```bash
-mymem0ry-mcp    # starts the MCP server
+uvx mymem0ry split data/openai/export
+uvx mymem0ry search "python decorators"
+uvx mymem0ry search "auth" --backend hybrid --expand
 ```
 
-Tools: `log_message`, `save_memory`, `save_conversation`, `search_memory`, `read_memory`.
+## Architecture
 
-### Supported sources
+```
+Conversations (ChatGPT/Gemini/Claude)
+        ↓
+    [split + ingest]
+        ↓
+  .md files + embeddings (spaCy 300-dim)
+        ↓
+  Indexed search (BM25 / FTS5 / sqlite-vec / hybrid RRF)
+        ↓
+    [MCP Server]
+        ↓
+  Agents (Claude Code, OpenCode, Cursor...)
+```
 
-| Source | Directory | Format |
-|--------|-----------|--------|
-| OpenAI (ChatGPT) | `data/openai/export/` | JSON with `mapping` tree |
-| Gemini (Google Takeout) | `data/gemini/` | `Minhaatividade.json` |
+## Memory scopes
 
-Auto-detected on `mymem0ry split` — both sources write to the same `data/conversations/` output.
+| Scope | What it stores | `save_memory` args |
+|---|---|---|
+| `global` | Preferences, stack, patterns | `scope="global"` |
+| `project` | Technical decisions, bugs, context | `scope="project", project_path="/abs/path"` |
+| `session` | Current session summary | `scope="session", session_id="abc123"` |
 
-## Search backends
+`get_context()` aggregates all 3 levels — session > project > global.
 
-| Backend | Description | Index |
-|---------|-------------|-------|
-| `ripgrep` | Regex keyword search (default) | None |
-| `bm25` | TF-IDF ranking with BM25Okapi | `.bm25_index.pkl` |
-| `fts5` | SQLite full-text search | `.fts5_index.db` |
+## MCP Tools
 
-## Environment Variables
+| Tool | Description |
+|---|---|
+| `log_message` | Log a message in the current session |
+| `save_memory` | Save a memory with scope |
+| `save_conversation` | Save a full conversation |
+| `read_memory` | Read a memory file's content |
+| `search_memory` | Search with semantic query expansion |
+| `get_context` | Aggregate context from all scopes |
+| `list_scopes` | List scopes with memory counts |
+| `end_session` | Mark session as completed |
+| `memory_stats` | Database statistics |
+
+## CLI commands
+
+```bash
+mymem0ry split                        # Export → .md by date
+mymem0ry search "query"               # Search (ripgrep default)
+mymem0ry search "query" --backend hybrid --expand
+mymem0ry benchmark "python"           # Compare backends
+mymem0ry expand "france"              # Semantically related tokens
+mymem0ry index                        # Build BM25 + FTS5 + vector indexes
+mymem0ry migrate                      # Migrate .md → SQLite memories
+mymem0ry stats                        # Memory database overview
+mymem0ry projects                     # List projects with memories
+mymem0ry doctor                       # System health check
+```
+
+## Configuration
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `EXPAND_TOP_K` | `10` | Number of similar tokens to generate |
+|---|---|---|
+| `EXPAND_TOP_K` | `10` | Similar tokens in expansion |
 | `CONVERSATIONS_DIR` | `data/conversations` | Directory with .md conversations |
-| `SEARCH_TOP_K` | `3` | Number of results to retrieve |
-| `SEARCH_BACKEND` | `ripgrep` | Default search backend: ripgrep, bm25, fts5 |
+| `SEARCH_TOP_K` | `3` | Number of search results |
+| `SEARCH_BACKEND` | `ripgrep` | Default backend: ripgrep, bm25, fts5, hybrid |
 | `SPACY_MODEL` | `pt_core_news_lg` | spaCy model for query expansion |
+| `VECTOR_DB_PATH` | `data/conversations/.vec.db` | sqlite-vec database path |
+| `EMBEDDING_DIM` | `300` | Embedding dimensionality |
+| `RRF_K` | `60` | RRF constant for hybrid search |
+| `DB_PATH` | `data/memories.db` | SQLite memories database path |
 
-## Testing & Linting
+## Development
 
 ```bash
-uv run pytest
+uv sync --group dev
+uv run spacy download pt_core_news_lg
+uv run python -m pytest
 uv run ruff check .
 uv run mypy src/mem0ry
 ```
+
+## License
+
+MIT

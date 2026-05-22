@@ -46,7 +46,7 @@ def test_search_fts_builds_index_if_missing(tmp_path: Path) -> None:
     (tmp_path / "2026-04-21").mkdir()
     (tmp_path / "2026-04-21" / "test.md").write_text("unique searchable content", encoding="utf-8")
     assert not _db_path(tmp_path).exists()
-    results = search_fts("unique", tmp_path)
+    search_fts("unique", tmp_path)
     assert _db_path(tmp_path).exists()
 
 

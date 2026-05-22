@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import pickle
 import re
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 from rank_bm25 import BM25Okapi
 
 from .search import _STOP_WORDS
+
+logger = logging.getLogger(__name__)
 
 
 def _tokenize(text: str) -> list[str]:
@@ -24,7 +27,7 @@ def build_bm25_index(conversations_dir: Path) -> None:
     """Build and save BM25 index from all .md files in conversations_dir."""
     files = sorted(conversations_dir.rglob("*.md"))
     if not files:
-        print("[bm25] Nenhum arquivo .md encontrado.")
+        logger.info("[bm25] Nenhum arquivo .md encontrado.")
         return
 
     corpus: list[list[str]] = []
@@ -43,7 +46,7 @@ def build_bm25_index(conversations_dir: Path) -> None:
     with open(path, "wb") as fh:
         pickle.dump({"bm25": bm25, "paths": paths}, fh)
 
-    print(f"[bm25] Índice criado: {len(paths)} arquivos em {path}")
+    logger.info("[bm25] Índice criado: %d arquivos em %s", len(paths), path)
 
 
 def search_bm25(

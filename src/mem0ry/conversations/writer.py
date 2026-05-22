@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..parsers.base import BaseParser
+from ..parsers.claude import ClaudeCodeParser, ClaudeExportParser
 from ..parsers.gemini import GeminiParser
 from ..parsers.openai import OpenAIParser
 from ..utils.filenames import sanitize_title
@@ -13,6 +14,8 @@ from ..utils.filenames import sanitize_title
 _PARSERS: dict[str, type[BaseParser]] = {
     "openai": OpenAIParser,
     "gemini": GeminiParser,
+    "claude-code": ClaudeCodeParser,
+    "claude-export": ClaudeExportParser,
 }
 
 
@@ -63,8 +66,13 @@ def _format_conversation(conv) -> str:
 
 
 def _detect_source_type(source: Path) -> str | None:
-    """Auto-detect export type by inspecting a JSON file in the directory."""
+    """Auto-detect export type by inspecting files in the directory."""
     json_files = sorted(source.glob("*.json"))
+    jsonl_files = sorted(source.glob("*.jsonl"))
+
+    if jsonl_files:
+        return "claude-code"
+
     if not json_files:
         return None
 
@@ -85,6 +93,7 @@ def _classify_payload(payload) -> str | None:
         (_is_gemini_list, "gemini"),
         (_is_openai_dict, "openai"),
         (_is_openai_list, "openai"),
+        (_is_claude_export, "claude-export"),
     ]
     for detector_fn, source_type in detectors:
         if detector_fn(payload):
@@ -102,6 +111,19 @@ def _is_openai_dict(payload) -> bool:
 
 def _is_openai_list(payload) -> bool:
     return isinstance(payload, list) and bool(payload) and "mapping" in payload[0]
+
+
+def _is_claude_export(payload) -> bool:
+    if isinstance(payload, list) and bool(payload):
+        first = payload[0]
+        return "chat_messages" in first or ("uuid" in first and "name" in first)
+    if isinstance(payload, dict):
+        convs = payload.get("conversations", [])
+        return (
+            "chat_messages" in payload
+            or (isinstance(convs, list) and bool(convs) and "chat_messages" in convs[0])
+        )
+    return False
 
 
 def split_conversations(

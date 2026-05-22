@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from mem0ry.conversations.search_bm25 import (
@@ -44,11 +45,11 @@ def test_build_bm25_index_creates_file(tmp_path: Path) -> None:
     assert _index_path(tmp_path).exists()
 
 
-def test_build_bm25_index_empty_dir(tmp_path: Path, capsys) -> None:
-    build_bm25_index(tmp_path)
+def test_build_bm25_index_empty_dir(tmp_path: Path, caplog) -> None:
+    with caplog.at_level(logging.INFO):
+        build_bm25_index(tmp_path)
     assert not _index_path(tmp_path).exists()
-    captured = capsys.readouterr()
-    assert "Nenhum arquivo" in captured.out
+    assert "Nenhum arquivo" in caplog.text
 
 
 def test_search_bm25_returns_results(tmp_path: Path) -> None:
@@ -69,7 +70,7 @@ def test_search_bm25_builds_index_if_missing(tmp_path: Path) -> None:
     (tmp_path / "2026-04-21").mkdir()
     (tmp_path / "2026-04-21" / "test.md").write_text("unique content here", encoding="utf-8")
     assert not _index_path(tmp_path).exists()
-    results = search_bm25("unique", tmp_path)
+    search_bm25("unique", tmp_path)
     assert _index_path(tmp_path).exists()
 
 

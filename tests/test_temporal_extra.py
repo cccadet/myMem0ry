@@ -44,7 +44,7 @@ def test_build_temporal_prompt_strips_newlines_in_title() -> None:
     conv = ParsedConversation(
         conversation_id="1", title="Line1\nLine2", create_time=None, messages=[]
     )
-    result = build_temporal_system_prompt(conv, "test")
+    build_temporal_system_prompt(conv, "test")
     assert "\n" not in conv.title.replace("\n", " ")
 
 

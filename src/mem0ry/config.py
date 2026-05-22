@@ -22,3 +22,13 @@ class MemoryConfig:
     search_backend: str = os.environ.get("SEARCH_BACKEND", "ripgrep")
     spacy_model: str = os.environ.get("SPACY_MODEL", "pt_core_news_lg")
     system_prompt: str | None = os.environ.get("SYSTEM_PROMPT", None)
+    vector_db_path: str = os.environ.get(
+        "VECTOR_DB_PATH",
+        str(Path(__file__).resolve().parents[2] / "data" / "conversations" / ".vec.db"),
+    )
+    embedding_dim: int = int(os.environ.get("EMBEDDING_DIM", "300"))
+    rrf_k: int = int(os.environ.get("RRF_K", "60"))
+    db_path: str = os.environ.get(
+        "DB_PATH",
+        str(Path(__file__).resolve().parents[2] / "data" / "memories.db"),
+    )
