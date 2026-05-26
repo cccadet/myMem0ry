@@ -20,7 +20,7 @@ class MemoryConfig:
     )
     search_top_k: int = int(os.environ.get("SEARCH_TOP_K", "3"))
     search_backend: str = os.environ.get("SEARCH_BACKEND", "ripgrep")
-    spacy_model: str = os.environ.get("SPACY_MODEL", "pt_core_news_lg")
+    spacy_model: str = os.environ.get("SPACY_MODEL", "en_core_web_lg")
     system_prompt: str | None = os.environ.get("SYSTEM_PROMPT", None)
     vector_db_path: str = os.environ.get(
         "VECTOR_DB_PATH",

@@ -7,7 +7,8 @@ Personal memory system with semantic search, scoped storage (session/context/pro
 ```bash
 bin/setup                          # Idempotent bootstrap (deps + spaCy model + ripgrep check)
 uv sync --group dev                # Dependencies only
-uv run spacy download pt_core_news_lg  # Required for search, expand, hybrid backends
+uv run spacy download en_core_web_lg   # Required for search, expand, hybrid backends
+# For Portuguese: SPACY_MODEL=pt_core_news_lg
 ```
 
 ripgrep (`rg`) must be on PATH — the default `ripgrep` search backend shells out to it.
@@ -38,6 +39,11 @@ mymem0ry decay [--days 90] [--dry-run]  # Remove old session logs
 mymem0ry benchmark "query"            # Compare search backends
 mymem0ry expand "token"               # Semantically related tokens
 mymem0ry dataset                      # ChatML JSONL (legacy)
+
+# CLI commands used by hooks
+mymem0ry context --cwd .              # Load context for current project (session-start)
+mymem0ry save "Title" "Content"       # Save a memory (session-end)
+mymem0ry log "message"                # Quick session log (lifecycle hooks)
 
 # MCP server
 mymem0ry-mcp                          # Starts FastMCP server
@@ -87,7 +93,7 @@ src/mem0ry/
 - **Schema version**: v3. `db/schema.py` sets `_SCHEMA_VERSION = 3`.
 - **Decay**: `decay_memories()` in `db/store.py` removes session-scoped `log` memories with no access in N days. `touch_memory()` increments `access_count`.
 - **Hybrid search** uses Reciprocal Rank Fusion (`RRF_K=60` by default) to merge BM25 and vector rankings.
-- **Embeddings** are spaCy doc vectors (300-dim, no external model API). The model `pt_core_news_lg` must be downloaded.
+- **Embeddings** are spaCy doc vectors (300-dim, no external model API). Default model: `en_core_web_lg`.
 - **MCP server** uses module-level global state (`_session_id`, `_expander`) with lazy init — not thread-safe.
 - **MCP tools** receive `cwd` parameter and resolve project_id + context automatically via `resolve_full_context()`.
 - `sanitize_title()` in `utils/filenames.py` is the single source for filename sanitization, shared between `writer.py` and `mcp_server.py`.

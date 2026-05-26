@@ -4,27 +4,24 @@
 
 - [uv](https://docs.astral.sh/uv/) package manager (installs Python too)
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) on PATH
-- spaCy model: `pt_core_news_lg` (auto-installed)
+- spaCy model: `en_core_web_lg` (auto-installed by `bin/setup`)
 
 ## Quick install (PyPI)
 
 No clone needed. Just run the one-liner for your agent:
 
 ```bash
-# VS Code
-code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
-
-# Cursor
-cursor --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
-
 # Claude Code
 claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
 
 # Codex CLI
 codex mcp add mymem0ry -- uvx mymem0ry-mcp
 
-# OpenCode — add to opencode.json:
-#   "mcpServers": { "mymem0ry": { "command": "uvx", "args": ["mymem0ry-mcp"] } }
+# VS Code
+code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+
+# Cursor
+cursor --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
 ```
 
 Or use the installer (auto-detects your agent):
@@ -32,6 +29,12 @@ Or use the installer (auto-detects your agent):
 ```bash
 git clone https://github.com/cccadet/myMem0ry.git && cd myMem0ry
 bin/install.sh
+```
+
+After installing the MCP server, download the spaCy model:
+
+```bash
+uvx spacy download en_core_web_lg
 ```
 
 ## Option 1: Local install with uv
@@ -50,7 +53,7 @@ For **stdio** transport (used by Claude Code, OpenCode, Codex):
 mymem0ry-mcp
 ```
 
-For **HTTP** transport (used by hooks, Cursor, remote access):
+For **HTTP** transport (used by Cursor remote, Docker):
 ```bash
 MCP_TRANSPORT=streamable-http MCP_PORT=49374 mymem0ry-mcp
 ```
@@ -63,11 +66,10 @@ curl http://127.0.0.1:49374/health
 ```
 
 The server exposes:
-- `POST /hook` — lifecycle hook endpoint
 - `GET /health` — health check
 - MCP protocol on `/mcp` (when using streamable-http transport)
 
-### Data directory
+### Docker data
 
 All data lives in `/data` inside the container, mounted as a Docker volume:
 
@@ -83,12 +85,6 @@ To back up:
 ```bash
 docker run --rm -v mymem0ry-data:/data -v $(pwd):/backup alpine \
     tar czf /backup/mymem0ry-backup.tar.gz -C /data .
-```
-
-To restore:
-```bash
-docker run --rm -v mymem0ry-data:/data -v $(pwd):/backup alpine \
-    sh -c "cd /data && tar xzf /backup/mymem0ry-backup.tar.gz"
 ```
 
 ---
@@ -136,10 +132,11 @@ claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
 
 ```json
 {
-  "mcpServers": {
+  "mcp": {
     "mymem0ry": {
-      "command": "uvx",
-      "args": ["mymem0ry-mcp"]
+      "type": "local",
+      "command": ["uvx", "mymem0ry-mcp"],
+      "enabled": true
     }
   }
 }
@@ -224,7 +221,7 @@ code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
 
 ---
 
-## Data directory (local install)
+## Storage location
 
 By default, data lives in `data/` inside the project root:
 
@@ -239,15 +236,38 @@ data/
 └── openai/               # Raw exports (source data)
 ```
 
-Override with environment variables:
+### Custom storage
+
+Override with environment variables (or `.env` file):
+
+```bash
+export DB_PATH=/path/to/shared/memories.db
+export CONVERSATIONS_DIR=/path/to/shared/conversations
+export VECTOR_DB_PATH=/path/to/shared/conversations/.vec.db
+```
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `CONVERSATIONS_DIR` | `data/conversations` | .md conversation files |
 | `DB_PATH` | `data/memories.db` | SQLite memories database |
 | `VECTOR_DB_PATH` | `data/conversations/.vec.db` | sqlite-vec index |
+| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for embeddings and search |
+| `MCP_TRANSPORT` | `stdio` | MCP transport: `stdio`, `sse`, `streamable-http` |
+| `MCP_HOST` | `127.0.0.1` | Host for HTTP transport |
+| `MCP_PORT` | `49374` | Port for HTTP transport |
 
-### Ingesting existing conversations
+### Language support
+
+Default is English. For Portuguese:
+
+```bash
+uv run spacy download pt_core_news_lg
+export SPACY_MODEL=pt_core_news_lg
+```
+
+Any spaCy model works — install it and set `SPACY_MODEL`.
+
+### Importing existing conversations
 
 ```bash
 mymem0ry split data/openai/export     # ChatGPT
