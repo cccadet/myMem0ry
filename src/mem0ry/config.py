@@ -3,12 +3,35 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+_project_root = Path(__file__).resolve().parents[2]
+
+load_dotenv(_project_root / ".env")
+
+
+def _default_data_dir() -> Path:
+    if _project_root.name == "site-packages" or _project_root.name == "mem0ry":
+        if sys.platform == "win32":
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        else:
+            base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+        return base / "mem0ry"
+    return _project_root / "data"
+
+
+_DATA_DIR = _default_data_dir()
+
+
+def _resolve_file_path(raw: str, filename: str) -> str:
+    p = Path(raw)
+    if p.is_dir() or (not p.suffix and not p.exists()):
+        return str(p / filename)
+    return str(p)
 
 
 @dataclass
@@ -16,19 +39,19 @@ class MemoryConfig:
     expand_top_k: int = int(os.environ.get("EXPAND_TOP_K", "10"))
     conversations_dir: str = os.environ.get(
         "CONVERSATIONS_DIR",
-        str(Path(__file__).resolve().parents[2] / "data" / "conversations"),
+        str(_DATA_DIR / "conversations"),
     )
     search_top_k: int = int(os.environ.get("SEARCH_TOP_K", "3"))
     search_backend: str = os.environ.get("SEARCH_BACKEND", "ripgrep")
     spacy_model: str = os.environ.get("SPACY_MODEL", "en_core_web_lg")
     system_prompt: str | None = os.environ.get("SYSTEM_PROMPT", None)
-    vector_db_path: str = os.environ.get(
-        "VECTOR_DB_PATH",
-        str(Path(__file__).resolve().parents[2] / "data" / "conversations" / ".vec.db"),
+    vector_db_path: str = _resolve_file_path(
+        os.environ.get("VECTOR_DB_PATH", str(_DATA_DIR / "conversations" / ".vec.db")),
+        ".vec.db",
     )
     embedding_dim: int = int(os.environ.get("EMBEDDING_DIM", "300"))
     rrf_k: int = int(os.environ.get("RRF_K", "60"))
-    db_path: str = os.environ.get(
-        "DB_PATH",
-        str(Path(__file__).resolve().parents[2] / "data" / "memories.db"),
+    db_path: str = _resolve_file_path(
+        os.environ.get("DB_PATH", str(_DATA_DIR / "memories.db")),
+        "memories.db",
     )

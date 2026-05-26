@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 import typer
@@ -16,6 +17,15 @@ from ..pipeline.dataset import build_dataset_from_openai
 from ..conversations.spacy_expand import SpacyConceptSearch
 
 app = typer.Typer(help="myMem0ry — personal memory search system")
+
+
+@app.command()
+def version() -> None:
+    """Show mymem0ry version."""
+    try:
+        typer.echo(f"mymem0ry {pkg_version('mymem0ry')}")
+    except Exception:
+        typer.echo("mymem0ry (unknown version)")
 
 _DEFAULT_SOURCES = [Path("data/openai/export"), Path("data/gemini"), Path("data/claude")]
 
@@ -305,10 +315,14 @@ def stats() -> None:
     db_path = Path(config.db_path)
 
     if not db_path.exists():
-        typer.echo("Database not found. Run 'mymem0ry migrate' first.")
-        raise typer.Exit(code=1)
+        typer.echo("Database not found. Run 'mymem0ry migrate' or use the MCP server first.")
+        raise typer.Exit(code=0)
 
-    result = db_stats(db_path)
+    try:
+        result = db_stats(db_path)
+    except Exception as exc:
+        typer.echo(f"Error reading database: {exc}")
+        raise typer.Exit(code=1)
     typer.echo(f"Total memories: {result['total']}\n")
 
     if result["by_scope"]:
