@@ -139,3 +139,132 @@ def test_index_missing_dir() -> None:
         app, ["index", "--conversations", "/nonexistent/dir"]
     )
     assert result.exit_code == 1
+
+
+def _setup_db(tmp_path: Path) -> Path:
+    from mem0ry.db.connection import get_connection
+    from mem0ry.db.schema import init_schema
+
+    db_path = tmp_path / "test.db"
+    conn = get_connection(db_path)
+    init_schema(conn)
+    conn.close()
+    return db_path
+
+
+def test_context_no_db(tmp_path: Path) -> None:
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(tmp_path / "missing.db")
+        result = runner.invoke(app, ["context", "--cwd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert result.output == ""
+
+
+def test_context_returns_memories(tmp_path: Path) -> None:
+    from mem0ry.db.store import create_memory
+
+    db_path = _setup_db(tmp_path)
+    create_memory(db_path, content="global fact", scope="global", memory_type="fact", title="G1")
+
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(db_path)
+        result = runner.invoke(app, ["context", "--cwd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "global fact" in result.output
+
+
+def test_context_empty_db(tmp_path: Path) -> None:
+    db_path = _setup_db(tmp_path)
+
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(db_path)
+        result = runner.invoke(app, ["context", "--cwd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert result.output == ""
+
+
+def test_save_creates_memory(tmp_path: Path) -> None:
+    db_path = _setup_db(tmp_path)
+
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(db_path)
+        result = runner.invoke(app, ["save", "Test Note", "Important content", "--cwd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert len(result.output.strip()) == 12
+
+    from mem0ry.db.store import search_memories
+    mems = search_memories(Path(db_path), query="Important")
+    assert len(mems) >= 1
+    assert mems[0]["content"] == "Important content"
+
+
+def test_save_with_scope(tmp_path: Path) -> None:
+    db_path = _setup_db(tmp_path)
+
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(db_path)
+        result = runner.invoke(app, [
+            "save", "Decision", "We chose X",
+            "--cwd", str(tmp_path),
+            "--scope", "project",
+            "--type", "decision",
+        ])
+    assert result.exit_code == 0
+
+    from mem0ry.db.store import search_memories
+    mems = search_memories(Path(db_path), scope="project", memory_type="decision")
+    assert len(mems) == 1
+
+
+def test_save_no_content_no_stdin(tmp_path: Path) -> None:
+    db_path = _setup_db(tmp_path)
+
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(db_path)
+        result = runner.invoke(app, ["save", "Empty", "--cwd", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "No content" in result.output
+
+
+def test_log_creates_session_memory(tmp_path: Path) -> None:
+    db_path = _setup_db(tmp_path)
+
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(db_path)
+        result = runner.invoke(app, ["log", "user asked about X", "--cwd", str(tmp_path)])
+    assert result.exit_code == 0
+
+    from mem0ry.db.store import search_memories
+    mems = search_memories(Path(db_path), scope="session")
+    assert len(mems) == 1
+    assert "user asked about X" in mems[0]["content"]
+
+
+def test_log_with_role(tmp_path: Path) -> None:
+    db_path = _setup_db(tmp_path)
+
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(db_path)
+        result = runner.invoke(app, [
+            "log", "assistant response",
+            "--cwd", str(tmp_path),
+            "--role", "assistant",
+        ])
+    assert result.exit_code == 0
+
+    from mem0ry.db.store import search_memories
+    mems = search_memories(Path(db_path), scope="session")
+    assert "[assistant]" in mems[0]["content"]
+
+
+def test_log_empty_content_is_noop(tmp_path: Path) -> None:
+    db_path = _setup_db(tmp_path)
+
+    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+        mock_cfg.return_value.db_path = str(db_path)
+        result = runner.invoke(app, ["log", "--cwd", str(tmp_path)])
+    assert result.exit_code == 0
+
+    from mem0ry.db.store import search_memories
+    mems = search_memories(Path(db_path))
+    assert len(mems) == 0

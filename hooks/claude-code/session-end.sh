@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Hook for Claude Code — Session End.
+# Claude Code SessionEnd hook.
+# Saves session summary to myMem0ry.
 set -euo pipefail
 
-MYMEM0RY_URL="${MYMEM0RY_URL:-http://127.0.0.1:49374}"
 CWD="$(pwd)"
 SUMMARY="${1:-Session completed.}"
+SESSION_ID="${MYMEM0RY_SESSION_ID:-$(date +%s | md5sum | head -c 8)}"
 
-curl -sf -X POST "${MYMEM0RY_URL}/hook" \
-    -H "Content-Type: application/json" \
-    -d "{\"event\": \"SessionEnd\", \"cwd\": \"${CWD}\", \"content\": \"${SUMMARY}\"}" \
-    --max-time 1 2>/dev/null || true
+mymem0ry save "Session end" "$SUMMARY" \
+    --cwd "$CWD" \
+    --session "$SESSION_ID" \
+    --scope session \
+    --type log \
+    2>/dev/null || true

@@ -414,42 +414,6 @@ def memory_stats() -> dict[str, Any]:
     return _stats(db)
 
 
-@mcp.custom_route("/hook", methods=["POST"])
-async def hook_endpoint(request: Any) -> Any:
-    """Receive lifecycle hook events from agent CLIs.
-
-    Accepts JSON with: event, cwd, role, content, session_id.
-    """
-    from starlette.responses import JSONResponse
-
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "invalid json"}, status_code=400)
-
-    event = body.get("event", "")
-    cwd = body.get("cwd", "")
-    content = body.get("content", "")
-    sid = body.get("session_id")
-
-    if sid:
-        global _session_id
-        _session_id = sid
-
-    if event in ("SessionStart", "session_start"):
-        get_context(cwd=cwd)
-    elif event in ("UserPromptSubmit", "user_prompt"):
-        log_message(role="user", content=content, cwd=cwd)
-    elif event in ("AssistantResponse", "assistant_response"):
-        log_message(role="assistant", content=content, cwd=cwd)
-    elif event in ("SessionEnd", "session_end"):
-        end_session(session_id=sid, summary=content if content else None)
-    elif event in ("PostToolUse", "tool_use"):
-        log_message(role="system", content=f"[tool] {content}", cwd=cwd)
-
-    return JSONResponse({"status": "ok", "event": event}, status_code=202)
-
-
 @mcp.custom_route("/health", methods=["GET"])
 async def health_endpoint(request: Any) -> Any:
     """Health check endpoint."""
