@@ -419,7 +419,7 @@ async def health_endpoint(request: Any) -> Any:
     """Health check endpoint."""
     from starlette.responses import JSONResponse
 
-    return JSONResponse({"status": "ok", "version": "0.4.0"})
+    return JSONResponse({"status": "ok", "version": "0.4.1"})
 
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
