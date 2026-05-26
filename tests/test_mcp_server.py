@@ -20,8 +20,12 @@ from mem0ry.mcp_server import (
     read_memory,
     auto_save_instructions,
     conversation_logger,
+    _resolve_cwd,
+    get_context,
+    memory_stats,
+    list_scopes,
+    end_session,
 )
-
 
 
 def test_validate_date_valid() -> None:
@@ -105,6 +109,24 @@ def test_conversations_dir_returns_path() -> None:
     assert isinstance(result, Path)
 
 
+def test_resolve_cwd_returns_session_id() -> None:
+    import mem0ry.mcp_server as mod
+
+    old = mod._session_id
+    try:
+        mod._session_id = None
+        ctx = _resolve_cwd(None)
+        assert ctx["session_id"] is not None
+        assert len(ctx["session_id"]) == 8
+    finally:
+        mod._session_id = old
+
+
+def test_resolve_cwd_with_path(tmp_path: Path) -> None:
+    ctx = _resolve_cwd(str(tmp_path))
+    assert ctx["project_path"] == str(tmp_path.resolve())
+
+
 def test_log_message_creates_file(tmp_path: Path) -> None:
     import mem0ry.mcp_server as mod
 
@@ -147,7 +169,15 @@ def test_log_message_appends_to_existing(tmp_path: Path) -> None:
 def test_save_memory_creates_file(tmp_path: Path) -> None:
     import mem0ry.mcp_server as mod
 
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path):
+    db_path = tmp_path / "test.db"
+    from mem0ry.db.connection import get_connection
+    from mem0ry.db.schema import init_schema
+    conn = get_connection(db_path)
+    init_schema(conn)
+    conn.close()
+
+    with patch.object(mod, "_conversations_dir", return_value=tmp_path), \
+         patch.object(mod, "_db_path", return_value=db_path):
         result = save_memory("My Note", "Important stuff", dt="2026-04-21")
     assert "Saved:" in result
     assert (tmp_path / "2026-04-21").is_dir()
@@ -156,6 +186,22 @@ def test_save_memory_creates_file(tmp_path: Path) -> None:
     content = files[0].read_text(encoding="utf-8")
     assert "# My Note" in content
     assert "Important stuff" in content
+
+
+def test_save_memory_with_memory_type(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+
+    db_path = tmp_path / "test.db"
+    from mem0ry.db.connection import get_connection
+    from mem0ry.db.schema import init_schema
+    conn = get_connection(db_path)
+    init_schema(conn)
+    conn.close()
+
+    with patch.object(mod, "_conversations_dir", return_value=tmp_path), \
+         patch.object(mod, "_db_path", return_value=db_path):
+        result = save_memory("Decision", "We chose X", memory_type="decision", dt="2026-04-21")
+    assert "type=decision" in result
 
 
 def test_save_memory_invalid_date(tmp_path: Path) -> None:
@@ -224,6 +270,7 @@ def test_auto_save_instructions_returns_string() -> None:
     result = auto_save_instructions()
     assert "log_message" in result
     assert "MANDATORY" in result
+    assert "context" in result
 
 
 def test_conversation_logger_with_topic() -> None:
@@ -310,3 +357,97 @@ def test_preview_text_returns_empty_string_for_empty_file(tmp_path: Path) -> Non
     f.write_text("", encoding="utf-8")
     result = _preview_text(f)
     assert result == ""
+
+
+def _setup_db(tmp_path: Path) -> Path:
+    from mem0ry.db.connection import get_connection
+    from mem0ry.db.schema import init_schema
+
+    db_path = tmp_path / "test.db"
+    conn = get_connection(db_path)
+    init_schema(conn)
+    conn.close()
+    return db_path
+
+
+def test_get_context_returns_empty_when_no_db(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+
+    with patch.object(mod, "_db_path", return_value=tmp_path / "missing.db"):
+        result = get_context(cwd=str(tmp_path))
+    assert result == []
+
+
+def test_get_context_returns_memories(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+    from mem0ry.db.store import create_memory
+
+    db_path = _setup_db(tmp_path)
+    create_memory(db_path, content="global fact", scope="global", memory_type="fact", title="G1")
+
+    with patch.object(mod, "_db_path", return_value=db_path), \
+         patch.object(mod, "_conversations_dir", return_value=tmp_path / "conv"):
+        result = get_context(cwd=str(tmp_path), top_k=5)
+    assert len(result) >= 1
+
+
+def test_memory_stats_returns_data(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+    from mem0ry.db.store import create_memory
+
+    db_path = _setup_db(tmp_path)
+    create_memory(db_path, content="test", scope="global", memory_type="fact", title="T")
+
+    with patch.object(mod, "_db_path", return_value=db_path):
+        result = memory_stats()
+    assert result["total"] == 1
+
+
+def test_memory_stats_empty_db(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+
+    with patch.object(mod, "_db_path", return_value=tmp_path / "missing.db"):
+        result = memory_stats()
+    assert result["total"] == 0
+
+
+def test_list_scopes_returns_data(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+    from mem0ry.db.store import create_memory
+
+    db_path = _setup_db(tmp_path)
+    create_memory(db_path, content="g", scope="global", title="G")
+    create_memory(db_path, content="p", scope="project", project_id="x/y", title="P")
+
+    with patch.object(mod, "_db_path", return_value=db_path):
+        result = list_scopes()
+    assert len(result) >= 1
+
+
+def test_list_scopes_empty_db(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+
+    with patch.object(mod, "_db_path", return_value=tmp_path / "missing.db"):
+        result = list_scopes()
+    assert result == []
+
+
+def test_end_session_no_active() -> None:
+    import mem0ry.mcp_server as mod
+
+    old = mod._session_id
+    try:
+        mod._session_id = None
+        result = end_session()
+        assert "No active session" in result
+    finally:
+        mod._session_id = old
+
+
+def test_end_session_not_found(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+
+    db_path = _setup_db(tmp_path)
+    with patch.object(mod, "_db_path", return_value=db_path):
+        result = end_session(session_id="nonexistent")
+    assert "No memories found" in result

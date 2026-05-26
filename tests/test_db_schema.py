@@ -1,4 +1,4 @@
-"""Tests for db.schema — table creation and indexing."""
+"""Tests for db.schema — table creation and indexing (v3)."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def test_init_schema_version(tmp_path: Path) -> None:
     init_schema(conn)
 
     row = conn.execute("SELECT value FROM schema_meta WHERE key='version'").fetchone()
-    assert row["value"] == "2"
+    assert row["value"] == "3"
     conn.close()
 
 
@@ -50,14 +50,11 @@ def test_memories_columns(tmp_path: Path) -> None:
 
     cols = conn.execute("PRAGMA table_info(memories)").fetchall()
     names = [row["name"] for row in cols]
-    assert "id" in names
-    assert "content" in names
-    assert "scope" in names
-    assert "project_path" in names
-    assert "session_id" in names
-    assert "source" in names
-    assert "tags" in names
-    assert "title" in names
-    assert "created_at" in names
-    assert "file_path" in names
+    expected = [
+        "id", "content", "scope", "project_id", "project_path", "context",
+        "session_id", "memory_type", "source", "tags", "title", "created_at",
+        "updated_at", "file_path", "access_count", "last_accessed_at",
+    ]
+    for col in expected:
+        assert col in names, f"Missing column: {col}"
     conn.close()

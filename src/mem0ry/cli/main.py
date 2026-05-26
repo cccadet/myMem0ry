@@ -269,10 +269,9 @@ def index(
 @app.command()
 def migrate(
     conversations: Path = Path(""),
+    reprocess: bool = typer.Option(False, "--reprocess", help="Drop DB and reingest all .md files into v3 schema"),
 ) -> None:
     """Migrate existing .md conversations into the structured memories database."""
-
-    from ..db.migrate import migrate_v1_to_v2
 
     config = MemoryConfig()
     conv_dir = conversations if str(conversations) not in ("", ".") else Path(config.conversations_dir)
@@ -282,8 +281,17 @@ def migrate(
         typer.echo(f"Conversations directory not found: {conv_dir}", err=True)
         raise typer.Exit(code=1)
 
-    typer.echo(f"Migrating conversations from {conv_dir}...")
-    result = migrate_v1_to_v2(conv_dir, db_path)
+    if reprocess:
+        from ..db.migrate import migrate_v2_to_v3
+
+        typer.echo(f"Reprocessing conversations from {conv_dir} (v3 schema)...")
+        result = migrate_v2_to_v3(conv_dir, db_path)
+    else:
+        from ..db.migrate import migrate_v1_to_v2
+
+        typer.echo(f"Migrating conversations from {conv_dir}...")
+        result = migrate_v1_to_v2(conv_dir, db_path)
+
     typer.echo(f"  Total: {result['total']} | Migrated: {result['migrated']} | Skipped: {result['skipped']}")
 
 
@@ -308,6 +316,11 @@ def stats() -> None:
         for item in result["by_scope"]:
             typer.echo(f"  {item['scope']}: {item['count']}")
 
+    if result.get("by_type"):
+        typer.echo("\nBy type:")
+        for item in result["by_type"]:
+            typer.echo(f"  {item['memory_type']}: {item['count']}")
+
     if result["by_source"]:
         typer.echo("\nBy source:")
         for item in result["by_source"]:
@@ -316,7 +329,7 @@ def stats() -> None:
     if result["projects"]:
         typer.echo(f"\nProjects ({len(result['projects'])}):")
         for proj in result["projects"][:10]:
-            typer.echo(f"  {proj['path']}: {proj['count']}")
+            typer.echo(f"  {proj['project_id']}: {proj['count']}")
 
 
 @app.command()
@@ -426,7 +439,33 @@ def projects() -> None:
         typer.echo("No projects found.")
         return
 
-    typer.echo(f"{'Project path':<60} {'Memories':>8}")
-    typer.echo("-" * 70)
+    typer.echo(f"{'Project ID':<50} {'Path':<40} {'Memories':>8}")
+    typer.echo("-" * 100)
     for proj in result:
-        typer.echo(f"{proj['path']:<60} {proj['count']:>8}")
+        typer.echo(f"{proj['project_id'] or '-':<50} {proj['project_path'] or '-':<40} {proj['count']:>8}")
+
+
+@app.command()
+def decay(
+    days: int = typer.Option(90, "--days", "-d", help="Days threshold for decay"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without deleting"),
+) -> None:
+    """Remove old session log memories past the access threshold."""
+
+    from ..db.store import decay_memories
+
+    config = MemoryConfig()
+    db_path = Path(config.db_path)
+
+    if not db_path.exists():
+        typer.echo("Database not found. Run 'mymem0ry migrate' first.")
+        raise typer.Exit(code=1)
+
+    ids = decay_memories(db_path, days_threshold=days, dry_run=dry_run)
+    mode = "Would delete" if dry_run else "Deleted"
+    typer.echo(f"{mode} {len(ids)} memories (session logs older than {days} days)")
+    if ids and dry_run:
+        for mid in ids[:20]:
+            typer.echo(f"  {mid}")
+        if len(ids) > 20:
+            typer.echo(f"  ... and {len(ids) - 20} more")

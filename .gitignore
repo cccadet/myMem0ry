@@ -14,12 +14,13 @@ data/
 qdrant_storage/
 unsloth_compiled_cache/
 output/
-pyproject.toml
 models/*.gguf
 files.zip
 Qwen3_5_(0_8B)_Vision.ipynb
 memoria.kvcache
-uv.lock
 .claude/settings.json
 .vscode/settings.json
 .coverage
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

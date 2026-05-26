@@ -1,4 +1,4 @@
-"""MCP server for myMem0ry — scoped memory system with session/project/global context."""
+"""MCP server for myMem0ry — scoped memory system with session/context/project/global context."""
 
 from __future__ import annotations
 
@@ -14,13 +14,13 @@ from mcp.server.fastmcp import FastMCP
 from .config import MemoryConfig
 from .conversations.spacy_expand import SpacyConceptSearch
 from .utils.filenames import sanitize_title
+from .utils.git_context import resolve_full_context
 
 mcp = FastMCP("myMem0ry")
 
 _PREVIEW_LINES = 5
 _PREVIEW_MAX_CHARS = 500
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_VALID_SCOPES = {"global", "project", "session"}
 
 _session_id: str | None = None
 _session_title: str = "session"
@@ -100,11 +100,23 @@ def _auto_session_id() -> str:
     return _session_id
 
 
+def _resolve_cwd(cwd: str | None) -> dict[str, Any]:
+    """Resolve full git context from cwd string."""
+    if cwd:
+        return resolve_full_context(Path(cwd), session_id=_auto_session_id())
+    return {
+        "project_id": None,
+        "project_path": None,
+        "context": None,
+        "session_id": _auto_session_id(),
+    }
+
+
 # ─── Tools ────────────────────────────────────────────────────────────────────
 
 
 @mcp.tool()
-def log_message(role: str, content: str) -> str:
+def log_message(role: str, content: str, cwd: str = "") -> str:
     """MANDATORY: Log a single message to the current conversation session.
 
     You MUST call this tool after EVERY message exchange — once for the
@@ -113,6 +125,7 @@ def log_message(role: str, content: str) -> str:
     Args:
         role: Who sent the message — "user" or "assistant".
         content: The message text.
+        cwd: Current working directory (used for context resolution).
     """
     global _session_id, _session_title
 
@@ -142,7 +155,10 @@ def save_memory(
     title: str,
     content: str,
     scope: str = "global",
-    project_path: str | None = None,
+    memory_type: str = "log",
+    cwd: str = "",
+    project_id: str | None = None,
+    context: str | None = None,
     session_id: str | None = None,
     tags: list[str] | None = None,
     source: str = "manual",
@@ -157,17 +173,19 @@ def save_memory(
     Args:
         title: Title for the memory.
         content: Text content of the memory.
-        scope: Memory scope — "global", "project", or "session". Defaults to "global".
-        project_path: Absolute path of the project (required if scope="project").
-        session_id: Session identifier (required if scope="session").
+        scope: Memory scope — "global", "project", "context", or "session". Defaults to "global".
+        memory_type: Type of memory — "fact", "decision", "pattern", or "log". Defaults to "log".
+        cwd: Current working directory. Used to auto-resolve project_id and context.
+        project_id: Override project identifier (e.g. git remote URL).
+        context: Override context (e.g. git branch name).
+        session_id: Session identifier (auto-generated if not provided).
         tags: Optional list of tags (e.g. ["auth", "decision"]).
-        source: Where the memory came from — "claude-code", "opencode", "manual", "import".
+        source: Where the memory came from — "claude-code", "opencode", "codex", "manual", "import".
         dt: Optional date in YYYY-MM-DD format. Defaults to today.
     """
-    if scope not in _VALID_SCOPES:
-        return f"Invalid scope '{scope}'. Use: {', '.join(sorted(_VALID_SCOPES))}"
-
     from .db.store import create_memory
+
+    resolved = _resolve_cwd(cwd)
 
     mem_date = _validate_date(dt) if dt else date.today().isoformat()
 
@@ -175,8 +193,11 @@ def save_memory(
         db_path=_db_path(),
         content=content,
         scope=scope,
-        project_path=project_path,
-        session_id=session_id or (_session_id if scope == "session" else None),
+        project_id=project_id or resolved["project_id"],
+        project_path=resolved["project_path"],
+        context=context or resolved["context"],
+        session_id=session_id or (resolved["session_id"] if scope == "session" else None),
+        memory_type=memory_type,
         source=source,
         tags=tags,
         title=title,
@@ -186,7 +207,7 @@ def save_memory(
     file_path = _write_md(conv_dir, mem_date, title, content)
 
     rel = file_path.relative_to(conv_dir)
-    return f"Saved: {rel} (id={mem_id}, scope={scope})"
+    return f"Saved: {rel} (id={mem_id}, scope={scope}, type={memory_type})"
 
 
 @mcp.tool()
@@ -228,15 +249,15 @@ def save_conversation(title: str, messages: list[dict[str, str]], dt: str = "") 
 
 @mcp.tool()
 def get_context(
-    project_path: str | None = None,
+    cwd: str = "",
     top_k: int = 5,
 ) -> list[dict[str, Any]]:
-    """Get aggregated context from session > project > global memories.
+    """Get aggregated context from session > context > project > global memories.
 
     Call this at the START of every session to load relevant context.
 
     Args:
-        project_path: Absolute path of the current project directory.
+        cwd: Absolute path of the current working directory.
         top_k: Maximum number of memories to return. Defaults to 5.
     """
     from .db.store import get_context as _get_ctx
@@ -245,15 +266,23 @@ def get_context(
     if not db.exists():
         return []
 
-    return _get_ctx(db, project_path=project_path, top_k=top_k)
+    resolved = _resolve_cwd(cwd)
+
+    return _get_ctx(
+        db,
+        project_id=resolved["project_id"],
+        context=resolved["context"],
+        session_id=resolved["session_id"],
+        top_k=top_k,
+    )
 
 
 @mcp.tool()
-def list_scopes(project_path: str | None = None) -> list[dict[str, Any]]:
+def list_scopes(cwd: str = "") -> list[dict[str, Any]]:
     """List memory scopes with counts.
 
     Args:
-        project_path: Optional project path to filter by.
+        cwd: Current working directory (used to filter by project).
     """
     from .db.store import list_scopes as _list_scopes
 
@@ -261,7 +290,8 @@ def list_scopes(project_path: str | None = None) -> list[dict[str, Any]]:
     if not db.exists():
         return []
 
-    return _list_scopes(db, project_path=project_path)
+    resolved = _resolve_cwd(cwd)
+    return _list_scopes(db, project_id=resolved["project_id"])
 
 
 @mcp.tool()
@@ -294,7 +324,8 @@ def search_memory(
     top_k: int = 5,
     backend: str = "ripgrep",
     scope: str | None = None,
-    project_path: str | None = None,
+    cwd: str = "",
+    memory_type: str | None = None,
     tags: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Search memories with semantic query expansion.
@@ -305,8 +336,9 @@ def search_memory(
         query: Natural language search query.
         top_k: Maximum number of results. Defaults to 5.
         backend: Search backend — "ripgrep", "bm25", "hybrid". Defaults to "ripgrep".
-        scope: Optional scope filter — "global", "project", "session".
-        project_path: Optional project path filter.
+        scope: Optional scope filter — "global", "project", "context", "session".
+        cwd: Current working directory (used for context resolution).
+        memory_type: Optional memory type filter — "fact", "decision", "pattern", "log".
         tags: Optional list of tags to filter by.
     """
     from .conversations.spacy_expand import expand_query_spacy
@@ -371,15 +403,59 @@ def read_memory(path: str) -> str:
 def memory_stats() -> dict[str, Any]:
     """Get overview statistics of the memories database.
 
-    Returns total count, breakdown by scope, by source, and by project.
+    Returns total count, breakdown by scope, by source, by type, and by project.
     """
     from .db.store import stats as _stats
 
     db = _db_path()
     if not db.exists():
-        return {"total": 0, "by_scope": [], "by_source": [], "projects": []}
+        return {"total": 0, "by_scope": [], "by_source": [], "by_type": [], "projects": []}
 
     return _stats(db)
+
+
+@mcp.custom_route("/hook", methods=["POST"])
+async def hook_endpoint(request: Any) -> Any:
+    """Receive lifecycle hook events from agent CLIs.
+
+    Accepts JSON with: event, cwd, role, content, session_id.
+    """
+    from starlette.responses import JSONResponse
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid json"}, status_code=400)
+
+    event = body.get("event", "")
+    cwd = body.get("cwd", "")
+    content = body.get("content", "")
+    sid = body.get("session_id")
+
+    if sid:
+        global _session_id
+        _session_id = sid
+
+    if event in ("SessionStart", "session_start"):
+        get_context(cwd=cwd)
+    elif event in ("UserPromptSubmit", "user_prompt"):
+        log_message(role="user", content=content, cwd=cwd)
+    elif event in ("AssistantResponse", "assistant_response"):
+        log_message(role="assistant", content=content, cwd=cwd)
+    elif event in ("SessionEnd", "session_end"):
+        end_session(session_id=sid, summary=content if content else None)
+    elif event in ("PostToolUse", "tool_use"):
+        log_message(role="system", content=f"[tool] {content}", cwd=cwd)
+
+    return JSONResponse({"status": "ok", "event": event}, status_code=202)
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_endpoint(request: Any) -> Any:
+    """Health check endpoint."""
+    from starlette.responses import JSONResponse
+
+    return JSONResponse({"status": "ok", "version": "0.4.0"})
 
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
@@ -397,17 +473,26 @@ def auto_save_instructions() -> str:
         "You are connected to the myMem0ry memory system. You MUST follow these rules:\n"
         "\n"
         "## Session Start\n"
-        "1. Call get_context with the current working directory to load relevant context.\n"
+        "1. Call get_context with the current working directory (cwd) to load relevant context.\n"
         "\n"
         "## During Session\n"
-        "2. After EVERY exchange, call log_message(role='user'/'assistant', content='...').\n"
+        "2. After EVERY exchange, call log_message(role='user'/'assistant', content='...', cwd=<cwd>).\n"
         "3. Save important facts with save_memory:\n"
-        "   - Technical decisions → save_memory(scope='project', project_path=<cwd>)\n"
+        "   - Technical decisions → save_memory(scope='project', cwd=<cwd>)\n"
+        "   - Branch-specific state → save_memory(scope='context', cwd=<cwd>)\n"
+        "   - Session-specific state → save_memory(scope='session', cwd=<cwd>)\n"
         "   - Personal preferences/patterns → save_memory(scope='global')\n"
-        "   - Session-specific state → save_memory(scope='session')\n"
+        "   - Use memory_type: 'fact', 'decision', 'pattern', or 'log'\n"
         "\n"
         "## Session End\n"
         "4. Call end_session with a brief summary of what was accomplished.\n"
+        "\n"
+        "## Scope Resolution\n"
+        "Scopes are resolved automatically from cwd:\n"
+        "- session → current session ID\n"
+        "- context → current git branch/worktree\n"
+        "- project → git remote URL (or cwd if no git)\n"
+        "- global → no resolution needed\n"
         "\n"
         "These rules are NON-NEGOTIABLE."
     )
@@ -432,7 +517,16 @@ def conversation_logger(topic: str = "") -> str:
 
 
 def main():
-    mcp.run()
+    import os
+
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    host = os.environ.get("MCP_HOST", "127.0.0.1")
+    port = int(os.environ.get("MCP_PORT", "49374"))
+
+    if transport in ("sse", "streamable-http"):
+        mcp.run(transport=transport, host=host, port=port)
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

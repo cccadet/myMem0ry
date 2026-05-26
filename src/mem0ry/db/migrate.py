@@ -32,8 +32,19 @@ def _parse_md_file(path: Path) -> dict | None:
     }
 
 
+def _guess_memory_type(title: str) -> str:
+    lower = title.lower()
+    if any(kw in lower for kw in ("decision", "architecture", "decisao")):
+        return "decision"
+    if any(kw in lower for kw in ("fact", "preferencia", "preference", "stack")):
+        return "fact"
+    if any(kw in lower for kw in ("pattern", "padrao")):
+        return "pattern"
+    return "log"
+
+
 def migrate_v1_to_v2(conversations_dir: Path, db_path: Path) -> dict:
-    """Migrate .md files from conversations_dir into the memories table.
+    """Migrate .md files from conversations_dir into the memories table (v2).
 
     Returns a dict with stats: total, migrated, skipped.
     """
@@ -77,3 +88,54 @@ def migrate_v1_to_v2(conversations_dir: Path, db_path: Path) -> dict:
     conn.commit()
     conn.close()
     return stats
+
+
+def migrate_v2_to_v3(conversations_dir: Path, db_path: Path) -> dict:
+    """Migrate .md files into v3 schema (drop + reingest).
+
+    Drops the existing database and re-creates with v3 schema.
+    All .md files are re-ingested with project_id and memory_type heuristics.
+
+    Returns a dict with stats: total, migrated, skipped.
+    """
+    if db_path.exists():
+        db_path.unlink()
+
+    conn = get_connection(db_path)
+    init_schema(conn)
+
+    if not conversations_dir.exists():
+        conn.close()
+        return {"total": 0, "migrated": 0, "skipped": 0}
+
+    md_files = sorted(conversations_dir.rglob("*.md"))
+    result = {"total": len(md_files), "migrated": 0, "skipped": 0}
+
+    for md_path in md_files:
+        rel_path = str(md_path.relative_to(conversations_dir))
+        parsed = _parse_md_file(md_path)
+        if not parsed:
+            result["skipped"] += 1
+            continue
+
+        mem_id = uuid.uuid4().hex[:12]
+        created_at = parsed["date"]
+        try:
+            datetime.fromisoformat(created_at)
+        except (ValueError, TypeError):
+            created_at = date.today().isoformat()
+
+        memory_type = _guess_memory_type(parsed["title"])
+
+        conn.execute(
+            "INSERT INTO memories(id, content, scope, memory_type, source, tags, "
+            "title, created_at, file_path, access_count, last_accessed_at) "
+            "VALUES(?, ?, 'global', ?, 'import', '[]', ?, ?, ?, 0, ?)",
+            (mem_id, parsed["content"], memory_type, parsed["title"],
+             created_at, rel_path, created_at),
+        )
+        result["migrated"] += 1
+
+    conn.commit()
+    conn.close()
+    return result

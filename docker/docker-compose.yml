@@ -1,0 +1,14 @@
+services:
+  mymem0ry:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: mymem0ry
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:49374:49374"
+    volumes:
+      - mymem0ry-data:/data
+
+volumes:
+  mymem0ry-data:

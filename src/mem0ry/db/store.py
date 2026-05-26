@@ -12,8 +12,11 @@ from .connection import get_connection
 from .schema import init_schema
 
 
-_VALID_SCOPES = {"global", "project", "session"}
-_VALID_SOURCES = {"claude-code", "opencode", "manual", "import"}
+_VALID_SCOPES = {"global", "project", "context", "session"}
+_VALID_SOURCES = {"claude-code", "opencode", "codex", "manual", "import"}
+_VALID_MEMORY_TYPES = {"fact", "decision", "pattern", "log"}
+
+_SCOPE_PRIORITY = ["session", "context", "project", "global"]
 
 
 def _now_iso() -> str:
@@ -36,12 +39,23 @@ def _validate_source(source: str) -> str:
     return source
 
 
+def _validate_memory_type(memory_type: str) -> str:
+    if memory_type not in _VALID_MEMORY_TYPES:
+        raise ValueError(
+            f"Invalid memory_type '{memory_type}'. Expected one of: {', '.join(sorted(_VALID_MEMORY_TYPES))}"
+        )
+    return memory_type
+
+
 def create_memory(
     db_path: Path,
     content: str,
     scope: str = "global",
+    project_id: str | None = None,
     project_path: str | None = None,
+    context: str | None = None,
     session_id: str | None = None,
+    memory_type: str = "log",
     source: str = "manual",
     tags: list[str] | None = None,
     title: str | None = None,
@@ -50,6 +64,7 @@ def create_memory(
     """Insert a new memory and return its id."""
     _validate_scope(scope)
     _validate_source(source)
+    _validate_memory_type(memory_type)
     mem_id = uuid.uuid4().hex[:12]
     now = _now_iso()
     tags_json = json.dumps(tags or [])
@@ -57,9 +72,11 @@ def create_memory(
     conn = get_connection(db_path)
     init_schema(conn)
     conn.execute(
-        "INSERT INTO memories(id, content, scope, project_path, session_id, source, tags, title, created_at, file_path) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (mem_id, content, scope, project_path, session_id, source, tags_json, title, now, file_path),
+        "INSERT INTO memories(id, content, scope, project_id, project_path, context, "
+        "session_id, memory_type, source, tags, title, created_at, file_path, access_count, last_accessed_at) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
+        (mem_id, content, scope, project_id, project_path, context,
+         session_id, memory_type, source, tags_json, title, now, file_path, now),
     )
     conn.commit()
     conn.close()
@@ -68,10 +85,12 @@ def create_memory(
 
 def get_context(
     db_path: Path,
-    project_path: str | None = None,
+    project_id: str | None = None,
+    context: str | None = None,
+    session_id: str | None = None,
     top_k: int = 5,
 ) -> list[dict[str, Any]]:
-    """Aggregate memories from session > project > global scopes.
+    """Aggregate memories from session > context > project > global scopes.
 
     Returns up to *top_k* results total, distributed across scopes.
     """
@@ -81,28 +100,42 @@ def get_context(
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    scope_queries: list[tuple[str, list[Any]]] = [
-        ("session", ["SELECT * FROM memories WHERE scope = 'session' ORDER BY created_at DESC"]),
-        ("project", []),
-        ("global", ["SELECT * FROM memories WHERE scope = 'global' ORDER BY created_at DESC"]),
-    ]
+    queries: list[tuple[str, list[Any]]] = []
 
-    if project_path:
-        scope_queries[1] = (
-            "project",
-            ["SELECT * FROM memories WHERE scope = 'project' AND project_path = ? ORDER BY created_at DESC", project_path],
-        )
+    if session_id:
+        queries.append((
+            "SELECT * FROM memories WHERE scope = 'session' AND session_id = ? ORDER BY created_at DESC",
+            [session_id],
+        ))
 
-    per_scope = max(2, top_k // 3)
+    if context and project_id:
+        queries.append((
+            "SELECT * FROM memories WHERE scope = 'context' AND context = ? AND project_id = ? ORDER BY created_at DESC",
+            [context, project_id],
+        ))
+    elif context:
+        queries.append((
+            "SELECT * FROM memories WHERE scope = 'context' AND context = ? ORDER BY created_at DESC",
+            [context],
+        ))
 
-    for _, query_info in scope_queries:
+    if project_id:
+        queries.append((
+            "SELECT * FROM memories WHERE scope = 'project' AND project_id = ? ORDER BY created_at DESC",
+            [project_id],
+        ))
+
+    queries.append((
+        "SELECT * FROM memories WHERE scope = 'global' ORDER BY created_at DESC",
+        [],
+    ))
+
+    active_scopes = len(queries)
+    per_scope = max(1, top_k // active_scopes) if active_scopes > 0 else top_k
+
+    for sql, params in queries:
         if len(results) >= top_k:
             break
-        if not query_info:
-            continue
-
-        sql = query_info[0]
-        params = query_info[1:]
         rows = conn.execute(sql, params if params else ()).fetchmany(per_scope)
         for row in rows:
             d = dict(row)
@@ -114,17 +147,17 @@ def get_context(
     return results[:top_k]
 
 
-def list_scopes(db_path: Path, project_path: str | None = None) -> list[dict[str, Any]]:
+def list_scopes(db_path: Path, project_id: str | None = None) -> list[dict[str, Any]]:
     """List scopes with memory counts."""
     conn = get_connection(db_path)
     init_schema(conn)
 
-    if project_path:
+    if project_id:
         rows = conn.execute(
             "SELECT scope, count(*) as cnt FROM memories "
-            "WHERE project_path = ? OR scope = 'global' "
+            "WHERE project_id = ? OR scope = 'global' "
             "GROUP BY scope ORDER BY scope",
-            (project_path,),
+            (project_id,),
         ).fetchall()
     else:
         rows = conn.execute(
@@ -150,15 +183,25 @@ def stats(db_path: Path) -> dict[str, Any]:
     for row in conn.execute("SELECT source, count(*) as cnt FROM memories GROUP BY source"):
         by_source.append({"source": row["source"], "count": row["cnt"]})
 
+    by_type: list[dict[str, Any]] = []
+    for row in conn.execute("SELECT memory_type, count(*) as cnt FROM memories GROUP BY memory_type"):
+        by_type.append({"memory_type": row["memory_type"], "count": row["cnt"]})
+
     projects: list[dict[str, Any]] = []
     for row in conn.execute(
-        "SELECT project_path, count(*) as cnt FROM memories "
-        "WHERE project_path IS NOT NULL GROUP BY project_path ORDER BY cnt DESC"
+        "SELECT project_id, count(*) as cnt FROM memories "
+        "WHERE project_id IS NOT NULL GROUP BY project_id ORDER BY cnt DESC"
     ):
-        projects.append({"path": row["project_path"], "count": row["cnt"]})
+        projects.append({"project_id": row["project_id"], "count": row["cnt"]})
 
     conn.close()
-    return {"total": total, "by_scope": by_scope, "by_source": by_source, "projects": projects}
+    return {
+        "total": total,
+        "by_scope": by_scope,
+        "by_source": by_source,
+        "by_type": by_type,
+        "projects": projects,
+    }
 
 
 def end_session(db_path: Path, session_id: str, summary: str | None = None) -> bool:
@@ -194,6 +237,7 @@ def end_session(db_path: Path, session_id: str, summary: str | None = None) -> b
             session_id=session_id,
             source="manual",
             title=f"Session summary: {session_id}",
+            memory_type="log",
         )
 
     return True
@@ -203,7 +247,9 @@ def search_memories(
     db_path: Path,
     query: str | None = None,
     scope: str | None = None,
-    project_path: str | None = None,
+    project_id: str | None = None,
+    context: str | None = None,
+    memory_type: str | None = None,
     tags: list[str] | None = None,
     top_k: int = 10,
 ) -> list[dict[str, Any]]:
@@ -218,9 +264,17 @@ def search_memories(
         conditions.append("scope = ?")
         params.append(scope)
 
-    if project_path:
-        conditions.append("(project_path = ? OR scope = 'global')")
-        params.append(project_path)
+    if project_id:
+        conditions.append("(project_id = ? OR scope = 'global')")
+        params.append(project_id)
+
+    if context:
+        conditions.append("(context = ? OR scope IN ('project', 'global'))")
+        params.append(context)
+
+    if memory_type:
+        conditions.append("memory_type = ?")
+        params.append(memory_type)
 
     if tags:
         for tag in tags:
@@ -237,14 +291,63 @@ def search_memories(
 
 
 def list_projects(db_path: Path) -> list[dict[str, Any]]:
-    """List all project paths with memory counts."""
+    """List all project IDs with memory counts."""
     conn = get_connection(db_path)
     init_schema(conn)
 
     rows = conn.execute(
-        "SELECT project_path, count(*) as cnt FROM memories "
-        "WHERE project_path IS NOT NULL GROUP BY project_path ORDER BY cnt DESC"
+        "SELECT project_id, project_path, count(*) as cnt FROM memories "
+        "WHERE project_id IS NOT NULL GROUP BY project_id ORDER BY cnt DESC"
     ).fetchall()
 
     conn.close()
-    return [{"path": row["project_path"], "count": row["cnt"]} for row in rows]
+    return [
+        {"project_id": row["project_id"], "project_path": row["project_path"], "count": row["cnt"]}
+        for row in rows
+    ]
+
+
+def touch_memory(db_path: Path, memory_id: str) -> bool:
+    """Increment access_count and update last_accessed_at for a memory."""
+    conn = get_connection(db_path)
+    init_schema(conn)
+
+    now = _now_iso()
+    cursor = conn.execute(
+        "UPDATE memories SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?",
+        (now, memory_id),
+    )
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+
+def decay_memories(db_path: Path, days_threshold: int = 90, dry_run: bool = False) -> list[str]:
+    """Soft-delete memories of type 'log' with no access in N days.
+
+    Returns list of memory IDs that would be/were deleted.
+    """
+    conn = get_connection(db_path)
+    init_schema(conn)
+
+    rows = conn.execute(
+        "SELECT id FROM memories "
+        "WHERE memory_type = 'log' "
+        "AND scope = 'session' "
+        "AND (last_accessed_at IS NULL OR julianday('now') - julianday(last_accessed_at) > ?) "
+        "ORDER BY created_at ASC",
+        (days_threshold,),
+    ).fetchall()
+
+    ids = [row["id"] for row in rows]
+
+    if not dry_run and ids:
+        placeholders = ",".join("?" for _ in ids)
+        conn.execute(
+            f"DELETE FROM memories WHERE id IN ({placeholders})", ids
+        )
+        conn.commit()
+
+    conn.close()
+    return ids
