@@ -889,23 +889,25 @@ def main():
     if transport in ("sse", "streamable-http"):
         allowed = parse_allowed_hosts(config.allowed_hosts)
 
+        app = mcp.sse_app() if transport == "sse" else mcp.streamable_http_app()
+
         web_routes = get_web_routes()
         for route in web_routes:
-            mcp.starlette_app.routes.append(route)
+            app.routes.append(route)
 
         if config.cors_origins:
-            mcp.starlette_app.add_middleware(
-                CORSMiddleware, origins=config.cors_origins
-            )
+            app.add_middleware(CORSMiddleware, origins=config.cors_origins)
 
         if config.auth_token or allowed:
-            mcp.starlette_app.add_middleware(
+            app.add_middleware(
                 AuthMiddleware,
                 auth_token=config.auth_token,
                 allowed_hosts=allowed,
             )
 
-        mcp.run(transport=transport, host=host, port=port)
+        import uvicorn
+
+        uvicorn.run(app, host=host, port=port)
     else:
         mcp.run(transport="stdio")
 
