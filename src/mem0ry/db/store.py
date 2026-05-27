@@ -189,6 +189,9 @@ def get_context(
                 results.append(d)
 
     conn.close()
+
+    track_reads(db_path, [r["id"] for r in results[:top_k]])
+
     return results[:top_k]
 
 
@@ -245,13 +248,33 @@ def stats(db_path: Path) -> dict[str, Any]:
     ):
         projects.append({"project_id": row["project_id"], "count": row["cnt"]})
 
+    top_reads: list[dict[str, Any]] = []
+    for row in conn.execute(
+        "SELECT id, title, access_count, last_accessed_at FROM memories "
+        "WHERE access_count > 0 ORDER BY access_count DESC LIMIT 10"
+    ):
+        top_reads.append(
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "access_count": row["access_count"],
+                "last_accessed_at": row["last_accessed_at"],
+            }
+        )
+
+    total_reads = conn.execute(
+        "SELECT COALESCE(SUM(access_count), 0) FROM memories"
+    ).fetchone()[0]
+
     conn.close()
     return {
         "total": total,
+        "total_reads": total_reads,
         "by_scope": by_scope,
         "by_source": by_source,
         "by_type": by_type,
         "projects": projects,
+        "top_reads": top_reads,
     }
 
 
@@ -349,7 +372,11 @@ def search_memories(
 
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+
+    results = [dict(row) for row in rows]
+    track_reads(db_path, [r["id"] for r in results])
+
+    return results
 
 
 def list_projects(db_path: Path) -> list[dict[str, Any]]:
@@ -387,6 +414,26 @@ def touch_memory(db_path: Path, memory_id: str) -> bool:
     affected = cursor.rowcount
     conn.close()
     return affected > 0
+
+
+def track_reads(db_path: Path, memory_ids: list[str]) -> None:
+    """Batch-increment access_count and update last_accessed_at for multiple memories.
+
+    Single transaction, one UPDATE per id (indexed by PK). Fast for typical
+    result sets of 5–50 memories.
+    """
+    if not memory_ids:
+        return
+    conn = get_connection(db_path)
+    init_schema(conn)
+    now = _now_iso()
+    for mid in memory_ids:
+        conn.execute(
+            "UPDATE memories SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?",
+            (now, mid),
+        )
+    conn.commit()
+    conn.close()
 
 
 def decay_memories(
