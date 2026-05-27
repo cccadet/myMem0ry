@@ -22,15 +22,33 @@ def get_server_url() -> str:
     return f"http://{cfg.server_host}:{cfg.server_port}"
 
 
+def _pid_exists(pid: int) -> bool:
+    if sys.platform == "win32":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
 def is_server_running() -> bool:
     pid_file = get_pid_file()
     if not pid_file.exists():
         return False
     try:
         pid = int(pid_file.read_text().strip())
-        os.kill(pid, 0)
+        if not _pid_exists(pid):
+            raise ProcessLookupError(pid)
         return True
-    except (ValueError, ProcessLookupError, PermissionError):
+    except (ValueError, ProcessLookupError, PermissionError, OSError):
         pid_file.unlink(missing_ok=True)
         return False
 
@@ -72,11 +90,17 @@ def ensure_server() -> str:
         "streamable-http",
     ]
 
+    popen_kwargs: dict[str, Any] = {}
+    if sys.platform == "win32":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+    else:
+        popen_kwargs["start_new_session"] = True
+
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        start_new_session=True,
+        **popen_kwargs,
     )
 
     pid_file.write_text(str(proc.pid))
@@ -87,6 +111,26 @@ def ensure_server() -> str:
     return url
 
 
+def _terminate_pid(pid: int) -> None:
+    if sys.platform == "win32":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        PROCESS_TERMINATE = 1
+        handle = kernel32.OpenProcess(PROCESS_TERMINATE, False, pid)
+        if handle:
+            kernel32.TerminateProcess(handle, 1)
+            kernel32.CloseHandle(handle)
+    else:
+        os.kill(pid, signal.SIGTERM)
+
+
+def _kill_pid(pid: int) -> None:
+    if sys.platform == "win32":
+        _terminate_pid(pid)
+    else:
+        os.kill(pid, signal.SIGKILL)
+
+
 def stop_server() -> bool:
     """Graceful stop via PID file. Returns True if stopped."""
     pid_file = get_pid_file()
@@ -95,16 +139,13 @@ def stop_server() -> bool:
 
     try:
         pid = int(pid_file.read_text().strip())
-        os.kill(pid, signal.SIGTERM)
+        _terminate_pid(pid)
         time.sleep(0.3)
-        try:
-            os.kill(pid, 0)
-            os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        if _pid_exists(pid):
+            _kill_pid(pid)
         pid_file.unlink(missing_ok=True)
         return True
-    except (ValueError, ProcessLookupError, PermissionError):
+    except (ValueError, ProcessLookupError, PermissionError, OSError):
         pid_file.unlink(missing_ok=True)
         return False
 
