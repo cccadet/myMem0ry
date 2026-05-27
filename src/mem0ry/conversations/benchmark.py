@@ -35,8 +35,10 @@ def run_benchmark(
     ]
 
     if encoder is not None and vec_store is not None:
+
         def _hybrid_fn(q: str, d: Path, top_k: int = top_k) -> list[Path]:
             return search_hybrid(q, d, encoder, vec_store, top_k=top_k)
+
         backends.append(("hybrid", _hybrid_fn))
 
     results = []
@@ -51,12 +53,14 @@ def run_benchmark(
             paths = []
             logger.warning("[benchmark] %s falhou: %s", name, e)
 
-        results.append({
-            "backend": name,
-            "time_ms": round(elapsed, 1),
-            "n_files": len(paths),
-            "paths": paths,
-        })
+        results.append(
+            {
+                "backend": name,
+                "time_ms": round(elapsed, 1),
+                "n_files": len(paths),
+                "paths": paths,
+            }
+        )
 
     return results
 

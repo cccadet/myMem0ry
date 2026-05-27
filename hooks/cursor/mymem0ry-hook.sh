@@ -1,17 +1,34 @@
 #!/usr/bin/env bash
 # Cursor lifecycle hook.
-# Logs events to session memory via CLI.
+# Sends observations to myMem0ry server via HTTP.
 set -euo pipefail
 
 CWD="$(pwd)"
-EVENT="${1:-}"
+EVENT="${1:-other}"
 SESSION_ID="${MYMEM0RY_SESSION_ID:-$(date +%s | md5sum | head -c 8)}"
+SERVER="${MEM0RY_SERVER_URL:-http://127.0.0.1:49374}"
+
+KIND="other"
+case "$EVENT" in
+    session-start) KIND="session-start" ;;
+    session-end) KIND="session-end" ;;
+    user-prompt) KIND="user-prompt" ;;
+    PostToolUse) KIND="post-tool-use" ;;
+    *) KIND="other" ;;
+esac
 
 CONTENT=""
 if [ ! -t 0 ]; then
-    CONTENT="$(cat)"
+    CONTENT="$(head -c 4096)"
 fi
 
+BODY_FIELD=""
 if [ -n "$CONTENT" ]; then
-    printf '%s' "$CONTENT" | mymem0ry log --cwd "$CWD" --session "$SESSION_ID" --role user 2>/dev/null || true
+    CONTENT_ESCAPED=$(printf '%s' "$CONTENT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo '""')
+    BODY_FIELD="\"body\":${CONTENT_ESCAPED},"
 fi
+
+curl -sf --max-time 0.2 -X POST "${SERVER}/hook" \
+  -H "Content-Type: application/json" \
+  -d "{${BODY_FIELD}\"kind\":\"${KIND}\",\"session_id\":\"${SESSION_ID}\",\"cwd\":\"${CWD}\",\"agent\":\"cursor\"}" \
+  2>/dev/null || true

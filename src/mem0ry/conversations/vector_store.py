@@ -66,13 +66,16 @@ class VectorStore:
         )
         self._conn.execute(
             "INSERT OR REPLACE INTO metadata(rowid, path, title, source) VALUES (?, ?, ?, ?)",
-            (rowid, path, (meta or {}).get("title", ""), (meta or {}).get("source", "")),
+            (
+                rowid,
+                path,
+                (meta or {}).get("title", ""),
+                (meta or {}).get("source", ""),
+            ),
         )
         self._conn.commit()
 
-    def query(
-        self, embedding: np.ndarray, top_k: int = 5
-    ) -> list[tuple[str, float]]:
+    def query(self, embedding: np.ndarray, top_k: int = 5) -> list[tuple[str, float]]:
         """Return (path, distance) pairs sorted by cosine distance (ascending)."""
         vec_bytes = embedding.astype(np.float32).tobytes()
         rows = self._conn.execute(
@@ -91,9 +94,7 @@ class VectorStore:
         self._conn.commit()
 
     def count(self) -> int:
-        row = self._conn.execute(
-            "SELECT count(*) FROM metadata"
-        ).fetchone()
+        row = self._conn.execute("SELECT count(*) FROM metadata").fetchone()
         return row[0] if row else 0
 
     def close(self) -> None:

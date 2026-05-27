@@ -18,7 +18,9 @@ def test_db_path(tmp_path: Path) -> None:
 
 def test_build_fts_index_creates_db(tmp_path: Path) -> None:
     (tmp_path / "2026-04-21").mkdir()
-    (tmp_path / "2026-04-21" / "test.md").write_text("Python programming", encoding="utf-8")
+    (tmp_path / "2026-04-21" / "test.md").write_text(
+        "Python programming", encoding="utf-8"
+    )
     build_fts_index(tmp_path)
     assert _db_path(tmp_path).exists()
 
@@ -44,7 +46,9 @@ def test_search_fts_returns_results(tmp_path: Path) -> None:
 
 def test_search_fts_builds_index_if_missing(tmp_path: Path) -> None:
     (tmp_path / "2026-04-21").mkdir()
-    (tmp_path / "2026-04-21" / "test.md").write_text("unique searchable content", encoding="utf-8")
+    (tmp_path / "2026-04-21" / "test.md").write_text(
+        "unique searchable content", encoding="utf-8"
+    )
     assert not _db_path(tmp_path).exists()
     search_fts("unique", tmp_path)
     assert _db_path(tmp_path).exists()

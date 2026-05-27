@@ -41,9 +41,7 @@ class SpacyConceptSearch:
         norms[norms == 0] = 1.0
         self._vocab_matrix = mat / norms
 
-    def similar_tokens(
-        self, text: str, top_k: int = 10
-    ) -> list[tuple[str, float]]:
+    def similar_tokens(self, text: str, top_k: int = 10) -> list[tuple[str, float]]:
         """Return the top-k semantically related words with cosine scores."""
         doc = self._nlp(text)
         vecs = [t.vector for t in doc if t.has_vector]
@@ -89,7 +87,10 @@ class SpacyConceptSearch:
         return results
 
     def similar_tokens_with_layers(
-        self, text: str, top_k: int = 10, **kwargs,
+        self,
+        text: str,
+        top_k: int = 10,
+        **kwargs,
     ) -> list[tuple[str, float, int]]:
         """Same as similar_tokens but with placeholder layer info for CLI compat."""
         return [(tok, sc, -1) for tok, sc in self.similar_tokens(text, top_k)]

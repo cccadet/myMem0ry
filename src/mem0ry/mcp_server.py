@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import platform
 import re
+import time
 import uuid
 from datetime import date
 from pathlib import Path
@@ -15,6 +17,8 @@ from .config import MemoryConfig
 from .conversations.spacy_expand import SpacyConceptSearch
 from .utils.filenames import sanitize_title
 from .utils.git_context import resolve_full_context
+
+_START_TIME: float = time.monotonic()
 
 mcp = FastMCP("myMem0ry")
 
@@ -196,7 +200,8 @@ def save_memory(
         project_id=project_id or resolved["project_id"],
         project_path=resolved["project_path"],
         context=context or resolved["context"],
-        session_id=session_id or (resolved["session_id"] if scope == "session" else None),
+        session_id=session_id
+        or (resolved["session_id"] if scope == "session" else None),
         memory_type=memory_type,
         source=source,
         tags=tags,
@@ -360,12 +365,17 @@ def search_memory(
         encoder = SpacyEncoder(model_name=config.spacy_model)
         vec_store = VectorStore(Path(config.vector_db_path), dim=config.embedding_dim)
         paths = search_hybrid(
-            effective_query, conv_dir, encoder, vec_store,
-            top_k=top_k, rrf_k=config.rrf_k,
+            effective_query,
+            conv_dir,
+            encoder,
+            vec_store,
+            top_k=top_k,
+            rrf_k=config.rrf_k,
         )
         vec_store.close()
     elif backend == "bm25":
         from .conversations.search_bm25 import search_bm25
+
         paths = search_bm25(effective_query, conv_dir, top_k=top_k)
     else:
         paths = rg_search(effective_query, conv_dir, top_k=top_k)
@@ -409,17 +419,397 @@ def memory_stats() -> dict[str, Any]:
 
     db = _db_path()
     if not db.exists():
-        return {"total": 0, "by_scope": [], "by_source": [], "by_type": [], "projects": []}
+        return {
+            "total": 0,
+            "by_scope": [],
+            "by_source": [],
+            "by_type": [],
+            "projects": [],
+        }
 
     return _stats(db)
 
 
+@mcp.tool()
+def memory_handoff_begin(
+    summary: str,
+    open_questions: list[str] | None = None,
+    next_steps: list[str] | None = None,
+    cwd: str = "",
+) -> str:
+    """Open a handoff for the next agent. Call at session end.
+
+    Creates a typed handoff record that the next agent (any supported CLI)
+    can pick up via memory_handoff_accept or the session-start hook.
+
+    Args:
+        summary: Brief summary of what was accomplished or where you left off.
+        open_questions: List of open questions for the next agent.
+        next_steps: List of concrete next steps.
+        cwd: Current working directory (used to match project).
+    """
+    from .db.store import begin_handoff
+
+    resolved = _resolve_cwd(cwd)
+    ho_id = begin_handoff(
+        _db_path(),
+        session_id=resolved["session_id"],
+        from_agent="mcp-client",
+        summary=summary,
+        project_id=resolved["project_id"],
+        project_path=resolved["project_path"],
+        context=resolved["context"],
+        open_questions=open_questions,
+        next_steps=next_steps,
+    )
+    return f"Handoff {ho_id} created. Next agent will see it on session start."
+
+
+@mcp.tool()
+def memory_handoff_accept(
+    cwd: str = "",
+) -> dict[str, Any] | None:
+    """Fetch + ack the latest open handoff for this project.
+
+    Called at session start to pick up where the previous agent left off.
+    Returns the handoff dict with summary, open_questions, next_steps,
+    or None if no pending handoff.
+
+    Args:
+        cwd: Current working directory (used to match project).
+    """
+    from .db.store import accept_handoff
+
+    resolved = _resolve_cwd(cwd)
+    return accept_handoff(
+        _db_path(),
+        project_id=resolved["project_id"],
+        accepted_by="mcp-client",
+    )
+
+
+@mcp.tool()
+def memory_pin(memory_id: str) -> str:
+    """Pin a memory — exempt from retention decay.
+
+    Pinned memories are never soft-deleted by forget-sweep.
+
+    Args:
+        memory_id: The memory ID to pin.
+    """
+    from .db.retention import pin_memory
+
+    found = pin_memory(_db_path(), memory_id)
+    if found:
+        return f"Pinned {memory_id}"
+    return f"Memory {memory_id} not found or already deleted"
+
+
+@mcp.tool()
+def memory_unpin(memory_id: str) -> str:
+    """Unpin a memory — subject to retention decay again.
+
+    Args:
+        memory_id: The memory ID to unpin.
+    """
+    from .db.retention import unpin_memory
+
+    found = unpin_memory(_db_path(), memory_id)
+    if found:
+        return f"Unpinned {memory_id}"
+    return f"Memory {memory_id} not found"
+
+
+@mcp.tool()
+def memory_forget_sweep(execute: bool = False) -> dict[str, Any]:
+    """Sweep stale memories: soft-delete low-salience + hard-delete expired grace.
+
+    By default runs in preview (dry-run) mode. Pass execute=True to apply changes.
+
+    Retention tiers are derived from memory_type:
+    - log → working (90d max, salience decay)
+    - pattern → procedural (365d max, frequency-based)
+    - fact/decision → semantic (indefinite, auto-pinned)
+
+    Args:
+        execute: If True, apply changes. Default is dry-run preview.
+    """
+    from .db.retention import forget_sweep
+
+    result: dict[str, Any] = forget_sweep(_db_path(), dry_run=not execute)
+    return result
+
+
+@mcp.tool()
+def memory_status() -> dict[str, Any]:
+    """Health check: counts, paths, version, uptime.
+
+    Returns structured status of the myMem0ry system for diagnostics.
+    """
+    from importlib.metadata import version as pkg_version
+
+    config = MemoryConfig()
+    db = _db_path()
+    uptime = time.monotonic() - _START_TIME
+
+    status: dict[str, Any] = {
+        "version": pkg_version("mymem0ry") if _can_import_version() else "dev",
+        "python": platform.python_version(),
+        "platform": platform.system(),
+        "uptime_seconds": round(uptime, 1),
+        "db_path": str(db),
+        "db_exists": db.exists(),
+        "conversations_dir": config.conversations_dir,
+    }
+
+    if db.exists():
+        from .db.store import stats as _stats
+
+        db_stats = _stats(db)
+        status["total_memories"] = db_stats["total"]
+        status["by_scope"] = db_stats["by_scope"]
+        status["by_type"] = db_stats["by_type"]
+
+        from .db.connection import get_connection
+        from .db.schema import init_schema
+
+        conn = get_connection(db)
+        init_schema(conn)
+        obs_count = conn.execute("SELECT count(*) FROM observations").fetchone()[0]
+        ho_count = conn.execute(
+            "SELECT count(*) FROM handoffs WHERE status = 'open'"
+        ).fetchone()[0]
+        audit_count = conn.execute("SELECT count(*) FROM audit_log").fetchone()[0]
+        version_row = conn.execute(
+            "SELECT value FROM schema_meta WHERE key='version'"
+        ).fetchone()
+        conn.close()
+
+        status["schema_version"] = int(version_row["value"]) if version_row else None
+        status["observations_count"] = obs_count
+        status["pending_handoffs"] = ho_count
+        status["audit_entries"] = audit_count
+    else:
+        status["total_memories"] = 0
+
+    return status
+
+
+def _can_import_version() -> bool:
+    try:
+        from importlib.metadata import version
+
+        version("mymem0ry")
+        return True
+    except Exception:
+        return False
+
+
+@mcp.tool()
+def memory_briefing(cwd: str = "", top_k: int = 5) -> dict[str, Any]:
+    """Structured snapshot: stats + key rules + recent memories.
+
+    Returns a briefing package for agents starting a new session.
+    Includes project stats, pinned facts/decisions, and recent memories.
+
+    Args:
+        cwd: Current working directory for project context.
+        top_k: Max memories per category. Defaults to 5.
+    """
+    from .db.store import search_memories, stats as _stats
+
+    db = _db_path()
+    resolved = _resolve_cwd(cwd)
+
+    briefing: dict[str, Any] = {
+        "project_id": resolved.get("project_id"),
+        "context": resolved.get("context"),
+        "session_id": resolved.get("session_id"),
+    }
+
+    if not db.exists():
+        briefing["stats"] = {"total": 0}
+        briefing["pinned_facts"] = []
+        briefing["pinned_decisions"] = []
+        briefing["recent"] = []
+        return briefing
+
+    briefing["stats"] = _stats(db)
+
+    pinned_facts = search_memories(
+        db, memory_type="fact", top_k=top_k
+    )
+    briefing["pinned_facts"] = [
+        {"id": m["id"], "title": m.get("title"), "content": m["content"][:200]}
+        for m in pinned_facts
+    ]
+
+    pinned_decisions = search_memories(
+        db, memory_type="decision", top_k=top_k
+    )
+    briefing["pinned_decisions"] = [
+        {"id": m["id"], "title": m.get("title"), "content": m["content"][:200]}
+        for m in pinned_decisions
+    ]
+
+    recent = search_memories(db, top_k=top_k)
+    briefing["recent"] = [
+        {
+            "id": m["id"],
+            "scope": m["scope"],
+            "type": m.get("memory_type"),
+            "title": m.get("title"),
+            "content": m["content"][:200],
+            "created_at": m.get("created_at"),
+        }
+        for m in recent
+    ]
+
+    return briefing
+
+
+@mcp.tool()
+def memory_explore(cwd: str = "") -> str:
+    """Prose digest of the project state for human-readable overview.
+
+    Generates a text summary of what's stored in the memory system,
+    including counts by scope, recent activity, and key decisions.
+
+    Args:
+        cwd: Current working directory for project context.
+    """
+    from .db.store import search_memories, stats as _stats
+
+    db = _db_path()
+    resolved = _resolve_cwd(cwd)
+
+    if not db.exists():
+        return "No database found. Start using myMem0ry by saving memories."
+
+    db_stats = _stats(db)
+    project_id = resolved.get("project_id")
+
+    lines: list[str] = []
+    lines.append("myMem0ry Project Digest")
+    lines.append(f"{'=' * 40}")
+    lines.append(f"Project: {project_id or 'global (no git project)'}")
+    lines.append(f"Total memories: {db_stats['total']}")
+    lines.append("")
+
+    for scope_info in db_stats["by_scope"]:
+        lines.append(f"  {scope_info['scope']}: {scope_info['count']} memories")
+
+    lines.append("")
+    for type_info in db_stats["by_type"]:
+        lines.append(f"  {type_info['memory_type']}: {type_info['count']}")
+
+    decisions = search_memories(db, memory_type="decision", top_k=3)
+    if decisions:
+        lines.append("\nRecent Decisions:")
+        for d in decisions:
+            title = d.get("title") or "untitled"
+            lines.append(f"  - {title}: {d['content'][:100]}")
+
+    facts = search_memories(db, memory_type="fact", top_k=3)
+    if facts:
+        lines.append("\nKey Facts:")
+        for f in facts:
+            title = f.get("title") or "untitled"
+            lines.append(f"  - {title}: {f['content'][:100]}")
+
+    recent = search_memories(db, top_k=5)
+    if recent:
+        lines.append("\nLatest Activity:")
+        for r in recent:
+            scope = r["scope"]
+            title = r.get("title") or "untitled"
+            created = r.get("created_at", "")[:10]
+            lines.append(f"  [{scope}] {title} ({created})")
+
+    return "\n".join(lines)
+
+
+# ─── HTTP Endpoints ───────────────────────────────────────────────────────────
+
+
 @mcp.custom_route("/health", methods=["GET"])
 async def health_endpoint(request: Any) -> Any:
-    """Health check endpoint."""
+    """Health check endpoint with extended diagnostics."""
     from starlette.responses import JSONResponse
 
-    return JSONResponse({"status": "ok", "version": "0.4.1"})
+    db = _db_path()
+    uptime = time.monotonic() - _START_TIME
+
+    resp: dict[str, Any] = {
+        "status": "ok",
+        "version": "0.7.0",
+        "uptime_seconds": round(uptime, 1),
+        "db_exists": db.exists(),
+    }
+
+    if db.exists():
+        from .db.store import stats as _stats
+
+        try:
+            s = _stats(db)
+            resp["total_memories"] = s["total"]
+        except Exception:
+            resp["db_error"] = True
+
+    return JSONResponse(resp)
+
+
+@mcp.custom_route("/hook", methods=["POST"])
+async def hook_endpoint(request: Any) -> Any:
+    """Fire-and-forget lifecycle hook ingestion.
+
+    Accepts JSON with: kind, session_id, agent, cwd, body, title.
+    Returns 202 Accepted immediately.
+    """
+    from starlette.responses import JSONResponse
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+
+    if not isinstance(payload, dict) or not payload.get("session_id"):
+        return JSONResponse({"error": "session_id required"}, status_code=400)
+
+    try:
+        from .hooks.router import handle_hook_event
+
+        obs_id = handle_hook_event(_db_path(), payload)
+        return JSONResponse({"status": "accepted", "id": obs_id}, status_code=202)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception:
+        return JSONResponse({"status": "accepted", "id": "error"}, status_code=202)
+
+
+@mcp.custom_route("/handoff/accept", methods=["GET"])
+async def handoff_accept_endpoint(request: Any) -> Any:
+    """HTTP endpoint for hooks to fetch pending handoffs."""
+    from starlette.responses import JSONResponse
+
+    from .db.store import accept_handoff
+
+    cwd = request.query_params.get("cwd", "")
+    project_id = None
+    if cwd:
+        resolved = resolve_full_context(Path(cwd))
+        project_id = resolved.get("project_id")
+
+    ho = accept_handoff(
+        _db_path(),
+        project_id=project_id,
+        accepted_by=request.query_params.get("agent", "hook"),
+    )
+
+    if not ho:
+        return JSONResponse(None)
+
+    return JSONResponse(ho)
 
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
@@ -449,7 +839,13 @@ def auto_save_instructions() -> str:
         "   - Use memory_type: 'fact', 'decision', 'pattern', or 'log'\n"
         "\n"
         "## Session End\n"
-        "4. Call end_session with a brief summary of what was accomplished.\n"
+        "4. Call memory_handoff_begin with a summary of what was accomplished, open questions,\n"
+        "   and next steps. The next agent will pick this up automatically.\n"
+        "5. Call end_session with a brief summary.\n"
+        "\n"
+        "## Cross-Agent Handoff\n"
+        "6. If you see a 'myMem0ry: pending handoff' block, read it and continue from there.\n"
+        "7. To check for handoffs manually, call memory_handoff_accept(cwd=<cwd>).\n"
         "\n"
         "## Scope Resolution\n"
         "Scopes are resolved automatically from cwd:\n"
@@ -481,13 +877,34 @@ def conversation_logger(topic: str = "") -> str:
 
 
 def main():
-    import os
+    from .auth import AuthMiddleware, CORSMiddleware, parse_allowed_hosts
+    from .web import get_web_routes
 
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     host = os.environ.get("MCP_HOST", "127.0.0.1")
     port = int(os.environ.get("MCP_PORT", "49374"))
 
+    config = MemoryConfig()
+
     if transport in ("sse", "streamable-http"):
+        allowed = parse_allowed_hosts(config.allowed_hosts)
+
+        web_routes = get_web_routes()
+        for route in web_routes:
+            mcp.starlette_app.routes.append(route)
+
+        if config.cors_origins:
+            mcp.starlette_app.add_middleware(
+                CORSMiddleware, origins=config.cors_origins
+            )
+
+        if config.auth_token or allowed:
+            mcp.starlette_app.add_middleware(
+                AuthMiddleware,
+                auth_token=config.auth_token,
+                allowed_hosts=allowed,
+            )
+
         mcp.run(transport=transport, host=host, port=port)
     else:
         mcp.run(transport="stdio")

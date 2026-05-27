@@ -131,11 +131,107 @@ def migrate_v2_to_v3(conversations_dir: Path, db_path: Path) -> dict:
             "INSERT INTO memories(id, content, scope, memory_type, source, tags, "
             "title, created_at, file_path, access_count, last_accessed_at) "
             "VALUES(?, ?, 'global', ?, 'import', '[]', ?, ?, ?, 0, ?)",
-            (mem_id, parsed["content"], memory_type, parsed["title"],
-             created_at, rel_path, created_at),
+            (
+                mem_id,
+                parsed["content"],
+                memory_type,
+                parsed["title"],
+                created_at,
+                rel_path,
+                created_at,
+            ),
         )
         result["migrated"] += 1
 
     conn.commit()
     conn.close()
     return result
+
+
+def migrate_v3_to_v4(db_path: Path) -> dict:
+    """Upgrade v3 schema to v4: add observations and handoffs tables.
+
+    Uses CREATE TABLE IF NOT EXISTS, so existing data is preserved.
+    Returns a dict with the new schema version.
+    """
+    conn = get_connection(db_path)
+    init_schema(conn)
+
+    version_row = conn.execute(
+        "SELECT value FROM schema_meta WHERE key='version'"
+    ).fetchone()
+    old_version = int(version_row["value"]) if version_row else 3
+
+    conn.close()
+    return {"old_version": old_version, "new_version": 4}
+
+
+def migrate_v4_to_v5(db_path: Path) -> dict:
+    """Upgrade v4 schema to v5: add salience, pinned, deleted_at, grace_until.
+
+    Retention tier is derived from memory_type (no column needed).
+    Existing facts/decisions are auto-pinned; salience is computed for all.
+    """
+    conn = get_connection(db_path)
+
+    version_row = conn.execute(
+        "SELECT value FROM schema_meta WHERE key='version'"
+    ).fetchone()
+    old_version = int(version_row["value"]) if version_row else 4
+
+    new_cols = [
+        ("salience", "REAL NOT NULL DEFAULT 0.5"),
+        ("pinned", "INTEGER NOT NULL DEFAULT 0"),
+        ("deleted_at", "TEXT"),
+        ("grace_until", "TEXT"),
+    ]
+    existing = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(memories)").fetchall()
+    }
+    for col_name, col_def in new_cols:
+        if col_name not in existing:
+            conn.execute(f"ALTER TABLE memories ADD COLUMN {col_name} {col_def}")
+
+    conn.execute(
+        "UPDATE memories SET pinned = 1 WHERE memory_type IN ('fact', 'decision') AND pinned = 0"
+    )
+    conn.commit()
+    conn.close()
+
+    from .retention import update_salience_for_all
+
+    update_salience_for_all(db_path)
+
+    conn = get_connection(db_path)
+    conn.execute(
+        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
+        ("version", "5"),
+    )
+    conn.commit()
+    conn.close()
+
+    return {"old_version": old_version, "new_version": 5}
+
+
+def migrate_v5_to_v6(db_path: Path) -> dict:
+    """Upgrade v5 schema to v6: add audit_log table.
+
+    Uses CREATE TABLE IF NOT EXISTS, so existing data is preserved.
+    """
+    conn = get_connection(db_path)
+    init_schema(conn)
+
+    version_row = conn.execute(
+        "SELECT value FROM schema_meta WHERE key='version'"
+    ).fetchone()
+    old_version = int(version_row["value"]) if version_row else 5
+
+    conn.execute(
+        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
+        ("version", "6"),
+    )
+    conn.commit()
+    conn.close()
+
+    return {"old_version": old_version, "new_version": 6}

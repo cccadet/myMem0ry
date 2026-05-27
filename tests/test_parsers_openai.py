@@ -13,31 +13,40 @@ def _make_mapping(nodes: list[dict]) -> dict:
 
 
 def test_parse_simple_conversation(tmp_path: Path) -> None:
-    mapping = _make_mapping([
-        {
-            "id": "root",
-            "children": ["c1"],
-        },
-        {
-            "id": "c1",
-            "message": {
-                "author": {"role": "user"},
-                "content": {"parts": ["Hello"]},
-                "id": "m1",
+    mapping = _make_mapping(
+        [
+            {
+                "id": "root",
+                "children": ["c1"],
             },
-            "children": ["c2"],
-        },
-        {
-            "id": "c2",
-            "message": {
-                "author": {"role": "assistant"},
-                "content": {"parts": ["Hi there"]},
-                "id": "m2",
+            {
+                "id": "c1",
+                "message": {
+                    "author": {"role": "user"},
+                    "content": {"parts": ["Hello"]},
+                    "id": "m1",
+                },
+                "children": ["c2"],
             },
-            "children": [],
-        },
-    ])
-    payload = [{"id": "conv1", "title": "Test", "create_time": "1700000000.0", "mapping": mapping}]
+            {
+                "id": "c2",
+                "message": {
+                    "author": {"role": "assistant"},
+                    "content": {"parts": ["Hi there"]},
+                    "id": "m2",
+                },
+                "children": [],
+            },
+        ]
+    )
+    payload = [
+        {
+            "id": "conv1",
+            "title": "Test",
+            "create_time": "1700000000.0",
+            "mapping": mapping,
+        }
+    ]
     path = tmp_path / "export.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -61,17 +70,19 @@ def test_parse_skips_empty_mapping(tmp_path: Path) -> None:
 
 
 def test_parse_skips_system_roles(tmp_path: Path) -> None:
-    mapping = _make_mapping([
-        {"id": "root", "children": ["c1"]},
-        {
-            "id": "c1",
-            "message": {
-                "author": {"role": "system"},
-                "content": {"parts": ["System msg"]},
+    mapping = _make_mapping(
+        [
+            {"id": "root", "children": ["c1"]},
+            {
+                "id": "c1",
+                "message": {
+                    "author": {"role": "system"},
+                    "content": {"parts": ["System msg"]},
+                },
+                "children": [],
             },
-            "children": [],
-        },
-    ])
+        ]
+    )
     payload = [{"id": "conv3", "mapping": mapping}]
     path = tmp_path / "export.json"
     path.write_text(json.dumps(payload), encoding="utf-8")

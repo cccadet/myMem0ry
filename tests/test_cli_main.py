@@ -47,7 +47,9 @@ def test_split_with_openai_source(tmp_path: Path) -> None:
 
 
 def test_search_missing_dir() -> None:
-    result = runner.invoke(app, ["search", "test", "--conversations", "/nonexistent/dir"])
+    result = runner.invoke(
+        app, ["search", "test", "--conversations", "/nonexistent/dir"]
+    )
     assert result.exit_code == 1
     assert "not found" in result.output
 
@@ -55,9 +57,7 @@ def test_search_missing_dir() -> None:
 @patch("mem0ry.conversations.search.search", return_value=[])
 def test_search_no_results(mock_search: MagicMock, tmp_path: Path) -> None:
     (tmp_path / "test.md").write_text("content", encoding="utf-8")
-    result = runner.invoke(
-        app, ["search", "python", "--conversations", str(tmp_path)]
-    )
+    result = runner.invoke(app, ["search", "python", "--conversations", str(tmp_path)])
     assert "Nenhum resultado" in result.output
 
 
@@ -68,14 +68,14 @@ def test_search_with_results(mock_search: MagicMock, tmp_path: Path) -> None:
     md.write_text("Python stuff", encoding="utf-8")
     mock_search.return_value = [md]
 
-    result = runner.invoke(
-        app, ["search", "python", "--conversations", str(tmp_path)]
-    )
+    result = runner.invoke(app, ["search", "python", "--conversations", str(tmp_path)])
     assert "1 resultados" in result.output
 
 
 def test_benchmark_missing_dir() -> None:
-    result = runner.invoke(app, ["benchmark", "test", "--conversations", "/nonexistent/dir"])
+    result = runner.invoke(
+        app, ["benchmark", "test", "--conversations", "/nonexistent/dir"]
+    )
     assert result.exit_code == 1
 
 
@@ -83,7 +83,12 @@ def test_benchmark_missing_dir() -> None:
 def test_benchmark_with_results(mock_bench: MagicMock, tmp_path: Path) -> None:
     (tmp_path / "test.md").write_text("content", encoding="utf-8")
     mock_bench.return_value = [
-        {"backend": "ripgrep", "time_ms": 10.0, "n_files": 1, "paths": [Path("test.md")]},
+        {
+            "backend": "ripgrep",
+            "time_ms": 10.0,
+            "n_files": 1,
+            "paths": [Path("test.md")],
+        },
     ]
     result = runner.invoke(
         app, ["benchmark", "python", "--conversations", str(tmp_path)]
@@ -94,7 +99,14 @@ def test_benchmark_with_results(mock_bench: MagicMock, tmp_path: Path) -> None:
 
 def test_dataset_missing_source(tmp_path: Path) -> None:
     result = runner.invoke(
-        app, ["dataset", "--source", str(tmp_path / "missing"), "--output", str(tmp_path / "out")]
+        app,
+        [
+            "dataset",
+            "--source",
+            str(tmp_path / "missing"),
+            "--output",
+            str(tmp_path / "out"),
+        ],
     )
     assert result.exit_code == 0
     assert "Dataset built" in result.output
@@ -102,12 +114,12 @@ def test_dataset_missing_source(tmp_path: Path) -> None:
 
 @patch("mem0ry.cli.main.build_bm25_index")
 @patch("mem0ry.cli.main.build_fts_index")
-def test_index_command(mock_fts: MagicMock, mock_bm25: MagicMock, tmp_path: Path) -> None:
+def test_index_command(
+    mock_fts: MagicMock, mock_bm25: MagicMock, tmp_path: Path
+) -> None:
     (tmp_path / "test.md").write_text("content", encoding="utf-8")
     with patch("mem0ry.cli.main._build_vector_index") as mock_vec:
-        result = runner.invoke(
-            app, ["index", "--conversations", str(tmp_path)]
-        )
+        result = runner.invoke(app, ["index", "--conversations", str(tmp_path)])
         assert result.exit_code == 0
         mock_bm25.assert_called_once()
         mock_fts.assert_called_once()
@@ -135,9 +147,7 @@ def test_index_fts5_only(mock_fts: MagicMock, tmp_path: Path) -> None:
 
 
 def test_index_missing_dir() -> None:
-    result = runner.invoke(
-        app, ["index", "--conversations", "/nonexistent/dir"]
-    )
+    result = runner.invoke(app, ["index", "--conversations", "/nonexistent/dir"])
     assert result.exit_code == 1
 
 
@@ -164,7 +174,9 @@ def test_context_returns_memories(tmp_path: Path) -> None:
     from mem0ry.db.store import create_memory
 
     db_path = _setup_db(tmp_path)
-    create_memory(db_path, content="global fact", scope="global", memory_type="fact", title="G1")
+    create_memory(
+        db_path, content="global fact", scope="global", memory_type="fact", title="G1"
+    )
 
     with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
@@ -188,11 +200,14 @@ def test_save_creates_memory(tmp_path: Path) -> None:
 
     with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
-        result = runner.invoke(app, ["save", "Test Note", "Important content", "--cwd", str(tmp_path)])
+        result = runner.invoke(
+            app, ["save", "Test Note", "Important content", "--cwd", str(tmp_path)]
+        )
     assert result.exit_code == 0
     assert len(result.output.strip()) == 12
 
     from mem0ry.db.store import search_memories
+
     mems = search_memories(Path(db_path), query="Important")
     assert len(mems) >= 1
     assert mems[0]["content"] == "Important content"
@@ -203,15 +218,24 @@ def test_save_with_scope(tmp_path: Path) -> None:
 
     with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
-        result = runner.invoke(app, [
-            "save", "Decision", "We chose X",
-            "--cwd", str(tmp_path),
-            "--scope", "project",
-            "--type", "decision",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "save",
+                "Decision",
+                "We chose X",
+                "--cwd",
+                str(tmp_path),
+                "--scope",
+                "project",
+                "--type",
+                "decision",
+            ],
+        )
     assert result.exit_code == 0
 
     from mem0ry.db.store import search_memories
+
     mems = search_memories(Path(db_path), scope="project", memory_type="decision")
     assert len(mems) == 1
 
@@ -231,10 +255,13 @@ def test_log_creates_session_memory(tmp_path: Path) -> None:
 
     with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
-        result = runner.invoke(app, ["log", "user asked about X", "--cwd", str(tmp_path)])
+        result = runner.invoke(
+            app, ["log", "user asked about X", "--cwd", str(tmp_path)]
+        )
     assert result.exit_code == 0
 
     from mem0ry.db.store import search_memories
+
     mems = search_memories(Path(db_path), scope="session")
     assert len(mems) == 1
     assert "user asked about X" in mems[0]["content"]
@@ -245,14 +272,21 @@ def test_log_with_role(tmp_path: Path) -> None:
 
     with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
-        result = runner.invoke(app, [
-            "log", "assistant response",
-            "--cwd", str(tmp_path),
-            "--role", "assistant",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "log",
+                "assistant response",
+                "--cwd",
+                str(tmp_path),
+                "--role",
+                "assistant",
+            ],
+        )
     assert result.exit_code == 0
 
     from mem0ry.db.store import search_memories
+
     mems = search_memories(Path(db_path), scope="session")
     assert "[assistant]" in mems[0]["content"]
 
@@ -266,5 +300,6 @@ def test_log_empty_content_is_noop(tmp_path: Path) -> None:
     assert result.exit_code == 0
 
     from mem0ry.db.store import search_memories
+
     mems = search_memories(Path(db_path))
     assert len(mems) == 0

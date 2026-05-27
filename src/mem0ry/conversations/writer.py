@@ -106,7 +106,9 @@ def _is_gemini_list(payload) -> bool:
 
 
 def _is_openai_dict(payload) -> bool:
-    return isinstance(payload, dict) and ("conversations" in payload or "mapping" in payload)
+    return isinstance(payload, dict) and (
+        "conversations" in payload or "mapping" in payload
+    )
 
 
 def _is_openai_list(payload) -> bool:
@@ -119,9 +121,8 @@ def _is_claude_export(payload) -> bool:
         return "chat_messages" in first or ("uuid" in first and "name" in first)
     if isinstance(payload, dict):
         convs = payload.get("conversations", [])
-        return (
-            "chat_messages" in payload
-            or (isinstance(convs, list) and bool(convs) and "chat_messages" in convs[0])
+        return "chat_messages" in payload or (
+            isinstance(convs, list) and bool(convs) and "chat_messages" in convs[0]
         )
     return False
 

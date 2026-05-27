@@ -12,7 +12,10 @@ def _write_md(conv_dir: Path, date_str: str, title: str, mem_id: str) -> Path:
     d = conv_dir / date_str
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{title}.md"
-    p.write_text(f"# {title}\n> id: {mem_id} | date: {date_str}\n\nSome content here.\n", encoding="utf-8")
+    p.write_text(
+        f"# {title}\n> id: {mem_id} | date: {date_str}\n\nSome content here.\n",
+        encoding="utf-8",
+    )
     return p
 
 
@@ -98,7 +101,9 @@ def test_migrate_v2_to_v3_drops_and_reingests(tmp_path: Path) -> None:
     assert result["skipped"] == 0
 
     conn = get_connection(db_path)
-    rows = conn.execute("SELECT memory_type, title FROM memories ORDER BY title").fetchall()
+    rows = conn.execute(
+        "SELECT memory_type, title FROM memories ORDER BY title"
+    ).fetchall()
     conn.close()
     types = {row["title"]: row["memory_type"] for row in rows}
     assert types["Test Chat"] == "log"

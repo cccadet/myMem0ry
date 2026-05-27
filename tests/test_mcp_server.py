@@ -172,12 +172,15 @@ def test_save_memory_creates_file(tmp_path: Path) -> None:
     db_path = tmp_path / "test.db"
     from mem0ry.db.connection import get_connection
     from mem0ry.db.schema import init_schema
+
     conn = get_connection(db_path)
     init_schema(conn)
     conn.close()
 
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path), \
-         patch.object(mod, "_db_path", return_value=db_path):
+    with (
+        patch.object(mod, "_conversations_dir", return_value=tmp_path),
+        patch.object(mod, "_db_path", return_value=db_path),
+    ):
         result = save_memory("My Note", "Important stuff", dt="2026-04-21")
     assert "Saved:" in result
     assert (tmp_path / "2026-04-21").is_dir()
@@ -194,13 +197,18 @@ def test_save_memory_with_memory_type(tmp_path: Path) -> None:
     db_path = tmp_path / "test.db"
     from mem0ry.db.connection import get_connection
     from mem0ry.db.schema import init_schema
+
     conn = get_connection(db_path)
     init_schema(conn)
     conn.close()
 
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path), \
-         patch.object(mod, "_db_path", return_value=db_path):
-        result = save_memory("Decision", "We chose X", memory_type="decision", dt="2026-04-21")
+    with (
+        patch.object(mod, "_conversations_dir", return_value=tmp_path),
+        patch.object(mod, "_db_path", return_value=db_path),
+    ):
+        result = save_memory(
+            "Decision", "We chose X", memory_type="decision", dt="2026-04-21"
+        )
     assert "type=decision" in result
 
 
@@ -289,6 +297,7 @@ def test_write_md_file_id_is_12_chars(tmp_path: Path) -> None:
     path = _write_md(tmp_path, "2026-04-21", "ID Check", "content")
     text = path.read_text(encoding="utf-8")
     import re
+
     match = re.search(r"id: ([a-f0-9]+) \|", text)
     assert match is not None
     assert len(match.group(1)) == 12
@@ -383,10 +392,14 @@ def test_get_context_returns_memories(tmp_path: Path) -> None:
     from mem0ry.db.store import create_memory
 
     db_path = _setup_db(tmp_path)
-    create_memory(db_path, content="global fact", scope="global", memory_type="fact", title="G1")
+    create_memory(
+        db_path, content="global fact", scope="global", memory_type="fact", title="G1"
+    )
 
-    with patch.object(mod, "_db_path", return_value=db_path), \
-         patch.object(mod, "_conversations_dir", return_value=tmp_path / "conv"):
+    with (
+        patch.object(mod, "_db_path", return_value=db_path),
+        patch.object(mod, "_conversations_dir", return_value=tmp_path / "conv"),
+    ):
         result = get_context(cwd=str(tmp_path), top_k=5)
     assert len(result) >= 1
 
@@ -396,7 +409,9 @@ def test_memory_stats_returns_data(tmp_path: Path) -> None:
     from mem0ry.db.store import create_memory
 
     db_path = _setup_db(tmp_path)
-    create_memory(db_path, content="test", scope="global", memory_type="fact", title="T")
+    create_memory(
+        db_path, content="test", scope="global", memory_type="fact", title="T"
+    )
 
     with patch.object(mod, "_db_path", return_value=db_path):
         result = memory_stats()

@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mem0ry.conversations.writer import _extract_date, _detect_source_type, split_conversations
+from mem0ry.conversations.writer import (
+    _extract_date,
+    _detect_source_type,
+    split_conversations,
+)
 
 
 def test_extract_date_unix_timestamp() -> None:
@@ -43,9 +47,7 @@ def test_detect_source_type_openai_dict(tmp_path: Path) -> None:
 
 
 def test_detect_source_type_openai_list(tmp_path: Path) -> None:
-    (tmp_path / "data.json").write_text(
-        json.dumps([{"mapping": {}}]), encoding="utf-8"
-    )
+    (tmp_path / "data.json").write_text(json.dumps([{"mapping": {}}]), encoding="utf-8")
     assert _detect_source_type(tmp_path) == "openai"
 
 

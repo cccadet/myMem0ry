@@ -25,10 +25,12 @@ def _mock_expander(scores: list[tuple[str, float]]) -> MagicMock:
 @patch("mem0ry.cli.main._get_expander")
 def test_expand_small_scores_formats_correctly(mock_get: MagicMock) -> None:
     """Scores < 10 must render with 4 decimal places, no crash."""
-    mock_get.return_value = _mock_expander([
-        ("paris", 0.6321),
-        ("french", 0.5123),
-    ])
+    mock_get.return_value = _mock_expander(
+        [
+            ("paris", 0.6321),
+            ("french", 0.5123),
+        ]
+    )
 
     result = runner.invoke(app, ["expand", "france"])
     assert result.exit_code == 0, result.output
@@ -40,10 +42,12 @@ def test_expand_small_scores_formats_correctly(mock_get: MagicMock) -> None:
 @patch("mem0ry.cli.main._get_expander")
 def test_expand_large_scores_formats_correctly(mock_get: MagicMock) -> None:
     """Scores >= 10 must widen the column, no crash."""
-    mock_get.return_value = _mock_expander([
-        ("paris", 15.3),
-        ("french", 12.8),
-    ])
+    mock_get.return_value = _mock_expander(
+        [
+            ("paris", 15.3),
+            ("french", 12.8),
+        ]
+    )
 
     result = runner.invoke(app, ["expand", "france"])
     assert result.exit_code == 0, result.output
@@ -53,10 +57,12 @@ def test_expand_large_scores_formats_correctly(mock_get: MagicMock) -> None:
 @patch("mem0ry.cli.main._get_expander")
 def test_expand_negative_scores(mock_get: MagicMock) -> None:
     """Negative scores (from spaCy filtering) must not crash formatting."""
-    mock_get.return_value = _mock_expander([
-        ("tok1", -2.0),
-        ("tok2", -1.5),
-    ])
+    mock_get.return_value = _mock_expander(
+        [
+            ("tok1", -2.0),
+            ("tok2", -1.5),
+        ]
+    )
 
     result = runner.invoke(app, ["expand", "test"])
     assert result.exit_code == 0, result.output
@@ -65,9 +71,11 @@ def test_expand_negative_scores(mock_get: MagicMock) -> None:
 @patch("mem0ry.cli.main._get_expander")
 def test_expand_single_result(mock_get: MagicMock) -> None:
     """Single result must not crash max() on a one-element list."""
-    mock_get.return_value = _mock_expander([
-        ("lonely", 0.42),
-    ])
+    mock_get.return_value = _mock_expander(
+        [
+            ("lonely", 0.42),
+        ]
+    )
 
     result = runner.invoke(app, ["expand", "test"])
     assert result.exit_code == 0, result.output

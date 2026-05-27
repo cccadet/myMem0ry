@@ -35,9 +35,11 @@ def test_run_benchmark_calls_backends(tmp_path: Path) -> None:
     mock_bm25 = MagicMock(return_value=[tmp_path / "test.md"])
     mock_fts = MagicMock(return_value=[])
 
-    with patch("mem0ry.conversations.benchmark.search", mock_rg), \
-         patch("mem0ry.conversations.benchmark.search_bm25", mock_bm25), \
-         patch("mem0ry.conversations.benchmark.search_fts", mock_fts):
+    with (
+        patch("mem0ry.conversations.benchmark.search", mock_rg),
+        patch("mem0ry.conversations.benchmark.search_bm25", mock_bm25),
+        patch("mem0ry.conversations.benchmark.search_fts", mock_fts),
+    ):
         results = run_benchmark("python", tmp_path, top_k=3)
 
     assert len(results) == 3
@@ -51,9 +53,11 @@ def test_run_benchmark_calls_backends(tmp_path: Path) -> None:
 def test_run_benchmark_handles_error(tmp_path: Path) -> None:
     mock_rg = MagicMock(side_effect=RuntimeError("boom"))
 
-    with patch("mem0ry.conversations.benchmark.search", mock_rg), \
-         patch("mem0ry.conversations.benchmark.search_bm25", MagicMock(return_value=[])), \
-         patch("mem0ry.conversations.benchmark.search_fts", MagicMock(return_value=[])):
+    with (
+        patch("mem0ry.conversations.benchmark.search", mock_rg),
+        patch("mem0ry.conversations.benchmark.search_bm25", MagicMock(return_value=[])),
+        patch("mem0ry.conversations.benchmark.search_fts", MagicMock(return_value=[])),
+    ):
         results = run_benchmark("test", tmp_path)
 
     assert results[0]["backend"] == "ripgrep"

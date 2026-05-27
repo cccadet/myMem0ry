@@ -39,7 +39,7 @@ def test_init_schema_version(tmp_path: Path) -> None:
     init_schema(conn)
 
     row = conn.execute("SELECT value FROM schema_meta WHERE key='version'").fetchone()
-    assert row["value"] == "3"
+    assert row["value"] == "6"
     conn.close()
 
 
@@ -51,9 +51,26 @@ def test_memories_columns(tmp_path: Path) -> None:
     cols = conn.execute("PRAGMA table_info(memories)").fetchall()
     names = [row["name"] for row in cols]
     expected = [
-        "id", "content", "scope", "project_id", "project_path", "context",
-        "session_id", "memory_type", "source", "tags", "title", "created_at",
-        "updated_at", "file_path", "access_count", "last_accessed_at",
+        "id",
+        "content",
+        "scope",
+        "project_id",
+        "project_path",
+        "context",
+        "session_id",
+        "memory_type",
+        "source",
+        "tags",
+        "title",
+        "created_at",
+        "updated_at",
+        "file_path",
+        "access_count",
+        "last_accessed_at",
+        "salience",
+        "pinned",
+        "deleted_at",
+        "grace_until",
     ]
     for col in expected:
         assert col in names, f"Missing column: {col}"

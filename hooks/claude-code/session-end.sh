@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # Claude Code SessionEnd hook.
-# Saves session summary to myMem0ry.
+# Sends session-end observation to myMem0ry server (auto-triggers handoff creation).
 set -euo pipefail
 
 CWD="$(pwd)"
-SUMMARY="${1:-Session completed.}"
 SESSION_ID="${MYMEM0RY_SESSION_ID:-$(date +%s | md5sum | head -c 8)}"
+SERVER="${MEM0RY_SERVER_URL:-http://127.0.0.1:49374}"
 
-mymem0ry save "Session end" "$SUMMARY" \
-    --cwd "$CWD" \
-    --session "$SESSION_ID" \
-    --scope session \
-    --type log \
-    2>/dev/null || true
+curl -sf --max-time 0.2 -X POST "${SERVER}/hook" \
+  -H "Content-Type: application/json" \
+  -d "{\"kind\":\"session-end\",\"session_id\":\"${SESSION_ID}\",\"cwd\":\"${CWD}\",\"agent\":\"claude-code\"}" \
+  2>/dev/null || true

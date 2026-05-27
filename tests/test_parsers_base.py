@@ -14,9 +14,7 @@ def test_parsed_message_defaults() -> None:
 
 
 def test_parsed_conversation_defaults() -> None:
-    conv = ParsedConversation(
-        conversation_id="abc", title="Test", create_time="1234.5"
-    )
+    conv = ParsedConversation(conversation_id="abc", title="Test", create_time="1234.5")
     assert conv.messages == []
     assert conv.metadata == {}
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,6 @@ from mem0ry.db.connection import get_connection
 from mem0ry.db.schema import init_schema
 from mem0ry.db.store import (
     create_memory,
-    decay_memories,
     end_session,
     get_context,
     list_projects,
@@ -60,12 +60,17 @@ def test_create_memory_persists(db: Path) -> None:
 
 def test_create_memory_project_scope(db: Path) -> None:
     create_memory(
-        db, content="project note", scope="project",
-        project_id="github.com/user/repo", project_path="/home/user/repo",
+        db,
+        content="project note",
+        scope="project",
+        project_id="github.com/user/repo",
+        project_path="/home/user/repo",
         title="PN",
     )
     conn = get_connection(db)
-    row = conn.execute("SELECT project_id, project_path FROM memories WHERE scope='project'").fetchone()
+    row = conn.execute(
+        "SELECT project_id, project_path FROM memories WHERE scope='project'"
+    ).fetchone()
     conn.close()
     assert row["project_id"] == "github.com/user/repo"
     assert row["project_path"] == "/home/user/repo"
@@ -73,12 +78,17 @@ def test_create_memory_project_scope(db: Path) -> None:
 
 def test_create_memory_with_context(db: Path) -> None:
     create_memory(
-        db, content="branch note", scope="context",
-        project_id="github.com/user/repo", context="feat/auth",
+        db,
+        content="branch note",
+        scope="context",
+        project_id="github.com/user/repo",
+        context="feat/auth",
         title="BN",
     )
     conn = get_connection(db)
-    row = conn.execute("SELECT context, scope FROM memories WHERE scope='context'").fetchone()
+    row = conn.execute(
+        "SELECT context, scope FROM memories WHERE scope='context'"
+    ).fetchone()
     conn.close()
     assert row["context"] == "feat/auth"
 
@@ -99,21 +109,34 @@ def test_get_context_empty(db: Path) -> None:
 def test_get_context_cascata(db: Path) -> None:
     create_memory(db, content="global fact", scope="global", title="G1")
     create_memory(
-        db, content="project fact", scope="project",
-        project_id="github.com/x/y", title="P1",
+        db,
+        content="project fact",
+        scope="project",
+        project_id="github.com/x/y",
+        title="P1",
     )
     create_memory(
-        db, content="context fact", scope="context",
-        project_id="github.com/x/y", context="main", title="C1",
+        db,
+        content="context fact",
+        scope="context",
+        project_id="github.com/x/y",
+        context="main",
+        title="C1",
     )
     create_memory(
-        db, content="session fact", scope="session",
-        session_id="s1", title="S1",
+        db,
+        content="session fact",
+        scope="session",
+        session_id="s1",
+        title="S1",
     )
 
     result = get_context(
-        db, project_id="github.com/x/y", context="main",
-        session_id="s1", top_k=10,
+        db,
+        project_id="github.com/x/y",
+        context="main",
+        session_id="s1",
+        top_k=10,
     )
     scopes = {r["scope"] for r in result}
     assert "session" in scopes
@@ -133,8 +156,11 @@ def test_list_scopes(db: Path) -> None:
     create_memory(db, content="g1", scope="global", title="G1")
     create_memory(db, content="g2", scope="global", title="G2")
     create_memory(
-        db, content="p1", scope="project",
-        project_id="github.com/x/y", title="P1",
+        db,
+        content="p1",
+        scope="project",
+        project_id="github.com/x/y",
+        title="P1",
     )
 
     result = list_scopes(db)
@@ -144,10 +170,17 @@ def test_list_scopes(db: Path) -> None:
 
 
 def test_stats(db: Path) -> None:
-    create_memory(db, content="g", scope="global", source="manual", memory_type="fact", title="G")
     create_memory(
-        db, content="p", scope="project", source="import",
-        project_id="github.com/x/y", memory_type="decision", title="P",
+        db, content="g", scope="global", source="manual", memory_type="fact", title="G"
+    )
+    create_memory(
+        db,
+        content="p",
+        scope="project",
+        source="import",
+        project_id="github.com/x/y",
+        memory_type="decision",
+        title="P",
     )
 
     result = stats(db)
@@ -183,8 +216,11 @@ def test_end_session_with_summary(db: Path) -> None:
 def test_search_memories_by_scope(db: Path) -> None:
     create_memory(db, content="global", scope="global", title="G")
     create_memory(
-        db, content="project", scope="project",
-        project_id="github.com/x/y", title="P",
+        db,
+        content="project",
+        scope="project",
+        project_id="github.com/x/y",
+        title="P",
     )
 
     results = search_memories(db, scope="global")
@@ -195,8 +231,11 @@ def test_search_memories_by_scope(db: Path) -> None:
 def test_search_memories_by_project_id(db: Path) -> None:
     create_memory(db, content="global", scope="global", title="G")
     create_memory(
-        db, content="project", scope="project",
-        project_id="github.com/x/y", title="P",
+        db,
+        content="project",
+        scope="project",
+        project_id="github.com/x/y",
+        title="P",
     )
 
     results = search_memories(db, project_id="github.com/x/y")
@@ -214,8 +253,12 @@ def test_search_memories_by_memory_type(db: Path) -> None:
 
 def test_search_memories_by_context(db: Path) -> None:
     create_memory(
-        db, content="ctx note", scope="context",
-        project_id="github.com/x/y", context="feat/auth", title="C",
+        db,
+        content="ctx note",
+        scope="context",
+        project_id="github.com/x/y",
+        context="feat/auth",
+        title="C",
     )
     create_memory(db, content="global note", scope="global", title="G")
 
@@ -225,16 +268,28 @@ def test_search_memories_by_context(db: Path) -> None:
 
 def test_list_projects(db: Path) -> None:
     create_memory(
-        db, content="a", scope="project",
-        project_id="github.com/x/p1", project_path="/p1", title="A",
+        db,
+        content="a",
+        scope="project",
+        project_id="github.com/x/p1",
+        project_path="/p1",
+        title="A",
     )
     create_memory(
-        db, content="b", scope="project",
-        project_id="github.com/x/p2", project_path="/p2", title="B",
+        db,
+        content="b",
+        scope="project",
+        project_id="github.com/x/p2",
+        project_path="/p2",
+        title="B",
     )
     create_memory(
-        db, content="c", scope="project",
-        project_id="github.com/x/p1", project_path="/p1", title="C",
+        db,
+        content="c",
+        scope="project",
+        project_id="github.com/x/p1",
+        project_path="/p1",
+        title="C",
     )
 
     result = list_projects(db)
@@ -268,13 +323,27 @@ def test_touch_memory_not_found(db: Path) -> None:
 
 
 def test_decay_memories_dry_run(db: Path) -> None:
+    from mem0ry.db.retention import forget_sweep
+
     create_memory(
-        db, content="old session", scope="session",
-        session_id="old", memory_type="log", title="Old",
+        db,
+        content="old session",
+        scope="session",
+        session_id="old",
+        memory_type="log",
+        title="Old",
     )
 
-    ids = decay_memories(db, days_threshold=-1, dry_run=True)
-    assert len(ids) == 1
+    past = (
+        datetime.now(timezone.utc) - timedelta(days=200)
+    ).isoformat()
+    conn = get_connection(db)
+    conn.execute("UPDATE memories SET created_at = ? WHERE title = 'Old'", (past,))
+    conn.commit()
+    conn.close()
+
+    result = forget_sweep(db, dry_run=True)
+    assert result["soft_count"] == 1
 
     conn = get_connection(db)
     count = conn.execute("SELECT count(*) FROM memories").fetchone()[0]
@@ -283,23 +352,47 @@ def test_decay_memories_dry_run(db: Path) -> None:
 
 
 def test_decay_memories_deletes(db: Path) -> None:
-    create_memory(
-        db, content="old session", scope="session",
-        session_id="old", memory_type="log", title="Old",
-    )
-    create_memory(db, content="a fact", scope="global", memory_type="fact", title="Fact")
+    from datetime import timedelta
 
-    ids = decay_memories(db, days_threshold=-1, dry_run=False)
-    assert len(ids) == 1
+    create_memory(
+        db,
+        content="old session",
+        scope="session",
+        session_id="old",
+        memory_type="log",
+        title="Old",
+    )
+    create_memory(
+        db, content="a fact", scope="global", memory_type="fact", title="Fact"
+    )
+
+    past = (
+        datetime.now(timezone.utc) - timedelta(days=200)
+    ).isoformat()
+    conn = get_connection(db)
+    conn.execute("UPDATE memories SET created_at = ? WHERE title = 'Old'", (past,))
+    conn.commit()
+    conn.close()
+
+    from mem0ry.db.retention import forget_sweep
+
+    result = forget_sweep(db, dry_run=False)
+    assert result["soft_count"] == 1
 
     conn = get_connection(db)
-    count = conn.execute("SELECT count(*) FROM memories").fetchone()[0]
+    count = conn.execute(
+        "SELECT count(*) FROM memories WHERE deleted_at IS NULL"
+    ).fetchone()[0]
     conn.close()
     assert count == 1
 
 
 def test_decay_preserves_non_session_logs(db: Path) -> None:
-    create_memory(db, content="project log", scope="project", memory_type="log", title="PL")
+    create_memory(
+        db, content="project log", scope="project", memory_type="log", title="PL"
+    )
 
-    ids = decay_memories(db, days_threshold=-1, dry_run=False)
-    assert len(ids) == 0
+    from mem0ry.db.retention import forget_sweep
+
+    result = forget_sweep(db, dry_run=True)
+    assert result["soft_count"] == 0

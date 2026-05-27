@@ -19,7 +19,9 @@ def _default_data_dir() -> Path:
         if sys.platform == "win32":
             base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
         else:
-            base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+            base = Path(
+                os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
+            )
         return base / "mem0ry"
     return _project_root / "data"
 
@@ -55,3 +57,11 @@ class MemoryConfig:
         os.environ.get("DB_PATH", str(_DATA_DIR / "memories.db")),
         "memories.db",
     )
+    server_host: str = os.environ.get("MEM0RY_HOST", "127.0.0.1")
+    server_port: int = int(os.environ.get("MEM0RY_PORT", "49374"))
+    server_pid_file: str = os.environ.get(
+        "MEM0RY_PID_FILE", str(_DATA_DIR / "server.pid")
+    )
+    auth_token: str | None = os.environ.get("MEM0RY_TOKEN", None)
+    allowed_hosts: str = os.environ.get("MEM0RY_ALLOWED_HOSTS", "localhost,127.0.0.1")
+    cors_origins: str = os.environ.get("MEM0RY_CORS_ORIGINS", "")

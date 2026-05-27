@@ -49,13 +49,15 @@ def test_parse_skips_empty_entries(tmp_path: Path) -> None:
 def test_parse_directory_multiple_files(tmp_path: Path) -> None:
     for name in ["a.json", "b.json"]:
         (tmp_path / name).write_text(
-            json.dumps([
-                {
-                    "title": "Prompted test",
-                    "time": "2026-01-01T00:00:00Z",
-                    "safeHtmlItem": [{"html": "response"}],
-                }
-            ]),
+            json.dumps(
+                [
+                    {
+                        "title": "Prompted test",
+                        "time": "2026-01-01T00:00:00Z",
+                        "safeHtmlItem": [{"html": "response"}],
+                    }
+                ]
+            ),
             encoding="utf-8",
         )
 

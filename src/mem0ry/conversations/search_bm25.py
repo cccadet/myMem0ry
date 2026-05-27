@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 
 def _tokenize(text: str) -> list[str]:
     """Tokenize text for BM25 indexing."""
-    return [w for w in re.findall(r"\w+", text.lower()) if w not in _STOP_WORDS and len(w) > 1]
+    return [
+        w
+        for w in re.findall(r"\w+", text.lower())
+        if w not in _STOP_WORDS and len(w) > 1
+    ]
 
 
 def _index_path(conversations_dir: Path) -> Path:

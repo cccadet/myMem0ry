@@ -68,7 +68,9 @@ def test_search_bm25_returns_results(tmp_path: Path) -> None:
 
 def test_search_bm25_builds_index_if_missing(tmp_path: Path) -> None:
     (tmp_path / "2026-04-21").mkdir()
-    (tmp_path / "2026-04-21" / "test.md").write_text("unique content here", encoding="utf-8")
+    (tmp_path / "2026-04-21" / "test.md").write_text(
+        "unique content here", encoding="utf-8"
+    )
     assert not _index_path(tmp_path).exists()
     search_bm25("unique", tmp_path)
     assert _index_path(tmp_path).exists()

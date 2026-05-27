@@ -24,10 +24,15 @@ def test_quality_filters_removes_short() -> None:
 
 def test_quality_filters_keeps_valid() -> None:
     examples = [
-        _make_example([
-            {"role": "user", "content": "Tell me about Python programming"},
-            {"role": "assistant", "content": "Python is a versatile programming language"},
-        ]),
+        _make_example(
+            [
+                {"role": "user", "content": "Tell me about Python programming"},
+                {
+                    "role": "assistant",
+                    "content": "Python is a versatile programming language",
+                },
+            ]
+        ),
     ]
     result = apply_quality_filters(examples, min_turns=2)
     assert len(result) == 1
@@ -62,7 +67,12 @@ def test_train_val_split_empty() -> None:
 
 def test_compute_stats() -> None:
     examples = [
-        _make_example([{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]),
+        _make_example(
+            [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "hello"},
+            ]
+        ),
     ]
     stats = compute_stats(examples)
     assert isinstance(stats, DatasetStats)

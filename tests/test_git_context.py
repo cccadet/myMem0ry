@@ -54,7 +54,9 @@ def test_resolve_context_in_git_repo(tmp_path: Path) -> None:
         capture_output=True,
     )
     (tmp_path / "f.txt").write_text("x")
-    subprocess.run(["git", "add", "."], cwd=str(tmp_path), check=True, capture_output=True)
+    subprocess.run(
+        ["git", "add", "."], cwd=str(tmp_path), check=True, capture_output=True
+    )
     subprocess.run(
         ["git", "commit", "-m", "init"],
         cwd=str(tmp_path),
@@ -95,7 +97,9 @@ def test_resolve_full_context(tmp_path: Path) -> None:
         capture_output=True,
     )
     (tmp_path / "f.txt").write_text("x")
-    subprocess.run(["git", "add", "."], cwd=str(tmp_path), check=True, capture_output=True)
+    subprocess.run(
+        ["git", "add", "."], cwd=str(tmp_path), check=True, capture_output=True
+    )
     subprocess.run(
         ["git", "commit", "-m", "init"],
         cwd=str(tmp_path),

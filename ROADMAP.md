@@ -1,109 +1,128 @@
 # myMem0ry — Roadmap
 
-> Ferramenta de memória pessoal, local, sem API key externa, para agentes de IA.  
+> Sistema de memória pessoal para agentes de IA. Offline, zero API keys, Python puro.
 > Filosofia: **o agente faz os resumos, tu fazes as buscas.**
 
 ---
 
-## Visão geral
+## O que está feito (v0.4.8)
 
-```
-Conversas históricas (ChatGPT, Gemini, Claude)
-        ↓
-    [split + ingest]
-        ↓
-  Base de memórias indexadas
-  (scope: global / project / session)
-        ↓
-    [MCP Server]
-        ↓
-  Agentes (Claude Code, OpenCode, Cursor...)
-```
-
----
-
-## Fase 1 — Fundação semântica ✅
-
-### 1.1 Embeddings locais
-
-- [x] Adicionar `sqlite-vec` como backend vetorial (zero deps externas, embutido no SQLite)
-- [x] Gerar embedding por chunk de conversa no momento do `split`
-- [x] Armazenar embeddings associados ao ficheiro `.md` correspondente
-- [x] Embeddings usa spaCy word vectors (300-dim, `pt_core_news_lg`) — não all-MiniLM-L6-v2
-
-### 1.2 Busca híbrida
-
-- [x] Implementar RRF fusion (Reciprocal Rank Fusion) combinando BM25 + vector
-- [x] Novo flag `--backend hybrid` no comando `search`
-- [x] Benchmark interno: comparar recall do hybrid vs BM25-only vs FTS5
-
-### 1.3 Suporte a Claude exports
-
-- [x] Parser para `.jsonl` do Claude Code (`~/.claude/projects/`)
-- [x] Parser para JSON de export do claude.ai
-- [x] Auto-detecção no comando `split` (junto com OpenAI e Gemini)
+- [x] Embeddings locais (spaCy word vectors 300-dim, sqlite-vec)
+- [x] Busca híbrida com RRF fusion (BM25 + vector + FTS5 + ripgrep)
+- [x] Query expansion semântica com spaCy
+- [x] Parsers: OpenAI (ChatGPT JSON), Gemini (Google Takeout), Claude (.jsonl + export JSON)
+- [x] Schema v3: 4 scopes (global/project/context/session), 4 memory types (fact/decision/pattern/log)
+- [x] Resolução automática de contexto via git (remote URL, branch)
+- [x] MCP server com 9 tools + 2 prompts + health endpoint
+- [x] CLI completo: split, search, index, migrate, stats, projects, doctor, benchmark, decay, expand, dataset
+- [x] Hooks para Claude Code, OpenCode, Cursor, Codex, Gemini CLI
+- [x] CI (GitHub Actions: ruff + mypy + pytest --cov, coverage gate 80%)
+- [x] Decay de sessões antigas (`decay_memories`)
+- [x] CHANGELOG.md, CONTRIBUTING.md, README, AGENTS.md
+- [x] Publicável no PyPI (hatchling, entry points, classifiers)
 
 ---
 
-## Fase 2 — Escopos de memória + captura ativa ✅
+## Comparação com ai-memory (akitaonrails)
 
-### 2.1 Novo schema de memória
+Análise feita contra `akitaonrails/ai-memory` v0.3.2 (Rust, 233 commits, 294 stars).
 
-- [x] Migrar para novo schema com scope, project_path, session_id, source, tags
-- [x] Índice SQLite por `scope` + `project_path` para queries eficientes
-- [x] Comando `mymem0ry migrate` para converter memórias existentes
+### Onde myMem0ry já compete ou supera
 
-### 2.2 Novas ferramentas MCP
+| Aspecto | myMem0ry | ai-memory |
+|---|---|---|
+| Embeddings offline | spaCy 300-dim, zero config | Requer OpenAI/Voyage/Google API key |
+| Setup | `uv sync` + `mymem0ry doctor` | Docker ou Rust build + LLM config |
+| Dependências | Python puro, sem API externa | Rust toolchain + LLM provider |
+| Custo | Zero | Pago se usar LLM consolidation |
+| Parsers de conversas | OpenAI + Gemini + Claude | Não importa conversas históricas |
 
-- [x] Implementar `save_memory` com validação de scope
-- [x] Implementar `get_context` com agregação dos 3 escopos
-- [x] Implementar `list_scopes` e `memory_stats`
-- [x] Implementar `end_session`
-- [x] Actualizar `search_memory` existente para suportar filtro por scope
+### Gaps críticos para um MCP profissional
 
-### 2.3 Captura ativa via hooks
+#### 1. Handoffs entre agentes (prioridade alta)
 
-- [x] Documentar instrução de hook para Claude Code (`CLAUDE.md`)
-- [x] Documentar instrução de hook para OpenCode (`opencode.json` system prompt)
-- [x] Auto-geração de `session_id` baseado em timestamp + project_path
+O ai-memory resolve o problema principal: parar um agente e continuar noutro.
+myMem0ry tem `get_context` mas não tem handoffs tipados.
 
-### 2.4 Auto-detecção de projecto
+- [ ] **Tabela `handoffs`** — registro de handoff com status (open/accepted/expired), cwd, agent_kind, summary, open_questions, next_steps
+- [ ] **Tool `memory_handoff_begin`** — criar handoff no fim da sessão
+- [ ] **Tool `memory_handoff_accept`** — buscar e ack do handoff pendente no início da próxima sessão
+- [ ] **Hook SessionStart** — auto-fetch handoff pendente via cwd matching
+- [ ] **Hook SessionEnd** — auto-create handoff com resumo da sessão
 
-- [x] `get_context` e `save_memory` aceitam `project_path` e fazem match por prefixo
-- [x] Fallback: se `project_path` não bate em nenhum projecto conhecido, usa scope global
-- [x] Comando `mymem0ry projects` → lista projectos com memórias indexadas
+#### 2. Lifecycle hooks robustos (prioridade alta)
 
----
+Os hooks atuais são scripts shell básicos. O ai-memory tem:
+- Fire-and-forget com timeout < 200ms
+- Backpressure (HTTP 429 quando saturado)
+- Sanitização de payload do agente
+- Vocabulário de eventos: session-start, user-prompt, pre-tool-use, post-tool-use, pre-compact, session-end
 
-## Fase 3 — Qualidade & visibilidade ✅
+- [ ] **Hook router HTTP** — endpoint `POST /hook` no MCP server para receber eventos de lifecycle
+- [ ] **Payload sanitization** — strip de PII, validação de schema
+- [ ] **Fire-and-forget com timeout** — hooks nunca bloqueiam o agente
+- [ ] **Eventos expandidos** — capturar user-prompt, post-tool-use, pre-compact (não só session-start/end)
+- [ ] **Tabela `observations`** — log imutável de todos os eventos capturados
 
-### 3.1 Observabilidade
+#### 3. Wiki markdown como source of truth (prioridade média)
 
-- [x] Comando `mymem0ry stats` — total de memórias, por scope, por projecto, por fonte
-- [x] Comando `mymem0ry projects` — lista directórios com memórias e contagens
-- [x] Logging estruturado (substituir prints por `logging` com níveis)
-- [x] Comando `mymem0ry doctor` — verifica dependências, índices, schema, permissões
+O ai-memory usa markdown git-versioned como fonte de verdade. myMem0ry gera .md
+mas não mantém wiki consolidada.
 
-### 3.2 CI/CD e qualidade de código
+- [ ] **Conceito de "pages"** — memórias consolidadas em páginas wiki (não só logs)
+- [ ] **Git-versioning do diretório de memórias** — auto-commit em session-end
+- [ ] **Consolidação** — no fim da sessão, reescrever logs em páginas coerentes
+- [ ] **Wikilinks** — cross-references entre memórias relacionadas
+- [ ] **Supersession chain** — histórico de versões de cada página
 
-- [x] GitHub Actions: `pytest` + `mypy` + `ruff` em cada PR
-- [x] Badge de CI no README
-- [x] Cobertura mínima de testes: 80%
-- [x] `mypy` config com `ignore_missing_imports` para deps não tipadas
-- [x] Limpar imports unused nos testes
-- [x] Remover dependência fantasma `openai>=1.0`
+#### 4. Consolidação LLM-driven (prioridade média, opt-in)
 
-### 3.3 Documentação
+O ai-memory oferece consolidação zero-LLM (rule-based) e LLM (rewrite).
+myMem0ry não tem nenhum dos dois.
 
-- [x] CHANGELOG.md com versioning semântico
-- [x] CONTRIBUTING.md
-- [x] README renovado com arquitectura, quick start, escopos, MCP tools, CLI commands
+- [ ] **Consolidação rule-based** — sem LLM, sumário estruturado da sessão
+- [ ] **Consolidação LLM (opt-in)** — com provider configurável (OpenAI, Anthropic, local)
+- [ ] **Tool `memory_consolidate`** — trigger manual ou automático
+- [ ] **Lint de contradições** — detectar decisões conflitantes entre memórias
 
-### 3.4 Packaging
+#### 5. Memória com retenção inteligente (prioridade média)
 
-- [x] Metadata PyPI (license, classifiers, URLs)
-- [x] Entry points limpos: `mymem0ry` e `mymem0ry-mcp`
-- [x] Versão bumpada para 0.3.0
+O ai-memory tem 4 tiers com decay parametrizável. myMem0ry tem decay básico.
+
+- [ ] **Tiers de retenção** — working (sessão), episodic (30d→180d), semantic (indefinido), procedural (frequency-decay)
+- [ ] **Fórmula de salience** — `salience · exp(−λΔt) + σ · log(1+access_count) · exp(−μ · days_since_access)`
+- [ ] **Soft-delete + hard-delete** — com período de grace
+- [ ] **Pinned memories** — isentas de decay
+- [ ] **Tool `memory_forget_sweep`** — preview (dry_run) + execução
+
+#### 6. MCP transport e autenticação (prioridade média)
+
+O ai-memory tem auth e transport robusto. myMem0ry tem HTTP básico.
+
+- [x] **Streamable HTTP transport** — além de stdio e SSE, suportar streamable-http para clients remotos
+- [x] **Bearer token auth** — proteger endpoints MCP/HTTP (MEM0RY_TOKEN env var)
+- [x] **Host allowlisting** — DNS rebinding protection (MEM0RY_ALLOWED_HOSTS)
+- [x] **CORS** — para web UI futura (MEM0RY_CORS_ORIGINS)
+
+#### 7. Observabilidade e ops (prioridade baixa)
+
+- [x] **Tool `memory_status`** — health check (counts, paths, version, uptime)
+- [x] **Tool `memory_briefing`** — snapshot estruturado (stats + rules + recent + slots)
+- [x] **Tool `memory_explore`** — digest em prosa do estado do projeto
+- [x] **Audit log** — tabela de mutations para forensics
+- [x] **Backup/restore** — `mymem0ry backup --to <tarball>` + `mymem0ry restore`
+
+#### 8. Web UI (prioridade baixa)
+
+- [x] **Read-only web viewer** — lista de projetos, árvore de pastas, FTS5 search, renderização markdown
+- [x] **Dark mode** — montado no mesmo servidor MCP
+- [x] **Auth integrada** — HTTP Basic com bearer token
+
+#### 9. Multi-agente / multi-machine (futuro)
+
+- [ ] **Workspace isolation** — projeto = workspace + project_id + path
+- [ ] **Remote server mode** — bind 0.0.0.0 com auth para uso em LAN/homelab
+- [ ] **Thin-client CLI** — `mymem0ry status`, `mymem0ry bootstrap` como HTTP clients do server
 
 ---
 
@@ -111,42 +130,52 @@ Conversas históricas (ChatGPT, Gemini, Claude)
 
 | Decisão | Escolha | Motivo |
 |---|---|---|
-| Embeddings | spaCy word vectors (300-dim, `pt_core_news_lg`) | Zero custo, offline, sem API key, sem modelo extra |
-| Vector store | `sqlite-vec` | Sem deps externas, embutido no SQLite já existente |
-| Resumos de sessão | Feitos pelo agente activo | Zero custo, o modelo já tem contexto completo |
-| Schema de memórias | SQLite + JSON | Simples, portátil, sem servidor |
-| MCP | `mcp` Python SDK | Já existente no projecto |
-| Linguagem | Python puro | Consistência, sem Node.js runtime |
+| Embeddings | spaCy word vectors (300-dim, offline) | Zero custo, sem API key, sem modelo extra |
+| Vector store | sqlite-vec | Sem deps externas, embutido no SQLite |
+| Resumos | Feitos pelo agente activo (consolidação rule-based futura) | Zero custo |
+| Schema | SQLite v3 (scopes + memory_type + access tracking) | Simples, portátil |
+| MCP | FastMCP Python SDK | Já existente, stdio + SSE + streamable-http |
+| Linguagem | Python puro | Consistência, sem runtime extra |
+| Hooks | Shell scripts + HTTP endpoint (futuro) | Fire-and-forget, não bloqueia agente |
 
 ---
 
-## Próximos passos (pós-v1.0)
+## Ordem sugerida de implementação
 
-1. **MCP via stdio** — suporte ao transporte stdio no MCP server (além do SSE actual), para compatibilidade com mais clientes
-- Publicar no PyPI como `mymem0ry` (testar `uvx mymem0ry`)
-- Dashboard web / viewer para memorias
-- Sync entre máquinas
-- Suporte a outros formatos (Notion, Obsidian, etc.)
-- Benchmark automatizado vs grep puro
-- Embeddings alternativos (sentence-transformers como opcional)
-- API REST separada do MCP
-- Memória de equipa / multi-utilizador
+```
+Prioridade alta (MCP profissional mínimo):
+ 1. Handoffs (tabela + tools + hook integration)        ~1 dia
+ 2. Hook router HTTP + payload sanitization              ~1 dia
+ 3. Observações imutáveis (tabela observations)          ~0.5 dia
+
+Prioridade média (feature parity):
+ 4. Pages wiki + git-versioning                          ~1 dia
+ 5. Consolidação rule-based                              ~0.5 dia
+ 6. Retenção inteligente (tiers + salience + sweep)      ~1 dia
+ 7. Bearer auth + streamable-http robusto                ~0.5 dia
+
+Prioridade baixa (diferenciação):
+ 8. Consolidação LLM-driven (opt-in)                     ~1 dia
+ 9. Web UI read-only                                     ~2 dias
+10. Multi-machine (remote server + thin-client)          ~1 dia
+```
 
 ---
 
-## Não está no scope (por enquanto)
+## Não está no scope
 
-- Dashboard web / viewer
-- Sync entre máquinas
-- Memória de equipa / multi-utilizador
-- API REST separada do MCP
-- Suporte a outros formatos (Notion, Obsidian, etc.)
+- Fine-tuning de modelos (PLAN_FINETUNE.md → arquived)
+- Q&A pipeline temporal (temporal-qa-pipeline.md → archived)
+- Sync entre máquinas (futuro)
+- Memória de equipa / multi-utilizador (futuro)
+- Suporte a outros formatos (Notion, Obsidian) (futuro)
 
 ---
 
 ## Referências
 
-- [myMem0ry](https://github.com/cccadet/myMem0ry) — repositório principal
-- [agentmemory](https://github.com/rohitg00/agentmemory) — referência de arquitectura (Node.js, mais complexo)
+- [akitaonrails/ai-memory](https://github.com/akitaonrails/ai-memory) — referência principal de comparação (Rust, v0.3.2)
+- [agentmemory](https://github.com/rohitg00/agentmemory) — referência de arquitectura
+- [basic-memory](https://github.com/basicmachines-co/basic-memory) — markdown source of truth
 - [sqlite-vec](https://github.com/asg017/sqlite-vec) — extensão vetorial para SQLite
-- [LongMemEval](https://github.com/xiaowu0162/LongMemEval) — benchmark de avaliação de memória
+- [Karpathy LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — compile-not-retrieve pattern

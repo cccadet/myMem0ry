@@ -132,21 +132,23 @@ def test_detect_source_type_unknown_structure(tmp_path: Path) -> None:
 def test_split_conversations_skips_empty_messages(tmp_path: Path) -> None:
     source = tmp_path / "export"
     source.mkdir()
-    payload = [{
-        "mapping": {
-            "node1": {
-                "message": {
-                    "id": "m1",
-                    "author": {"role": "system"},
-                    "content": {"content_type": "text", "parts": ["System prompt"]},
-                    "create_time": 1700000000.0,
-                },
-                "children": [],
-            }
-        },
-        "title": "System Only",
-        "create_time": 1700000000.0,
-    }]
+    payload = [
+        {
+            "mapping": {
+                "node1": {
+                    "message": {
+                        "id": "m1",
+                        "author": {"role": "system"},
+                        "content": {"content_type": "text", "parts": ["System prompt"]},
+                        "create_time": 1700000000.0,
+                    },
+                    "children": [],
+                }
+            },
+            "title": "System Only",
+            "create_time": 1700000000.0,
+        }
+    ]
     (source / "convs.json").write_text(json.dumps(payload), encoding="utf-8")
     output = tmp_path / "out"
     stats = split_conversations(source, output, source_type="openai")

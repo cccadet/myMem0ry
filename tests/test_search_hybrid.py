@@ -61,9 +61,7 @@ def test_search_hybrid_returns_paths(tmp_path: Path) -> None:
         "mem0ry.conversations.search_hybrid.search_bm25",
         return_value=[d / "python.md"],
     ):
-        results = search_hybrid(
-            "python", conv_dir, fake_encoder, fake_store, top_k=3
-        )
+        results = search_hybrid("python", conv_dir, fake_encoder, fake_store, top_k=3)
 
     assert len(results) >= 1
     assert all(isinstance(p, Path) for p in results)

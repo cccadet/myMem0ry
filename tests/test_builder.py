@@ -27,11 +27,15 @@ def _make_conv(
 
 
 def test_build_chatml_examples_basic() -> None:
-    conv = _make_conv([
-        ("user", "What is Python?"),
-        ("assistant", "Python is a programming language."),
-    ])
-    results = build_chatml_examples([conv], system_prompt="You are helpful.", use_temporal=False)
+    conv = _make_conv(
+        [
+            ("user", "What is Python?"),
+            ("assistant", "Python is a programming language."),
+        ]
+    )
+    results = build_chatml_examples(
+        [conv], system_prompt="You are helpful.", use_temporal=False
+    )
     assert len(results) >= 1
     assert isinstance(results[0], ChatMLExample)
     assert results[0].conversation_id == "test-1"

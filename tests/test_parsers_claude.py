@@ -10,8 +10,20 @@ from mem0ry.parsers.claude import ClaudeCodeParser, ClaudeExportParser
 
 def test_parse_jsonl_single_turn(tmp_path: Path) -> None:
     lines = [
-        json.dumps({"type": "human", "message": {"content": "Hello"}, "timestamp": "2025-01-01T00:00:00Z"}),
-        json.dumps({"type": "assistant", "message": {"content": "Hi there"}, "timestamp": "2025-01-01T00:00:01Z"}),
+        json.dumps(
+            {
+                "type": "human",
+                "message": {"content": "Hello"},
+                "timestamp": "2025-01-01T00:00:00Z",
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {"content": "Hi there"},
+                "timestamp": "2025-01-01T00:00:01Z",
+            }
+        ),
     ]
     path = tmp_path / "session.jsonl"
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -27,22 +39,26 @@ def test_parse_jsonl_single_turn(tmp_path: Path) -> None:
 
 def test_parse_jsonl_with_content_blocks(tmp_path: Path) -> None:
     lines = [
-        json.dumps({
-            "type": "human",
-            "message": {"content": "Question"},
-            "timestamp": "2025-06-01T00:00:00Z",
-        }),
-        json.dumps({
-            "type": "assistant",
-            "message": {
-                "content": [
-                    {"type": "text", "text": "Part one"},
-                    {"type": "text", "text": "Part two"},
-                    {"type": "image", "url": "ignored"},
-                ]
-            },
-            "timestamp": "2025-06-01T00:00:01Z",
-        }),
+        json.dumps(
+            {
+                "type": "human",
+                "message": {"content": "Question"},
+                "timestamp": "2025-06-01T00:00:00Z",
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "text", "text": "Part one"},
+                        {"type": "text", "text": "Part two"},
+                        {"type": "image", "url": "ignored"},
+                    ]
+                },
+                "timestamp": "2025-06-01T00:00:01Z",
+            }
+        ),
     ]
     path = tmp_path / "blocks.jsonl"
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -97,8 +113,16 @@ def test_parse_export_list_format(tmp_path: Path) -> None:
             "name": "Test Chat",
             "created_at": "2025-01-15T10:00:00Z",
             "chat_messages": [
-                {"sender": "human", "text": "What is 2+2?", "created_at": "2025-01-15T10:00:00Z"},
-                {"sender": "assistant", "text": "4", "created_at": "2025-01-15T10:00:01Z"},
+                {
+                    "sender": "human",
+                    "text": "What is 2+2?",
+                    "created_at": "2025-01-15T10:00:00Z",
+                },
+                {
+                    "sender": "assistant",
+                    "text": "4",
+                    "created_at": "2025-01-15T10:00:01Z",
+                },
             ],
         }
     ]
