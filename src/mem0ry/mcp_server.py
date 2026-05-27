@@ -15,7 +15,6 @@ from mcp.server.fastmcp import FastMCP
 
 from .config import MemoryConfig
 from .conversations.spacy_expand import SpacyConceptSearch
-from .utils.filenames import sanitize_title
 from .utils.git_context import resolve_full_context
 
 _START_TIME: float = time.monotonic()
@@ -27,7 +26,6 @@ _PREVIEW_MAX_CHARS = 500
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 _session_id: str | None = None
-_session_title: str = "session"
 _expander: SpacyConceptSearch | None = None
 
 
@@ -120,41 +118,6 @@ def _resolve_cwd(cwd: str | None) -> dict[str, Any]:
 
 
 @mcp.tool()
-def log_message(role: str, content: str, cwd: str = "") -> str:
-    """MANDATORY: Log a single message to the current conversation session.
-
-    You MUST call this tool after EVERY message exchange — once for the
-    user's message (role="user") and once for your response (role="assistant").
-
-    Args:
-        role: Who sent the message — "user" or "assistant".
-        content: The message text.
-        cwd: Current working directory (used for context resolution).
-    """
-    global _session_id, _session_title
-
-    conv_dir = _conversations_dir()
-    today = date.today().isoformat()
-    dir_path = conv_dir / today
-    dir_path.mkdir(parents=True, exist_ok=True)
-
-    sid = _auto_session_id()
-    safe_title = sanitize_title(_session_title)
-    filename = f"{safe_title}-{sid}.md"
-    file_path = dir_path / filename
-
-    if not file_path.exists():
-        header = f"# {safe_title}\n> id: {sid} | date: {today}\n\n"
-        file_path.write_text(header, encoding="utf-8")
-
-    with open(file_path, "a", encoding="utf-8") as f:
-        f.write(f"[{role}]: {content}\n\n")
-
-    rel = file_path.relative_to(conv_dir)
-    return f"Logged ({role}) to {rel}"
-
-
-@mcp.tool()
 def save_memory(
     title: str,
     content: str,
@@ -216,17 +179,29 @@ def save_memory(
 
 
 @mcp.tool()
-def save_conversation(title: str, messages: list[dict[str, str]], dt: str = "") -> str:
-    """CRITICAL: Save a full conversation with multiple messages.
+def save_conversation(
+    title: str,
+    messages: list[dict[str, str]],
+    dt: str = "",
+    summary: str | None = None,
+) -> str:
+    """CRITICAL: Save a full conversation and end the session.
 
     MANDATORY: You MUST call this tool at the END of every conversation to
-    archive the full exchange.
+    archive the full exchange. This also marks the current session as completed,
+    updating all session memories with the current timestamp.
 
     Args:
         title: Title for the conversation.
         messages: List of {role, content} dicts.
         dt: Optional date in YYYY-MM-DD format. Defaults to today.
+        summary: Optional text summary of what was accomplished. If provided,
+            creates a session summary memory.
     """
+    from .db.store import end_session as _end_session
+
+    global _session_id
+
     conv_dir = _conversations_dir()
     mem_date = _validate_date(dt) if dt else date.today().isoformat()
 
@@ -247,9 +222,23 @@ def save_conversation(title: str, messages: list[dict[str, str]], dt: str = "") 
         lines.append(f"[{role}]: {content}")
         lines.append("")
 
+    if summary:
+        lines.append("## Summary")
+        lines.append(summary)
+        lines.append("")
+
     file_path.write_text("\n".join(lines), encoding="utf-8")
     rel = file_path.relative_to(conv_dir)
-    return f"Saved: {rel}"
+
+    sid = _session_id
+    ended = ""
+    if sid:
+        found = _end_session(_db_path(), sid, summary=summary)
+        if found:
+            ended = f" Session {sid} ended."
+        _session_id = None
+
+    return f"Saved: {rel}{ended}"
 
 
 @mcp.tool()
@@ -297,30 +286,6 @@ def list_scopes(cwd: str = "") -> list[dict[str, Any]]:
 
     resolved = _resolve_cwd(cwd)
     return _list_scopes(db, project_id=resolved["project_id"])
-
-
-@mcp.tool()
-def end_session(session_id: str | None = None, summary: str | None = None) -> str:
-    """Mark a session as completed. Optionally save a summary.
-
-    Args:
-        session_id: Session ID to end. Defaults to current session.
-        summary: Optional text summary of what was accomplished.
-    """
-    from .db.store import end_session as _end_session
-
-    global _session_id
-
-    sid = session_id or _session_id
-    if not sid:
-        return "No active session to end."
-
-    found = _end_session(_db_path(), sid, summary=summary)
-    if not found:
-        return f"No memories found for session {sid}."
-
-    _session_id = None
-    return f"Session {sid} ended." + (" Summary saved." if summary else "")
 
 
 @mcp.tool()
@@ -830,8 +795,7 @@ def auto_save_instructions() -> str:
         "1. Call get_context with the current working directory (cwd) to load relevant context.\n"
         "\n"
         "## During Session\n"
-        "2. After EVERY exchange, call log_message(role='user'/'assistant', content='...', cwd=<cwd>).\n"
-        "3. Save important facts with save_memory:\n"
+        "2. Save important facts with save_memory:\n"
         "   - Technical decisions → save_memory(scope='project', cwd=<cwd>)\n"
         "   - Branch-specific state → save_memory(scope='context', cwd=<cwd>)\n"
         "   - Session-specific state → save_memory(scope='session', cwd=<cwd>)\n"
@@ -839,13 +803,13 @@ def auto_save_instructions() -> str:
         "   - Use memory_type: 'fact', 'decision', 'pattern', or 'log'\n"
         "\n"
         "## Session End\n"
-        "4. Call memory_handoff_begin with a summary of what was accomplished, open questions,\n"
-        "   and next steps. The next agent will pick this up automatically.\n"
-        "5. Call end_session with a brief summary.\n"
+        "3. Call save_conversation with all messages and an optional summary.\n"
+        "   This archives the conversation AND marks the session as completed.\n"
+        "4. Optionally call memory_handoff_begin with open questions and next steps.\n"
         "\n"
         "## Cross-Agent Handoff\n"
-        "6. If you see a 'myMem0ry: pending handoff' block, read it and continue from there.\n"
-        "7. To check for handoffs manually, call memory_handoff_accept(cwd=<cwd>).\n"
+        "5. If you see a 'myMem0ry: pending handoff' block, read it and continue from there.\n"
+        "6. To check for handoffs manually, call memory_handoff_accept(cwd=<cwd>).\n"
         "\n"
         "## Scope Resolution\n"
         "Scopes are resolved automatically from cwd:\n"
@@ -866,10 +830,9 @@ def conversation_logger(topic: str = "") -> str:
         topic: Brief topic/title for the conversation being logged.
     """
     instructions = (
-        "Immediately log the conversation using log_message.\n"
-        "Call log_message(role='user', content='...') for each user message\n"
-        "and log_message(role='assistant', content='...') for each assistant response.\n"
-        "Do not respond without calling log_message for every message."
+        "Immediately save the conversation using save_conversation.\n"
+        "Call save_conversation(title='...', messages=[{role, content}, ...]) with all messages.\n"
+        "Do not respond without calling save_conversation with every message."
     )
     if topic:
         instructions = f"Conversation topic: {topic}\n\n{instructions}"

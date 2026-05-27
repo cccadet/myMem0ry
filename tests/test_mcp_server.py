@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,7 +13,6 @@ from mem0ry.mcp_server import (
     _write_md,
     _preview_text,
     _conversations_dir,
-    log_message,
     save_memory,
     save_conversation,
     read_memory,
@@ -24,7 +22,6 @@ from mem0ry.mcp_server import (
     get_context,
     memory_stats,
     list_scopes,
-    end_session,
 )
 
 
@@ -125,46 +122,6 @@ def test_resolve_cwd_returns_session_id() -> None:
 def test_resolve_cwd_with_path(tmp_path: Path) -> None:
     ctx = _resolve_cwd(str(tmp_path))
     assert ctx["project_path"] == str(tmp_path.resolve())
-
-
-def test_log_message_creates_file(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    old_sid, old_title = mod._session_id, mod._session_title
-    try:
-        mod._session_id = None
-        mod._session_title = "test-session"
-        with patch.object(mod, "_conversations_dir", return_value=tmp_path):
-            result = log_message("user", "hello world")
-        assert "Logged (user)" in result
-        today = date.today().isoformat()
-        files = list((tmp_path / today).glob("*.md"))
-        assert len(files) == 1
-        content = files[0].read_text(encoding="utf-8")
-        assert "[user]: hello world" in content
-    finally:
-        mod._session_id, mod._session_title = old_sid, old_title
-
-
-def test_log_message_appends_to_existing(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    old_sid, old_title = mod._session_id, mod._session_title
-    try:
-        mod._session_id = None
-        mod._session_title = "append-test"
-        with patch.object(mod, "_conversations_dir", return_value=tmp_path):
-            log_message("user", "first")
-            log_message("assistant", "second")
-        today = date.today().isoformat()
-        files = list((tmp_path / today).glob("*.md"))
-        assert len(files) == 1
-        content = files[0].read_text(encoding="utf-8")
-        assert "[user]: first" in content
-        assert "[assistant]: second" in content
-    finally:
-        mod._session_id, mod._session_title = old_sid, old_title
-
 
 def test_save_memory_creates_file(tmp_path: Path) -> None:
     import mem0ry.mcp_server as mod
@@ -276,7 +233,7 @@ def test_read_memory_traversal(tmp_path: Path) -> None:
 
 def test_auto_save_instructions_returns_string() -> None:
     result = auto_save_instructions()
-    assert "log_message" in result
+    assert "save_conversation" in result
     assert "MANDATORY" in result
     assert "context" in result
 
@@ -284,13 +241,13 @@ def test_auto_save_instructions_returns_string() -> None:
 def test_conversation_logger_with_topic() -> None:
     result = conversation_logger(topic="testing")
     assert "testing" in result
-    assert "log_message" in result
+    assert "save_conversation" in result
 
 
 def test_conversation_logger_without_topic() -> None:
     result = conversation_logger()
     assert "Conversation topic" not in result
-    assert "log_message" in result
+    assert "save_conversation" in result
 
 
 def test_write_md_file_id_is_12_chars(tmp_path: Path) -> None:
@@ -447,22 +404,46 @@ def test_list_scopes_empty_db(tmp_path: Path) -> None:
     assert result == []
 
 
-def test_end_session_no_active() -> None:
+def test_save_conversation_ends_session(tmp_path: Path) -> None:
+    import mem0ry.mcp_server as mod
+    from mem0ry.db.store import create_memory
+
+    db_path = _setup_db(tmp_path)
+    create_memory(db_path, content="s", scope="session", session_id="abc", title="S")
+
+    old = mod._session_id
+    try:
+        mod._session_id = "abc"
+        with (
+            patch.object(mod, "_conversations_dir", return_value=tmp_path),
+            patch.object(mod, "_db_path", return_value=db_path),
+        ):
+            result = save_conversation(
+                "End Test",
+                [{"role": "user", "content": "bye"}],
+                dt="2026-04-21",
+                summary="Session done",
+            )
+        assert "Saved:" in result
+        assert "ended" in result
+        assert mod._session_id is None
+    finally:
+        mod._session_id = old
+
+
+def test_save_conversation_no_session_active(tmp_path: Path) -> None:
     import mem0ry.mcp_server as mod
 
     old = mod._session_id
     try:
         mod._session_id = None
-        result = end_session()
-        assert "No active session" in result
+        with patch.object(mod, "_conversations_dir", return_value=tmp_path):
+            result = save_conversation(
+                "No Session",
+                [{"role": "user", "content": "hi"}],
+                dt="2026-04-21",
+            )
+        assert "Saved:" in result
+        assert "ended" not in result
     finally:
         mod._session_id = old
-
-
-def test_end_session_not_found(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    db_path = _setup_db(tmp_path)
-    with patch.object(mod, "_db_path", return_value=db_path):
-        result = end_session(session_id="nonexistent")
-    assert "No memories found" in result
