@@ -14,7 +14,7 @@ from .schema import init_schema
 
 
 _VALID_SCOPES = {"global", "project", "context", "session"}
-_VALID_SOURCES = {"claude-code", "opencode", "codex", "manual", "import"}
+_VALID_SOURCES = {"claude-code", "opencode", "codex", "manual", "import", "hook"}
 _VALID_MEMORY_TYPES = {"fact", "decision", "pattern", "log"}
 
 _SCOPE_PRIORITY = ["session", "context", "project", "global"]
@@ -461,6 +461,7 @@ _VALID_KINDS = {
     "post-tool-use",
     "pre-compact",
     "session-end",
+    "log",
     "other",
 }
 

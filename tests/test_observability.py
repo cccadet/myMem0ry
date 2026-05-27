@@ -1,9 +1,8 @@
-"""Tests for observability tools — memory_status, memory_briefing, memory_explore."""
+"""Tests for observability — audit log (memory_status/briefing/explore removed as tools)."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
 
 
 from mem0ry.db.connection import get_connection
@@ -17,87 +16,6 @@ def _setup_db(tmp_path: Path) -> Path:
     init_schema(conn)
     conn.close()
     return db_path
-
-
-def test_memory_status_no_db(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    with patch.object(mod, "_db_path", return_value=tmp_path / "missing.db"):
-        result = mod.memory_status()
-    assert result["total_memories"] == 0
-    assert result["db_exists"] is False
-    assert "uptime_seconds" in result
-
-
-def test_memory_status_with_db(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    db_path = _setup_db(tmp_path)
-    create_memory(db_path, content="test", scope="global", title="T")
-
-    with patch.object(mod, "_db_path", return_value=db_path):
-        result = mod.memory_status()
-    assert result["total_memories"] == 1
-    assert result["db_exists"] is True
-    assert result["schema_version"] == 6
-    assert result["audit_entries"] >= 1
-
-
-def test_memory_briefing_no_db(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    with patch.object(mod, "_db_path", return_value=tmp_path / "missing.db"):
-        result = mod.memory_briefing()
-    assert result["stats"]["total"] == 0
-    assert result["pinned_facts"] == []
-
-
-def test_memory_briefing_with_data(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    db_path = _setup_db(tmp_path)
-    create_memory(
-        db_path, content="fact 1", scope="global",
-        memory_type="fact", title="F1",
-    )
-    create_memory(
-        db_path, content="decision 1", scope="global",
-        memory_type="decision", title="D1",
-    )
-
-    with patch.object(mod, "_db_path", return_value=db_path):
-        result = mod.memory_briefing()
-    assert result["stats"]["total"] == 2
-    assert len(result["pinned_facts"]) == 1
-    assert len(result["pinned_decisions"]) == 1
-
-
-def test_memory_explore_no_db(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    with patch.object(mod, "_db_path", return_value=tmp_path / "missing.db"):
-        result = mod.memory_explore()
-    assert "No database found" in result
-
-
-def test_memory_explore_with_data(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    db_path = _setup_db(tmp_path)
-    create_memory(
-        db_path, content="We chose Python", scope="global",
-        memory_type="decision", title="Language Choice",
-    )
-    create_memory(
-        db_path, content="Uses spaCy", scope="global",
-        memory_type="fact", title="Stack",
-    )
-
-    with patch.object(mod, "_db_path", return_value=db_path):
-        result = mod.memory_explore()
-    assert "Language Choice" in result
-    assert "Stack" in result
-    assert "Total memories:" in result
 
 
 def test_audit_record_and_query(tmp_path: Path) -> None:

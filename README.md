@@ -191,27 +191,32 @@ Resolved automatically from `cwd` — no manual configuration needed:
 
 `get_context()` aggregates all 4 levels in priority order.
 
-## MCP Tools (17)
+## MCP Tools (9 read-only) + Hook Writes
+
+### Tools (low token cost — reads + selective writes)
 
 | Tool | Description |
 |---|---|
-| `log_message` | Log a message in the current session |
-| `save_memory` | Save a memory with scope, type, and auto-resolved context |
-| `save_conversation` | Save a full conversation |
-| `read_memory` | Read a memory file's content |
-| `search_memory` | Search with semantic query expansion |
 | `get_context` | Aggregate context from all scopes |
-| `list_scopes` | List scopes with memory counts |
-| `end_session` | Mark session as completed |
+| `save_memory` | Save a memory with scope, type, and auto-resolved context |
+| `search_memory` | Search with semantic query expansion |
 | `memory_stats` | Database statistics |
 | `memory_handoff_begin` | Create handoff for next agent |
 | `memory_handoff_accept` | Accept pending handoff |
 | `memory_pin` | Pin a memory (exempt from decay) |
 | `memory_unpin` | Unpin a memory |
 | `memory_forget_sweep` | Sweep stale memories (preview or execute) |
-| `memory_status` | Health check with diagnostics |
-| `memory_briefing` | Structured snapshot for agents |
-| `memory_explore` | Prose digest of project state |
+
+### Hook writes (zero LLM tokens)
+
+| Hook kind | Description |
+|---|---|
+| `session-end` with `messages` | Archives full conversation to .md + auto-handoff |
+| `log` | Quick session log (creates session-scoped memory) |
+| `session-start` | Records session start observation |
+| `user-prompt` / `post-tool-use` / `pre-compact` | Lifecycle observations |
+
+All writes go through `POST /hook` (fire-and-forget, 200ms timeout). The LLM never serializes conversations.
 
 ## Web UI
 

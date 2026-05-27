@@ -149,6 +149,53 @@ class TestRouter:
         assert ho is not None
         assert "session-start" in ho["summary"] or "user-prompt" in ho["summary"]
 
+    def test_session_end_with_messages_archives_conversation(
+        self, db: Path, tmp_path: Path
+    ) -> None:
+        conv_dir = tmp_path / "conv"
+        conv_dir.mkdir()
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setenv("CONVERSATIONS_DIR", str(conv_dir))
+
+            handle_hook_event(
+                db,
+                {
+                    "kind": "session-end",
+                    "session_id": "s-archive",
+                    "cwd": str(tmp_path),
+                    "agent": "test",
+                    "title": "Archived Chat",
+                    "messages": [
+                        {"role": "user", "content": "hello"},
+                        {"role": "assistant", "content": "hi there"},
+                    ],
+                    "body": "A chat about greetings",
+                },
+            )
+
+        from mem0ry.db.store import get_session_observations
+
+        obs = get_session_observations(db, "s-archive")
+        assert len(obs) >= 1
+
+    def test_log_kind_creates_session_memory(self, db: Path) -> None:
+        handle_hook_event(
+            db,
+            {
+                "kind": "log",
+                "session_id": "s-log",
+                "body": "quick log entry",
+                "title": "Test Log",
+                "cwd": "/tmp/test",
+            },
+        )
+
+        from mem0ry.db.store import search_memories
+
+        results = search_memories(db, scope="session", top_k=10)
+        assert any("quick log entry" in r["content"] for r in results)
+
     def test_secrets_stripped_before_storage(self, db: Path) -> None:
         handle_hook_event(
             db,

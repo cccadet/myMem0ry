@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import platform
 import re
 import time
 import uuid
@@ -179,69 +178,6 @@ def save_memory(
 
 
 @mcp.tool()
-def save_conversation(
-    title: str,
-    messages: list[dict[str, str]],
-    dt: str = "",
-    summary: str | None = None,
-) -> str:
-    """CRITICAL: Save a full conversation and end the session.
-
-    MANDATORY: You MUST call this tool at the END of every conversation to
-    archive the full exchange. This also marks the current session as completed,
-    updating all session memories with the current timestamp.
-
-    Args:
-        title: Title for the conversation.
-        messages: List of {role, content} dicts.
-        dt: Optional date in YYYY-MM-DD format. Defaults to today.
-        summary: Optional text summary of what was accomplished. If provided,
-            creates a session summary memory.
-    """
-    from .db.store import end_session as _end_session
-
-    global _session_id
-
-    conv_dir = _conversations_dir()
-    mem_date = _validate_date(dt) if dt else date.today().isoformat()
-
-    file_id = uuid.uuid4().hex[:12]
-    safe_date = os.path.basename(mem_date)
-    dir_path = conv_dir / safe_date
-    dir_path.mkdir(parents=True, exist_ok=True)
-    file_path = dir_path / f"{file_id}.md"
-
-    lines = [
-        f"# {title}",
-        f"> id: {file_id} | date: {mem_date}",
-        "",
-    ]
-    for msg in messages:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        lines.append(f"[{role}]: {content}")
-        lines.append("")
-
-    if summary:
-        lines.append("## Summary")
-        lines.append(summary)
-        lines.append("")
-
-    file_path.write_text("\n".join(lines), encoding="utf-8")
-    rel = file_path.relative_to(conv_dir)
-
-    sid = _session_id
-    ended = ""
-    if sid:
-        found = _end_session(_db_path(), sid, summary=summary)
-        if found:
-            ended = f" Session {sid} ended."
-        _session_id = None
-
-    return f"Saved: {rel}{ended}"
-
-
-@mcp.tool()
 def get_context(
     cwd: str = "",
     top_k: int = 5,
@@ -269,23 +205,6 @@ def get_context(
         session_id=resolved["session_id"],
         top_k=top_k,
     )
-
-
-@mcp.tool()
-def list_scopes(cwd: str = "") -> list[dict[str, Any]]:
-    """List memory scopes with counts.
-
-    Args:
-        cwd: Current working directory (used to filter by project).
-    """
-    from .db.store import list_scopes as _list_scopes
-
-    db = _db_path()
-    if not db.exists():
-        return []
-
-    resolved = _resolve_cwd(cwd)
-    return _list_scopes(db, project_id=resolved["project_id"])
 
 
 @mcp.tool()
@@ -355,47 +274,8 @@ def search_memory(
     return results
 
 
-@mcp.tool()
-def read_memory(path: str) -> str:
-    """Read the full content of a memory file.
 
-    Args:
-        path: Relative path returned by search_memory (e.g. "2026-04-17/test.md").
-    """
-    conv_dir = _conversations_dir()
-    try:
-        file_path = _resolve_within(conv_dir, path)
-    except ValueError:
-        return "Invalid path"
-
-    if not file_path.exists():
-        return f"File not found: {path}"
-
-    return file_path.read_text(encoding="utf-8")
-
-
-@mcp.tool()
-def memory_stats() -> dict[str, Any]:
-    """Get overview statistics of the memories database.
-
-    Returns total count, breakdown by scope, by source, by type, and by project.
-    """
-    from .db.store import stats as _stats
-
-    db = _db_path()
-    if not db.exists():
-        return {
-            "total": 0,
-            "by_scope": [],
-            "by_source": [],
-            "by_type": [],
-            "projects": [],
-        }
-
-    return _stats(db)
-
-
-@mcp.tool()
+# ─── HTTP Endpoints ───────────────────────────────────────────────────────────
 def memory_handoff_begin(
     summary: str,
     open_questions: list[str] | None = None,
@@ -506,58 +386,24 @@ def memory_forget_sweep(execute: bool = False) -> dict[str, Any]:
 
 
 @mcp.tool()
-def memory_status() -> dict[str, Any]:
-    """Health check: counts, paths, version, uptime.
+def memory_stats() -> dict[str, Any]:
+    """Get overview statistics of the memories database.
 
-    Returns structured status of the myMem0ry system for diagnostics.
+    Returns total count, breakdown by scope, by source, by type, and by project.
     """
-    from importlib.metadata import version as pkg_version
+    from .db.store import stats as _stats
 
-    config = MemoryConfig()
     db = _db_path()
-    uptime = time.monotonic() - _START_TIME
+    if not db.exists():
+        return {
+            "total": 0,
+            "by_scope": [],
+            "by_source": [],
+            "by_type": [],
+            "projects": [],
+        }
 
-    status: dict[str, Any] = {
-        "version": pkg_version("mymem0ry") if _can_import_version() else "dev",
-        "python": platform.python_version(),
-        "platform": platform.system(),
-        "uptime_seconds": round(uptime, 1),
-        "db_path": str(db),
-        "db_exists": db.exists(),
-        "conversations_dir": config.conversations_dir,
-    }
-
-    if db.exists():
-        from .db.store import stats as _stats
-
-        db_stats = _stats(db)
-        status["total_memories"] = db_stats["total"]
-        status["by_scope"] = db_stats["by_scope"]
-        status["by_type"] = db_stats["by_type"]
-
-        from .db.connection import get_connection
-        from .db.schema import init_schema
-
-        conn = get_connection(db)
-        init_schema(conn)
-        obs_count = conn.execute("SELECT count(*) FROM observations").fetchone()[0]
-        ho_count = conn.execute(
-            "SELECT count(*) FROM handoffs WHERE status = 'open'"
-        ).fetchone()[0]
-        audit_count = conn.execute("SELECT count(*) FROM audit_log").fetchone()[0]
-        version_row = conn.execute(
-            "SELECT value FROM schema_meta WHERE key='version'"
-        ).fetchone()
-        conn.close()
-
-        status["schema_version"] = int(version_row["value"]) if version_row else None
-        status["observations_count"] = obs_count
-        status["pending_handoffs"] = ho_count
-        status["audit_entries"] = audit_count
-    else:
-        status["total_memories"] = 0
-
-    return status
+    return _stats(db)
 
 
 def _can_import_version() -> bool:
@@ -569,129 +415,6 @@ def _can_import_version() -> bool:
     except Exception:
         return False
 
-
-@mcp.tool()
-def memory_briefing(cwd: str = "", top_k: int = 5) -> dict[str, Any]:
-    """Structured snapshot: stats + key rules + recent memories.
-
-    Returns a briefing package for agents starting a new session.
-    Includes project stats, pinned facts/decisions, and recent memories.
-
-    Args:
-        cwd: Current working directory for project context.
-        top_k: Max memories per category. Defaults to 5.
-    """
-    from .db.store import search_memories, stats as _stats
-
-    db = _db_path()
-    resolved = _resolve_cwd(cwd)
-
-    briefing: dict[str, Any] = {
-        "project_id": resolved.get("project_id"),
-        "context": resolved.get("context"),
-        "session_id": resolved.get("session_id"),
-    }
-
-    if not db.exists():
-        briefing["stats"] = {"total": 0}
-        briefing["pinned_facts"] = []
-        briefing["pinned_decisions"] = []
-        briefing["recent"] = []
-        return briefing
-
-    briefing["stats"] = _stats(db)
-
-    pinned_facts = search_memories(
-        db, memory_type="fact", top_k=top_k
-    )
-    briefing["pinned_facts"] = [
-        {"id": m["id"], "title": m.get("title"), "content": m["content"][:200]}
-        for m in pinned_facts
-    ]
-
-    pinned_decisions = search_memories(
-        db, memory_type="decision", top_k=top_k
-    )
-    briefing["pinned_decisions"] = [
-        {"id": m["id"], "title": m.get("title"), "content": m["content"][:200]}
-        for m in pinned_decisions
-    ]
-
-    recent = search_memories(db, top_k=top_k)
-    briefing["recent"] = [
-        {
-            "id": m["id"],
-            "scope": m["scope"],
-            "type": m.get("memory_type"),
-            "title": m.get("title"),
-            "content": m["content"][:200],
-            "created_at": m.get("created_at"),
-        }
-        for m in recent
-    ]
-
-    return briefing
-
-
-@mcp.tool()
-def memory_explore(cwd: str = "") -> str:
-    """Prose digest of the project state for human-readable overview.
-
-    Generates a text summary of what's stored in the memory system,
-    including counts by scope, recent activity, and key decisions.
-
-    Args:
-        cwd: Current working directory for project context.
-    """
-    from .db.store import search_memories, stats as _stats
-
-    db = _db_path()
-    resolved = _resolve_cwd(cwd)
-
-    if not db.exists():
-        return "No database found. Start using myMem0ry by saving memories."
-
-    db_stats = _stats(db)
-    project_id = resolved.get("project_id")
-
-    lines: list[str] = []
-    lines.append("myMem0ry Project Digest")
-    lines.append(f"{'=' * 40}")
-    lines.append(f"Project: {project_id or 'global (no git project)'}")
-    lines.append(f"Total memories: {db_stats['total']}")
-    lines.append("")
-
-    for scope_info in db_stats["by_scope"]:
-        lines.append(f"  {scope_info['scope']}: {scope_info['count']} memories")
-
-    lines.append("")
-    for type_info in db_stats["by_type"]:
-        lines.append(f"  {type_info['memory_type']}: {type_info['count']}")
-
-    decisions = search_memories(db, memory_type="decision", top_k=3)
-    if decisions:
-        lines.append("\nRecent Decisions:")
-        for d in decisions:
-            title = d.get("title") or "untitled"
-            lines.append(f"  - {title}: {d['content'][:100]}")
-
-    facts = search_memories(db, memory_type="fact", top_k=3)
-    if facts:
-        lines.append("\nKey Facts:")
-        for f in facts:
-            title = f.get("title") or "untitled"
-            lines.append(f"  - {title}: {f['content'][:100]}")
-
-    recent = search_memories(db, top_k=5)
-    if recent:
-        lines.append("\nLatest Activity:")
-        for r in recent:
-            scope = r["scope"]
-            title = r.get("title") or "untitled"
-            created = r.get("created_at", "")[:10]
-            lines.append(f"  [{scope}] {title} ({created})")
-
-    return "\n".join(lines)
 
 
 # ─── HTTP Endpoints ───────────────────────────────────────────────────────────
@@ -729,6 +452,9 @@ async def hook_endpoint(request: Any) -> Any:
     """Fire-and-forget lifecycle hook ingestion.
 
     Accepts JSON with: kind, session_id, agent, cwd, body, title.
+    For session-end: also accepts `messages` (list of {role, content}) to
+    archive the full conversation without LLM token cost.
+    For log: accepts `body` to create a session-scoped memory.
     Returns 202 Accepted immediately.
     """
     from starlette.responses import JSONResponse
@@ -787,56 +513,24 @@ def auto_save_instructions() -> str:
     Use this prompt at the start of every conversation.
     """
     return (
-        "MANDATORY BEHAVIOR — myMem0ry Scoped Memory Protocol:\n"
-        "\n"
-        "You are connected to the myMem0ry memory system. You MUST follow these rules:\n"
+        "myMem0ry Memory Protocol (read-only tools + hook-based writes):\n"
         "\n"
         "## Session Start\n"
-        "1. Call get_context with the current working directory (cwd) to load relevant context.\n"
+        "1. Call get_context(cwd=<cwd>) to load relevant memories.\n"
         "\n"
         "## During Session\n"
-        "2. Save important facts with save_memory:\n"
-        "   - Technical decisions → save_memory(scope='project', cwd=<cwd>)\n"
-        "   - Branch-specific state → save_memory(scope='context', cwd=<cwd>)\n"
-        "   - Session-specific state → save_memory(scope='session', cwd=<cwd>)\n"
-        "   - Personal preferences/patterns → save_memory(scope='global')\n"
-        "   - Use memory_type: 'fact', 'decision', 'pattern', or 'log'\n"
+        "2. Save important info with save_memory:\n"
+        "   - Decisions → save_memory(scope='project', cwd=<cwd>, memory_type='decision')\n"
+        "   - Facts → save_memory(scope='global', memory_type='fact')\n"
+        "   - Patterns → save_memory(scope='global', memory_type='pattern')\n"
         "\n"
         "## Session End\n"
-        "3. Call save_conversation with all messages and an optional summary.\n"
-        "   This archives the conversation AND marks the session as completed.\n"
-        "4. Optionally call memory_handoff_begin with open questions and next steps.\n"
+        "3. Call memory_handoff_begin(summary='...', cwd=<cwd>) to hand off to next agent.\n"
+        "   Conversation archiving is handled automatically by hooks (zero tokens).\n"
         "\n"
-        "## Cross-Agent Handoff\n"
-        "5. If you see a 'myMem0ry: pending handoff' block, read it and continue from there.\n"
-        "6. To check for handoffs manually, call memory_handoff_accept(cwd=<cwd>).\n"
-        "\n"
-        "## Scope Resolution\n"
-        "Scopes are resolved automatically from cwd:\n"
-        "- session → current session ID\n"
-        "- context → current git branch/worktree\n"
-        "- project → git remote URL (or cwd if no git)\n"
-        "- global → no resolution needed\n"
-        "\n"
-        "These rules are NON-NEGOTIABLE."
+        "## Search\n"
+        "4. Use search_memory(query='...', cwd=<cwd>) to find past memories.\n"
     )
-
-
-@mcp.prompt()
-def conversation_logger(topic: str = "") -> str:
-    """Log the current conversation to myMem0ry immediately.
-
-    Args:
-        topic: Brief topic/title for the conversation being logged.
-    """
-    instructions = (
-        "Immediately save the conversation using save_conversation.\n"
-        "Call save_conversation(title='...', messages=[{role, content}, ...]) with all messages.\n"
-        "Do not respond without calling save_conversation with every message."
-    )
-    if topic:
-        instructions = f"Conversation topic: {topic}\n\n{instructions}"
-    return instructions
 
 
 def main():

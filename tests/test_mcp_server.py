@@ -14,14 +14,10 @@ from mem0ry.mcp_server import (
     _preview_text,
     _conversations_dir,
     save_memory,
-    save_conversation,
-    read_memory,
     auto_save_instructions,
-    conversation_logger,
     _resolve_cwd,
     get_context,
     memory_stats,
-    list_scopes,
 )
 
 
@@ -123,6 +119,7 @@ def test_resolve_cwd_with_path(tmp_path: Path) -> None:
     ctx = _resolve_cwd(str(tmp_path))
     assert ctx["project_path"] == str(tmp_path.resolve())
 
+
 def test_save_memory_creates_file(tmp_path: Path) -> None:
     import mem0ry.mcp_server as mod
 
@@ -177,77 +174,11 @@ def test_save_memory_invalid_date(tmp_path: Path) -> None:
             save_memory("X", "Y", dt="bad-date")
 
 
-def test_save_conversation_creates_file(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    messages = [
-        {"role": "user", "content": "What is Python?"},
-        {"role": "assistant", "content": "Python is a language."},
-    ]
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path):
-        result = save_conversation("Python Chat", messages, dt="2026-04-21")
-    assert "Saved:" in result
-    files = list((tmp_path / "2026-04-21").glob("*.md"))
-    assert len(files) == 1
-    content = files[0].read_text(encoding="utf-8")
-    assert "[user]: What is Python?" in content
-    assert "[assistant]: Python is a language." in content
-
-
-def test_save_conversation_defaults_role(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    messages = [{"content": "no role field"}]
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path):
-        save_conversation("NoRole", messages, dt="2026-01-01")
-    files = list((tmp_path / "2026-01-01").glob("*.md"))
-    content = files[0].read_text(encoding="utf-8")
-    assert "[user]: no role field" in content
-
-
-def test_read_memory_valid(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    (tmp_path / "2026-04-21").mkdir()
-    (tmp_path / "2026-04-21" / "test.md").write_text("content here", encoding="utf-8")
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path):
-        result = read_memory("2026-04-21/test.md")
-    assert result == "content here"
-
-
-def test_read_memory_not_found(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path):
-        result = read_memory("2026-04-21/nonexistent.md")
-    assert "File not found" in result
-
-
-def test_read_memory_traversal(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path):
-        result = read_memory("../../etc/passwd")
-    assert result == "Invalid path"
-
-
 def test_auto_save_instructions_returns_string() -> None:
     result = auto_save_instructions()
-    assert "save_conversation" in result
-    assert "MANDATORY" in result
-    assert "context" in result
-
-
-def test_conversation_logger_with_topic() -> None:
-    result = conversation_logger(topic="testing")
-    assert "testing" in result
-    assert "save_conversation" in result
-
-
-def test_conversation_logger_without_topic() -> None:
-    result = conversation_logger()
-    assert "Conversation topic" not in result
-    assert "save_conversation" in result
+    assert "save_memory" in result
+    assert "get_context" in result
+    assert "hook" in result.lower()
 
 
 def test_write_md_file_id_is_12_chars(tmp_path: Path) -> None:
@@ -381,69 +312,3 @@ def test_memory_stats_empty_db(tmp_path: Path) -> None:
     with patch.object(mod, "_db_path", return_value=tmp_path / "missing.db"):
         result = memory_stats()
     assert result["total"] == 0
-
-
-def test_list_scopes_returns_data(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-    from mem0ry.db.store import create_memory
-
-    db_path = _setup_db(tmp_path)
-    create_memory(db_path, content="g", scope="global", title="G")
-    create_memory(db_path, content="p", scope="project", project_id="x/y", title="P")
-
-    with patch.object(mod, "_db_path", return_value=db_path):
-        result = list_scopes()
-    assert len(result) >= 1
-
-
-def test_list_scopes_empty_db(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    with patch.object(mod, "_db_path", return_value=tmp_path / "missing.db"):
-        result = list_scopes()
-    assert result == []
-
-
-def test_save_conversation_ends_session(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-    from mem0ry.db.store import create_memory
-
-    db_path = _setup_db(tmp_path)
-    create_memory(db_path, content="s", scope="session", session_id="abc", title="S")
-
-    old = mod._session_id
-    try:
-        mod._session_id = "abc"
-        with (
-            patch.object(mod, "_conversations_dir", return_value=tmp_path),
-            patch.object(mod, "_db_path", return_value=db_path),
-        ):
-            result = save_conversation(
-                "End Test",
-                [{"role": "user", "content": "bye"}],
-                dt="2026-04-21",
-                summary="Session done",
-            )
-        assert "Saved:" in result
-        assert "ended" in result
-        assert mod._session_id is None
-    finally:
-        mod._session_id = old
-
-
-def test_save_conversation_no_session_active(tmp_path: Path) -> None:
-    import mem0ry.mcp_server as mod
-
-    old = mod._session_id
-    try:
-        mod._session_id = None
-        with patch.object(mod, "_conversations_dir", return_value=tmp_path):
-            result = save_conversation(
-                "No Session",
-                [{"role": "user", "content": "hi"}],
-                dt="2026-04-21",
-            )
-        assert "Saved:" in result
-        assert "ended" not in result
-    finally:
-        mod._session_id = old

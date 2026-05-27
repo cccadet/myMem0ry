@@ -64,7 +64,7 @@ src/mem0ry/
 ├── config.py                 # MemoryConfig dataclass — loads .env via dotenv
 ├── auth.py                   # AuthMiddleware + CORSMiddleware — bearer token, host allowlist, CORS
 ├── web.py                    # Read-only Web UI — dark mode, dashboard, projects, search, audit
-├── mcp_server.py             # FastMCP server — 17 tools, /hook endpoint, /handoff endpoints, web UI routes
+├── mcp_server.py             # FastMCP server — 8 read-only tools, /hook endpoint, /handoff endpoints, web UI routes
 ├── daemon.py                 # Auto-daemon: ensure_server(), is_server_running(), stop_server()
 ├── cli/main.py               # Typer app — all CLI commands (incl. backup, restore)
 ├── db/
@@ -102,16 +102,18 @@ src/mem0ry/
 - **Schema version**: v6. `db/schema.py` sets `_SCHEMA_VERSION = 6`. Tables: `memories`, `observations`, `handoffs`, `audit_log`, `schema_meta`.
 - **Memory scopes**: `global` / `project` / `context` / `session` — validated by `_VALID_SCOPES` in `db/store.py`.
 - **Memory types**: `fact` / `decision` / `pattern` / `log` — validated by `_VALID_MEMORY_TYPES` in `db/store.py`. Used for decay differentiation.
-- **Source values**: `claude-code` / `opencode` / `codex` / `manual` / `import` — validated by `_VALID_SOURCES` in `db/store.py`.
-- **Observation kinds**: `session-start` / `user-prompt` / `post-tool-use` / `pre-compact` / `session-end` / `other` — validated by `_VALID_KINDS` in `db/store.py`.
+- **Source values**: `claude-code` / `opencode` / `codex` / `manual` / `import` / `hook` — validated by `_VALID_SOURCES` in `db/store.py`.
+- **Observation kinds**: `session-start` / `user-prompt` / `post-tool-use` / `pre-compact` / `session-end` / `log` / `other` — validated by `_VALID_KINDS` in `db/store.py` and `hooks/sanitize.py`.
 - **Handoff lifecycle**: `open` → `accepted` or `expired` (auto-expires after 7 days). Matched by `project_id`.
 - **`get_context()`** aggregates session → context → project → global (4-level cascata), returning up to `top_k` results distributed across scopes.
 - **Project resolution**: `resolve_project_id()` uses `git remote get-url origin` (raw URL). Falls back to None if not a git repo. See `utils/git_context.py`.
 - **Context resolution**: `resolve_context()` uses `git rev-parse --abbrev-ref HEAD`. Generic — can be branch, worktree, feature, etc.
-- **Hook architecture**: Hooks `curl POST /hook` to the HTTP server (fire-and-forget, 200ms timeout). Sanitization in `hooks/sanitize.py`. Router auto-creates handoff on `session-end`.
+- **Hook architecture**: Hooks `curl POST /hook` to the HTTP server (fire-and-forget, 200ms timeout). Sanitization in `hooks/sanitize.py`. Router handles all writes: logging (`kind=log`), conversation archiving (`session-end` with `messages`), auto-handoff on session end.
+- **Hook-based writes (zero LLM tokens)**: Conversation archiving, message logging, session end → all handled by `/hook` endpoint. The LLM never serializes conversations.
 - **Auto-daemon**: `daemon.py` manages PID file + health check. `ensure_server()` starts server if not running.
 - **MCP server** uses module-level global state (`_session_id`, `_expander`) with lazy init — not thread-safe.
-- **MCP tools** (17 total): log_message, save_memory, save_conversation, get_context, list_scopes, end_session, search_memory, read_memory, memory_stats, memory_handoff_begin, memory_handoff_accept, memory_pin, memory_unpin, memory_forget_sweep, memory_status, memory_briefing, memory_explore.
+- **MCP tools** (8 read-only tools): get_context, save_memory, search_memory, memory_stats, memory_handoff_begin, memory_handoff_accept, memory_pin, memory_unpin, memory_forget_sweep.
+- **Token philosophy**: Tools are for reads + selective writes (save_memory for facts/decisions). Bulk writes (conversation archiving, logging) are hook-only to avoid burning LLM tokens.
 - **HTTP endpoints**: `GET /health`, `POST /hook`, `GET /handoff/accept`.
 - **Web UI**: `web.py` — read-only dark mode viewer mounted on MCP server. Routes: `/` (dashboard), `/projects`, `/project/{id}`, `/memory/{id}`, `/search`, `/audit`, `/api/memories`.
 - **Auth**: `auth.py` — Bearer token (`MEM0RY_TOKEN`), Host allowlisting (`MEM0RY_ALLOWED_HOSTS`), CORS (`MEM0RY_CORS_ORIGINS`). Applied as Starlette middleware on HTTP transport.

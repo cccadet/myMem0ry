@@ -21,6 +21,7 @@ _VALID_KINDS = {
     "post-tool-use",
     "pre-compact",
     "session-end",
+    "log",
     "other",
 }
 
