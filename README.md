@@ -8,11 +8,15 @@
 
 Persistent memory that any AI agent can read and write. Quit Claude Code mid-task, open Codex in the same directory — it picks up where you left off.
 
-- Scoped memory: session → context (branch) → project → global
-- Auto-resolves context from `cwd` (git branch, remote URL)
-- Semantic search (spaCy + sqlite-vec + BM25/FTS5/hybrid)
-- CLI hooks for lifecycle events (no server needed)
-- MCP server for in-conversation tools
+- **Scoped memory**: session → context (branch) → project → global
+- **Cross-agent handoffs**: typed handoff records with summary, open questions, next steps
+- **Auto-resolves context** from `cwd` (git branch, remote URL)
+- **Semantic search**: spaCy + sqlite-vec + BM25/FTS5/hybrid RRF fusion
+- **Lifecycle hooks**: fire-and-forget HTTP endpoint, payload sanitization, immutable observations
+- **Retention**: salience-based decay with tiers (working/procedural/semantic), pin/unpin
+- **Auth**: Bearer token, host allowlisting, CORS (for HTTP transport)
+- **Web UI**: dark mode read-only viewer (dashboard, projects, search, audit log)
+- **Backup/restore**: tarball CLI commands
 
 ## Install
 
@@ -57,7 +61,7 @@ codex mcp add mymem0ry -- uvx mymem0ry-mcp
 ### VS Code
 
 ```bash
-code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mym0ry-mcp"]}'
 ```
 
 ### Cursor
@@ -92,6 +96,9 @@ All via environment variables (or `.env` file in the project root):
 | `MCP_TRANSPORT` | `stdio` | MCP transport: `stdio`, `sse`, `streamable-http` |
 | `MCP_HOST` | `127.0.0.1` | Host for HTTP transport |
 | `MCP_PORT` | `49374` | Port for HTTP transport |
+| `MEM0RY_TOKEN` | _(empty)_ | Bearer token for HTTP auth (skip = no auth) |
+| `MEM0RY_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host allowlist (DNS rebinding protection) |
+| `MEM0RY_CORS_ORIGINS` | _(empty)_ | CORS origins for web UI |
 
 ### Custom storage location
 
@@ -133,17 +140,42 @@ mymem0ry migrate
 ## CLI commands
 
 ```bash
+# Context & search
 mymem0ry context --cwd .                    # Load context for current project
 mymem0ry save "Title" "Content" --scope project  # Save a memory
-mym0ry log "something happened"             # Quick session log
+mymem0ry log "message"                      # Quick session log
 mymem0ry search "query"                     # ripgrep search
 mymem0ry search "query" --backend hybrid --expand
 mymem0ry index                              # Build BM25 + FTS5 + vector indexes
-mymem0ry migrate --reprocess                # Reingest into v3 schema
+mymem0ry migrate --reprocess                # Reingest into latest schema
+
+# Overview
 mymem0ry stats                              # Database overview
 mymem0ry projects                           # List projects with memories
 mymem0ry doctor                             # System health check
-mymem0ry decay --days 90 --dry-run          # Remove old session logs
+
+# Retention
+mymem0ry decay --days 90 --dry-run          # Preview decay
+mymem0ry pin <memory_id>                    # Pin memory (exempt from decay)
+mymem0ry unpin <memory_id>                  # Unpin memory
+mymem0ry forget-sweep --dry-run             # Preview salience-based sweep
+
+# Handoffs
+mymem0ry handoff begin --summary "..."      # Create handoff for next agent
+mymem0ry handoff accept                     # Accept pending handoff
+mymem0ry handoff status                     # Check server status
+
+# Server & backup
+mymem0ry serve                              # Start HTTP server (MCP + hooks + handoffs + web UI)
+mymem0ry serve --detach                     # Start in background (daemon mode)
+mymem0ry backup --to backup.tar.gz          # Backup DB + conversations
+mymem0ry restore --from backup.tar.gz       # Restore from backup
+
+# Other
+mymem0ry benchmark "query"                  # Compare search backends
+mymem0ry expand "token"                     # Semantically related tokens
+mymem0ry dataset                            # ChatML JSONL (legacy)
+mymem0ry observe session-start              # Send lifecycle observation
 ```
 
 ## Memory scopes
@@ -159,7 +191,7 @@ Resolved automatically from `cwd` — no manual configuration needed:
 
 `get_context()` aggregates all 4 levels in priority order.
 
-## MCP Tools
+## MCP Tools (17)
 
 | Tool | Description |
 |---|---|
@@ -172,6 +204,26 @@ Resolved automatically from `cwd` — no manual configuration needed:
 | `list_scopes` | List scopes with memory counts |
 | `end_session` | Mark session as completed |
 | `memory_stats` | Database statistics |
+| `memory_handoff_begin` | Create handoff for next agent |
+| `memory_handoff_accept` | Accept pending handoff |
+| `memory_pin` | Pin a memory (exempt from decay) |
+| `memory_unpin` | Unpin a memory |
+| `memory_forget_sweep` | Sweep stale memories (preview or execute) |
+| `memory_status` | Health check with diagnostics |
+| `memory_briefing` | Structured snapshot for agents |
+| `memory_explore` | Prose digest of project state |
+
+## Web UI
+
+When running in HTTP mode (`MCP_TRANSPORT=streamable-http`), a read-only web UI is available:
+
+- `/` — Dashboard with stats and recent memories
+- `/projects` — List of projects with memory counts
+- `/project/{id}` — Project detail with memories
+- `/memory/{id}` — Single memory detail
+- `/search` — Full-text search with scope/type filters
+- `/audit` — Audit log of all mutations
+- `/api/memories` — JSON API endpoint
 
 ## Documentation
 
