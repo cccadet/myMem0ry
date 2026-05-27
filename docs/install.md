@@ -12,16 +12,16 @@ No clone needed. Just run the one-liner for your agent:
 
 ```bash
 # Claude Code
-claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
+claude mcp add --scope user mymem0ry -- mymem0ry-mcp
 
 # Codex CLI
-codex mcp add mymem0ry -- uvx mymem0ry-mcp
+codex mcp add mymem0ry -- mymem0ry-mcp
 
 # VS Code
-code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+code --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
 
 # Cursor
-cursor --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+cursor --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
 ```
 
 Or use the installer (auto-detects your agent):
@@ -95,20 +95,16 @@ docker run --rm -v mymem0ry-data:/data -v $(pwd):/backup alpine \
 
 **One-liner:**
 ```bash
-claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
-```
+claude mcp add --scope user mymem0ry -- mymem0ry-mcp
 
 **Or manual config** — add to `~/.claude/settings.json`:
 
 ```json
-{
-  "mcpServers": {
+  "servers": {
     "mymem0ry": {
-      "command": "uvx",
-      "args": ["mymem0ry-mcp"]
+      "command": "mymem0ry-mcp"
     }
   }
-}
 ```
 
 **Hooks (optional, for auto-capture):** Add to `~/.claude/settings.json`:
@@ -135,7 +131,7 @@ claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
   "mcp": {
     "mymem0ry": {
       "type": "local",
-      "command": ["uvx", "mymem0ry-mcp"],
+      "command": ["mymem0ry-mcp"],
       "enabled": true
     }
   }
@@ -148,15 +144,14 @@ claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
 
 **One-liner:**
 ```bash
-codex mcp add mymem0ry -- uvx mymem0ry-mcp
+codex mcp add mymem0ry -- mymem0ry-mcp
 ```
 
 **Or manual config** — add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.mymem0ry]
-command = "uvx"
-args = ["mymem0ry-mcp"]
+command = "mymem0ry-mcp"
 ```
 
 **Hooks (optional):** Copy `hooks/codex/mymem0ry-hook.sh` to `~/.codex/hooks/`.
@@ -165,7 +160,7 @@ args = ["mymem0ry-mcp"]
 
 **One-liner (stdio):**
 ```bash
-cursor --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+cursor --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
 ```
 
 **Or HTTP mode** — start the server first:
@@ -188,7 +183,7 @@ Then add to Cursor Settings → MCP:
 
 **One-liner:**
 ```bash
-code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+code --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
 ```
 
 **Or workspace config** — add to `.vscode/mcp.json`:
@@ -197,8 +192,7 @@ code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
 {
   "servers": {
     "mymem0ry": {
-      "command": "uvx",
-      "args": ["mymem0ry-mcp"]
+      "command": "mymem0ry-mcp"
     }
   }
 }
@@ -212,8 +206,7 @@ code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
 {
   "mcpServers": {
     "mymem0ry": {
-      "command": "uvx",
-      "args": ["mymem0ry-mcp"]
+      "command": "mymem0ry-mcp"
     }
   }
 }

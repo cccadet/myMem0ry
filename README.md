@@ -24,7 +24,7 @@ Persistent memory that any AI agent can read and write. Quit Claude Code mid-tas
 
 ```bash
 pip install uv        # or: curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install mymem0ry-mcp
+uv tool install mymem0ry
 mymem0ry doctor       # checks + auto-installs spaCy model
 ```
 
@@ -36,7 +36,7 @@ The HTTP server auto-starts when the MCP server runs — no separate `serve` com
 ### Claude Code
 
 ```bash
-claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
+claude mcp add --scope user mymem0ry -- mymem0ry-mcp
 ```
 
 ### OpenCode
@@ -48,7 +48,7 @@ Add to `~/.config/opencode/opencode.json` (global) or `./opencode.json` (project
   "mcp": {
     "mymem0ry": {
       "type": "local",
-      "command": ["uvx", "mymem0ry-mcp"],
+      "command": ["mymem0ry-mcp"],
       "enabled": true
     }
   },
@@ -71,8 +71,7 @@ MCP + hooks em `~/.claude/settings.json`:
   "mcpServers": {
     "mymem0ry": {
       "type": "stdio",
-      "command": "uvx",
-      "args": ["mymem0ry-mcp"]
+      "command": "mymem0ry-mcp"
     }
   },
   "hooks": {
@@ -98,24 +97,24 @@ Eles recebem o payload completo no stdin (incluindo `messages` no session-end) e
 ### Codex CLI
 
 ```bash
-codex mcp add mymem0ry -- uvx mymem0ry-mcp
+codex mcp add mymem0ry -- mymem0ry-mcp
 ```
 
 ### VS Code
 
 ```bash
-code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mym0ry-mcp"]}'
+code --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
 ```
 
 ### Cursor
 
 ```bash
-cursor --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+cursor --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
 ```
 
 ### Gemini CLI
 
-Same stdio pattern. Add to Gemini CLI MCP config with `command: uvx` and `args: ["mymem0ry-mcp"]`.
+Same stdio pattern. Add to Gemini CLI MCP config with `command: mymem0ry-mcp`.
 
 ### Docker
 

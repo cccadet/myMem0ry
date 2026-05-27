@@ -38,7 +38,7 @@ detect_agent() {
 install_claude() {
     echo "Installing mymem0ry for Claude Code..."
     if [ "$SOURCE" = "mymem0ry" ]; then
-        claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
+        claude mcp add --scope user mymem0ry -- mymem0ry-mcp
     else
         local repo_path
         repo_path="$(cd "$(dirname "$0")/.." && pwd)"
@@ -54,8 +54,7 @@ install_opencode() {
     if [ "$SOURCE" = "mymem0ry" ]; then
         echo '  "mcpServers": {'
         echo '    "mymem0ry": {'
-        echo '      "command": "uvx",'
-        echo '      "args": ["mymem0ry-mcp"]'
+        echo '      "command": "mymem0ry-mcp"'
         echo '    }'
         echo '  }'
     else
@@ -73,7 +72,7 @@ install_opencode() {
 install_codex() {
     echo "Installing mymem0ry for Codex CLI..."
     if [ "$SOURCE" = "mymem0ry" ]; then
-        codex mcp add mymem0ry -- uvx mymem0ry-mcp
+        codex mcp add mymem0ry -- mymem0ry-mcp
     else
         local repo_path
         repo_path="$(cd "$(dirname "$0")/.." && pwd)"
@@ -85,7 +84,7 @@ install_codex() {
 install_code() {
     echo "Installing mymem0ry for VS Code..."
     if [ "$SOURCE" = "mymem0ry" ]; then
-        code --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+        code --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
     else
         local repo_path
         repo_path="$(cd "$(dirname "$0")/.." && pwd)"
@@ -97,7 +96,7 @@ install_code() {
 install_cursor() {
     echo "Installing mymem0ry for Cursor..."
     if [ "$SOURCE" = "mymem0ry" ]; then
-        cursor --add-mcp '{"name":"mymem0ry","command":"uvx","args":["mymem0ry-mcp"]}'
+        cursor --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
     else
         local repo_path
         repo_path="$(cd "$(dirname "$0")/.." && pwd)"
