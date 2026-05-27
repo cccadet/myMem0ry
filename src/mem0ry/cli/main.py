@@ -876,10 +876,14 @@ def observe(
     }
 
     data = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("MEM0RY_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(
         f"{url}/hook",
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
 

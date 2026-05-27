@@ -30,6 +30,9 @@ mymem0ry doctor       # checks + auto-installs spaCy model
 
 For Portuguese: set `SPACY_MODEL=pt_core_news_lg` in `.env` before running `mymem0ry doctor`.
 
+**Zero config**: after install, just add the MCP server + hooks to your agent config below.
+The HTTP server auto-starts when the MCP server runs — no separate `serve` command needed.
+
 ### Claude Code
 
 ```bash
@@ -38,7 +41,7 @@ claude mcp add --scope user mymem0ry -- uvx mymem0ry-mcp
 
 ### OpenCode
 
-Add to `opencode.json`:
+Add to `~/.config/opencode/opencode.json` (global) or `./opencode.json` (project):
 
 ```json
 {
@@ -48,9 +51,49 @@ Add to `opencode.json`:
       "command": ["uvx", "mymem0ry-mcp"],
       "enabled": true
     }
+  },
+  "hooks": {
+    "session-start": "curl -s -m 2 -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' -d '{\"kind\":\"session-start\",\"session_id\":\"'$OPENCODE_SESSION_ID'\",\"agent\":\"opencode\",\"cwd\":\"'$PWD'\"}' > /dev/null 2>&1",
+    "session-end": "curl -s -m 2 -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' -d '{\"kind\":\"session-end\",\"session_id\":\"'$OPENCODE_SESSION_ID'\",\"agent\":\"opencode\",\"cwd\":\"'$PWD'\"}' > /dev/null 2>&1"
   }
 }
 ```
+
+The hooks POST lifecycle events to `POST /hook` (fire-and-forget, 2s timeout).
+No manual server start needed — the HTTP server auto-starts when the MCP server runs (e.g., when your agent starts).
+
+### Claude Code
+
+MCP + hooks em `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "mymem0ry": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mymem0ry-mcp"]
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [{"type": "command", "command": "~/.local/share/mymem0ry/hooks/claude-code/session-start.sh"}]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [{"type": "command", "command": "~/.local/share/mymem0ry/hooks/claude-code/session-end.sh"}]
+      }
+    ]
+  }
+}
+```
+
+Os scripts de hook: `~/.local/share/mymem0ry/hooks/claude-code/session-start.sh` e `session-end.sh`.
+Eles recebem o payload completo no stdin (incluindo `messages` no session-end) e encaminham para `POST /hook`.
 
 ### Codex CLI
 
@@ -81,7 +124,33 @@ docker compose -f docker/docker-compose.yml up -d
 curl http://127.0.0.1:49374/health
 ```
 
-For detailed per-agent instructions (hooks, manual config, HTTP mode): [docs/install.md](docs/install.md)
+For detailed per-agent instructions (manual config, HTTP mode): [docs/install.md](docs/install.md)
+
+### Lifecycle Hooks (per-agent setup)
+
+Lifecycle hooks POST to `POST /hook` on the myMem0ry HTTP server.
+The server auto-starts when the MCP server runs — no manual `serve` step needed.
+
+| Agent | Lifecycle hooks | How it works |
+|---|---|---|
+| **OpenCode** | ✅ Nativo | `hooks` em `opencode.json` com `$OPENCODE_SESSION_ID` (ver acima) |
+| **Claude Code** | ✅ Nativo | `hooks` em `~/.claude/settings.json` — scripts recebem payload completo no stdin, incluindo `messages` no session-end |
+| **Codex CLI** | ✅ Hook scripts | `codex hook add session-end ./hook-session-end.sh` |
+| **Genérico** | — | `curl -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' ...` |
+
+Hook payload fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `kind` | yes | `session-start`, `session-end`, `log`, `user-prompt`, `post-tool-use`, `pre-compact` |
+| `session_id` | yes | Unique session identifier (max 64 chars) |
+| `agent` | no | `opencode`, `claude-code`, `codex`, `manual`, `hook` (max 64 chars) |
+| `cwd` | no | Working directory for context resolution (max 512 chars) |
+| `title` | no | Short label (max 500 chars) |
+| `body` | no | Content (max 10 000 chars) |
+| `messages` | no (session-end) | `[{"role": "user"\|"assistant", "content": "..."}]` — archived as .md |
+
+All payloads are sanitized: secrets (API keys, tokens, Bearer) are redacted, home paths are stripped, and fields are truncated to max lengths.
 
 ## Configuration
 
@@ -93,9 +162,8 @@ All via environment variables (or `.env` file in the project root):
 | `DB_PATH` | `data/memories.db` | SQLite memories database |
 | `VECTOR_DB_PATH` | `data/conversations/.vec.db` | sqlite-vec index |
 | `SPACY_MODEL` | `en_core_web_lg` | spaCy model for embeddings and search |
-| `MCP_TRANSPORT` | `stdio` | MCP transport: `stdio`, `sse`, `streamable-http` |
-| `MCP_HOST` | `127.0.0.1` | Host for HTTP transport |
-| `MCP_PORT` | `49374` | Port for HTTP transport |
+| `MEM0RY_HOST` | `127.0.0.1` | Host for HTTP transport |
+| `MEM0RY_PORT` | `49374` | Port for HTTP transport |
 | `MEM0RY_TOKEN` | _(empty)_ | Bearer token for HTTP auth (skip = no auth) |
 | `MEM0RY_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host allowlist (DNS rebinding protection) |
 | `MEM0RY_CORS_ORIGINS` | _(empty)_ | CORS origins for web UI |
@@ -191,9 +259,9 @@ Resolved automatically from `cwd` — no manual configuration needed:
 
 `get_context()` aggregates all 4 levels in priority order.
 
-## MCP Tools (9 read-only) + Hook Writes
+## MCP Tools + Hook Writes
 
-### Tools (low token cost — reads + selective writes)
+### MCP Tools (low token cost — reads + selective writes)
 
 | Tool | Description |
 |---|---|
@@ -216,7 +284,9 @@ Resolved automatically from `cwd` — no manual configuration needed:
 | `session-start` | Records session start observation |
 | `user-prompt` / `post-tool-use` / `pre-compact` | Lifecycle observations |
 
-All writes go through `POST /hook` (fire-and-forget, 200ms timeout). The LLM never serializes conversations.
+All writes go through `POST /hook` (fire-and-forget, 2s timeout). Payloads are sanitized (secrets redacted, paths stripped, fields truncated). The LLM never serializes conversations.
+
+The CLI `mymem0ry observe` can also send lifecycle events and supports `MEM0RY_TOKEN` auth.
 
 ## Web UI
 

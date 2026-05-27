@@ -82,13 +82,18 @@ def ensure_server() -> str:
     pid_file = get_pid_file()
     pid_file.parent.mkdir(parents=True, exist_ok=True)
 
+    cfg = MemoryConfig()
     cmd = [
         sys.executable,
         "-m",
         "mem0ry.mcp_server",
-        "--transport",
-        "streamable-http",
     ]
+    env = {
+        **os.environ,
+        "MCP_TRANSPORT": "streamable-http",
+        "MCP_HOST": cfg.server_host,
+        "MCP_PORT": str(cfg.server_port),
+    }
 
     popen_kwargs: dict[str, Any] = {}
     if sys.platform == "win32":
@@ -98,6 +103,7 @@ def ensure_server() -> str:
 
     proc = subprocess.Popen(
         cmd,
+        env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         **popen_kwargs,

@@ -42,6 +42,13 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + "..."
 
 
+def _sanitize_message(msg: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "role": str(msg.get("role", "user")),
+        "content": _strip_secrets(_strip_home_paths(str(msg.get("content", "")))),
+    }
+
+
 def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Sanitize and validate a hook payload.
 
@@ -72,6 +79,10 @@ def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
         body = _strip_secrets(_strip_home_paths(str(body)))
         body = _truncate(body, _MAX_BODY)
 
+    messages = payload.get("messages")
+    if messages is not None and isinstance(messages, list):
+        messages = [_sanitize_message(m) for m in messages]
+
     return {
         "kind": kind,
         "session_id": session_id,
@@ -80,4 +91,5 @@ def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "project_id": project_id,
         "title": title,
         "body": body,
+        "messages": messages,
     }

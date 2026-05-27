@@ -474,8 +474,10 @@ async def hook_endpoint(request: Any) -> Any:
         return JSONResponse({"status": "accepted", "id": obs_id}, status_code=202)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
-    except Exception:
-        return JSONResponse({"status": "accepted", "id": "error"}, status_code=202)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @mcp.custom_route("/handoff/accept", methods=["GET"])
@@ -535,6 +537,7 @@ def auto_save_instructions() -> str:
 
 def main():
     from .auth import AuthMiddleware, CORSMiddleware, parse_allowed_hosts
+    from .daemon import ensure_server
     from .web import get_web_routes
 
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
@@ -543,7 +546,9 @@ def main():
 
     config = MemoryConfig()
 
-    if transport in ("sse", "streamable-http"):
+    if transport == "stdio":
+        ensure_server()
+    elif transport in ("sse", "streamable-http"):
         allowed = parse_allowed_hosts(config.allowed_hosts)
 
         app = mcp.sse_app() if transport == "sse" else mcp.streamable_http_app()

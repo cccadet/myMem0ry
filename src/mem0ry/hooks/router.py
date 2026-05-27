@@ -112,7 +112,7 @@ def handle_hook_event(
         )
 
     if kind == "session-end":
-        messages = raw_payload.get("messages")
+        messages = payload.get("messages")
         if messages and isinstance(messages, list):
             title = payload.get("title") or f"Session {payload['session_id']}"
             summary = payload.get("body")
