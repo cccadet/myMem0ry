@@ -376,14 +376,39 @@ def doctor() -> None:
         if config.spacy_model in nlp:
             ok(f"{config.spacy_model} instalado")
         else:
-            fail(f"{config.spacy_model} nao encontrado (instale com: uv run spacy download {config.spacy_model})")
+            pkg_name = config.spacy_model.replace("_", "-")
+            typer.echo(f"  Baixando {pkg_name}...")
+            import shutil
+            import subprocess
+            import sys
+
+            from spacy.cli.download import get_compatibility, get_version
+            import spacy.about
+
+            compat = get_compatibility()
+            ver = get_version(config.spacy_model, compat)
+            wheel_url = (
+                f"{spacy.about.__download_url__}"
+                f"/{config.spacy_model}-{ver}"
+                f"/{config.spacy_model}-{ver}-py3-none-any.whl"
+            )
+            uv = shutil.which("uv")
+            if uv:
+                subprocess.check_call(
+                    [uv, "pip", "install", "--python", sys.executable, wheel_url]
+                )
+            else:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", wheel_url]
+                )
+            ok(f"{config.spacy_model} instalado")
     except ImportError:
         fail("spacy nao instalado")
 
     typer.echo("[2/6] sqlite-vec")
     try:
         import sqlite_vec
-        ok(f"sqlite-vec {sqlite_vec.sqlite_vec_version()}")
+        ok(f"sqlite-vec {sqlite_vec.__version__}")
     except ImportError:
         fail("sqlite-vec nao instalado")
 

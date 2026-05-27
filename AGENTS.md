@@ -7,7 +7,7 @@ Personal memory system with semantic search, scoped storage (session/context/pro
 ```bash
 bin/setup                          # Idempotent bootstrap (deps + spaCy model + ripgrep check)
 uv sync --group dev                # Dependencies only
-uv run spacy download en_core_web_lg   # Required for search, expand, hybrid backends
+mymem0ry doctor                    # Auto-downloads spaCy model if missing
 # For Portuguese: SPACY_MODEL=pt_core_news_lg
 ```
 

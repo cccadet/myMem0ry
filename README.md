@@ -21,10 +21,10 @@ Persistent memory that any AI agent can read and write. Quit Claude Code mid-tas
 ```bash
 pip install uv        # or: curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install mymem0ry-mcp
-uv tool run spacy download en_core_web_lg
+mymem0ry doctor       # checks + auto-installs spaCy model
 ```
 
-For Portuguese: `SPACY_MODEL=pt_core_news_lg` (see [Configuration](#configuration)).
+For Portuguese: set `SPACY_MODEL=pt_core_news_lg` in `.env` before running `mymem0ry doctor`.
 
 ### Claude Code
 
@@ -103,8 +103,8 @@ export CONVERSATIONS_DIR=/path/to/shared/conversations
 For Portuguese language support:
 
 ```bash
-uv run spacy download pt_core_news_lg
 export SPACY_MODEL=pt_core_news_lg
+mymem0ry doctor       # auto-downloads the model
 ```
 
 ## Import conversations

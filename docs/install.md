@@ -4,7 +4,7 @@
 
 - [uv](https://docs.astral.sh/uv/) package manager (installs Python too)
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) on PATH
-- spaCy model: `en_core_web_lg` (auto-installed by `bin/setup`)
+- spaCy model: `en_core_web_lg` (auto-installed by `mymem0ry doctor`)
 
 ## Quick install (PyPI)
 
@@ -34,7 +34,7 @@ bin/install.sh
 After installing the MCP server, download the spaCy model:
 
 ```bash
-uvx spacy download en_core_web_lg
+mymem0ry doctor       # auto-downloads spaCy model if missing
 ```
 
 ## Option 1: Local install with uv
@@ -261,11 +261,11 @@ export VECTOR_DB_PATH=/path/to/shared/conversations/.vec.db
 Default is English. For Portuguese:
 
 ```bash
-uv run spacy download pt_core_news_lg
 export SPACY_MODEL=pt_core_news_lg
+mymem0ry doctor       # auto-downloads the model
 ```
 
-Any spaCy model works — install it and set `SPACY_MODEL`.
+Any spaCy model works — set `SPACY_MODEL` and run `mymem0ry doctor`.
 
 ### Importing existing conversations
 

@@ -185,8 +185,8 @@ myMem0ry uses spaCy for embeddings and semantic search. The default model is Eng
 For Portuguese:
 
 ```bash
-uv run spacy download pt_core_news_lg
 export SPACY_MODEL=pt_core_news_lg
+mymem0ry doctor       # auto-downloads the model
 ```
 
-Any spaCy model works — install it and set `SPACY_MODEL`.
+Any spaCy model works — set `SPACY_MODEL` and run `mymem0ry doctor`.
