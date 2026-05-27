@@ -164,6 +164,35 @@ ON audit_log(created_at)
 """
 
 
+_EXTRA_COLUMNS: list[tuple[str, str]] = [
+    ("project_id", "TEXT"),
+    ("project_path", "TEXT"),
+    ("context", "TEXT"),
+    ("session_id", "TEXT"),
+    ("memory_type", "TEXT NOT NULL DEFAULT 'log'"),
+    ("source", "TEXT NOT NULL DEFAULT 'manual'"),
+    ("tags", "TEXT NOT NULL DEFAULT '[]'"),
+    ("title", "TEXT"),
+    ("updated_at", "TEXT"),
+    ("file_path", "TEXT"),
+    ("access_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("last_accessed_at", "TEXT"),
+    ("salience", "REAL NOT NULL DEFAULT 0.5"),
+    ("pinned", "INTEGER NOT NULL DEFAULT 0"),
+    ("deleted_at", "TEXT"),
+    ("grace_until", "TEXT"),
+]
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    existing = {
+        row[1] for row in conn.execute("PRAGMA table_info(memories)").fetchall()
+    }
+    for col_name, col_def in _EXTRA_COLUMNS:
+        if col_name not in existing:
+            conn.execute(f"ALTER TABLE memories ADD COLUMN {col_name} {col_def}")
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     """Create all tables and indexes if they don't exist."""
     for sql in (
@@ -172,6 +201,10 @@ def init_schema(conn: sqlite3.Connection) -> None:
         _CREATE_HANDOFFS,
         _CREATE_METADATA,
         _CREATE_AUDIT_LOG,
+    ):
+        conn.execute(sql)
+    _ensure_columns(conn)
+    for sql in (
         _INDEX_SCOPE,
         _INDEX_PROJECT_ID,
         _INDEX_PROJECT_PATH,

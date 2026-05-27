@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from mem0ry.db.connection import get_connection
 from mem0ry.db.schema import init_schema
