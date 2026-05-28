@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
@@ -15,6 +16,8 @@ from mcp.server.fastmcp import FastMCP
 from .config import MemoryConfig
 from .conversations.spacy_expand import SpacyConceptSearch
 from .utils.git_context import resolve_full_context
+
+logger = logging.getLogger(__name__)
 
 _START_TIME: float = time.monotonic()
 
@@ -102,15 +105,9 @@ def _auto_session_id() -> str:
 
 
 def _resolve_cwd(cwd: str | None) -> dict[str, Any]:
-    """Resolve full git context from cwd string."""
-    if cwd:
-        return resolve_full_context(Path(cwd), session_id=_auto_session_id())
-    return {
-        "project_id": None,
-        "project_path": None,
-        "context": None,
-        "session_id": _auto_session_id(),
-    }
+    """Resolve full git context from cwd string. Falls back to os.getcwd()."""
+    path = Path(cwd) if cwd else Path.cwd()
+    return resolve_full_context(path, session_id=_auto_session_id())
 
 
 # ─── Tools ────────────────────────────────────────────────────────────────────
@@ -153,13 +150,20 @@ def save_memory(
 
     resolved = _resolve_cwd(cwd)
 
+    final_project_id = project_id or resolved["project_id"]
+    if scope in ("project", "context") and final_project_id is None:
+        logger.warning(
+            "save_memory: scope=%s but project_id is None (cwd=%r, resolved=%r)",
+            scope, cwd, resolved["project_id"],
+        )
+
     mem_date = _validate_date(dt) if dt else date.today().isoformat()
 
     mem_id = create_memory(
         db_path=_db_path(),
         content=content,
         scope=scope,
-        project_id=project_id or resolved["project_id"],
+        project_id=final_project_id,
         project_path=resolved["project_path"],
         context=context or resolved["context"],
         session_id=session_id

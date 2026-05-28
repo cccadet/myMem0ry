@@ -111,6 +111,7 @@ def test_resolve_cwd_returns_session_id() -> None:
         ctx = _resolve_cwd(None)
         assert ctx["session_id"] is not None
         assert len(ctx["session_id"]) == 8
+        assert "project_id" in ctx
     finally:
         mod._session_id = old
 
