@@ -21,14 +21,16 @@ def record_audit(
     now = _now_iso()
 
     conn = get_connection(db_path)
-    init_schema(conn)
-    conn.execute(
-        "INSERT INTO audit_log(id, action, target_type, target_id, agent, details, created_at) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?)",
-        (audit_id, action, target_type, target_id, agent, details, now),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        init_schema(conn)
+        conn.execute(
+            "INSERT INTO audit_log(id, action, target_type, target_id, agent, details, created_at) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?)",
+            (audit_id, action, target_type, target_id, agent, details, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
     return audit_id
 
 
@@ -40,25 +42,27 @@ def query_audit_log(
     top_k: int = 100,
 ) -> list[dict[str, Any]]:
     conn = get_connection(db_path)
-    init_schema(conn)
+    try:
+        init_schema(conn)
 
-    conditions: list[str] = []
-    params: list[Any] = []
+        conditions: list[str] = []
+        params: list[Any] = []
 
-    if action:
-        conditions.append("action = ?")
-        params.append(action)
-    if target_type:
-        conditions.append("target_type = ?")
-        params.append(target_type)
-    if target_id:
-        conditions.append("target_id = ?")
-        params.append(target_id)
+        if action:
+            conditions.append("action = ?")
+            params.append(action)
+        if target_type:
+            conditions.append("target_type = ?")
+            params.append(target_type)
+        if target_id:
+            conditions.append("target_id = ?")
+            params.append(target_id)
 
-    where = " AND ".join(conditions) if conditions else "1=1"
-    sql = f"SELECT * FROM audit_log WHERE {where} ORDER BY created_at DESC LIMIT ?"
-    params.append(top_k)
+        where = " AND ".join(conditions) if conditions else "1=1"
+        sql = f"SELECT * FROM audit_log WHERE {where} ORDER BY created_at DESC LIMIT ?"
+        params.append(top_k)
 
-    rows = conn.execute(sql, params).fetchall()
-    conn.close()
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
     return [dict(row) for row in rows]

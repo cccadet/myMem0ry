@@ -85,26 +85,30 @@ def _now_iso() -> str:
 
 def pin_memory(db_path: Path, memory_id: str) -> bool:
     conn = get_connection(db_path)
-    init_schema(conn)
-    cursor = conn.execute(
-        "UPDATE memories SET pinned = 1 WHERE id = ? AND deleted_at IS NULL",
-        (memory_id,),
-    )
-    conn.commit()
-    affected = cursor.rowcount
-    conn.close()
+    try:
+        init_schema(conn)
+        cursor = conn.execute(
+            "UPDATE memories SET pinned = 1 WHERE id = ? AND deleted_at IS NULL",
+            (memory_id,),
+        )
+        conn.commit()
+        affected = cursor.rowcount
+    finally:
+        conn.close()
     return affected > 0
 
 
 def unpin_memory(db_path: Path, memory_id: str) -> bool:
     conn = get_connection(db_path)
-    init_schema(conn)
-    cursor = conn.execute(
-        "UPDATE memories SET pinned = 0 WHERE id = ?", (memory_id,)
-    )
-    conn.commit()
-    affected = cursor.rowcount
-    conn.close()
+    try:
+        init_schema(conn)
+        cursor = conn.execute(
+            "UPDATE memories SET pinned = 0 WHERE id = ?", (memory_id,)
+        )
+        conn.commit()
+        affected = cursor.rowcount
+    finally:
+        conn.close()
     return affected > 0
 
 
@@ -112,76 +116,77 @@ def forget_sweep(
     db_path: Path, dry_run: bool = False
 ) -> dict[str, Any]:
     conn = get_connection(db_path)
-    init_schema(conn)
+    try:
+        init_schema(conn)
 
-    hard_delete_ids: list[str] = []
-    for row in conn.execute(
-        "SELECT id FROM memories WHERE deleted_at IS NOT NULL AND grace_until < ?",
-        (_now_iso(),),
-    ).fetchall():
-        hard_delete_ids.append(row["id"])
+        hard_delete_ids: list[str] = []
+        for row in conn.execute(
+            "SELECT id FROM memories WHERE deleted_at IS NOT NULL AND grace_until < ?",
+            (_now_iso(),),
+        ).fetchall():
+            hard_delete_ids.append(row["id"])
 
-    if not dry_run and hard_delete_ids:
-        placeholders = ",".join("?" for _ in hard_delete_ids)
-        conn.execute(
-            f"DELETE FROM memories WHERE id IN ({placeholders})",
-            hard_delete_ids,
-        )
-        conn.commit()
+        if not dry_run and hard_delete_ids:
+            placeholders = ",".join("?" for _ in hard_delete_ids)
+            conn.execute(
+                f"DELETE FROM memories WHERE id IN ({placeholders})",
+                hard_delete_ids,
+            )
+            conn.commit()
 
-    candidates = conn.execute(
-        "SELECT id, memory_type, created_at, access_count, last_accessed_at, "
-        "pinned, deleted_at, salience FROM memories WHERE deleted_at IS NULL AND pinned = 0"
-    ).fetchall()
+        candidates = conn.execute(
+            "SELECT id, memory_type, created_at, access_count, last_accessed_at, "
+            "pinned, deleted_at, salience FROM memories WHERE deleted_at IS NULL AND pinned = 0"
+        ).fetchall()
 
-    to_soft_delete: list[dict[str, Any]] = []
-    now = _now_iso()
-    grace = (
-        datetime.now(timezone.utc) + timedelta(days=_GRACE_DAYS)
-    ).isoformat()
+        to_soft_delete: list[dict[str, Any]] = []
+        now = _now_iso()
+        grace = (
+            datetime.now(timezone.utc) + timedelta(days=_GRACE_DAYS)
+        ).isoformat()
 
-    for row in candidates:
-        mem = dict(row)
-        tier = tier_from_type(mem["memory_type"])
-        max_days = _TIER_MAX_DAYS.get(tier, 90)
+        for row in candidates:
+            mem = dict(row)
+            tier = tier_from_type(mem["memory_type"])
+            max_days = _TIER_MAX_DAYS.get(tier, 90)
 
-        try:
-            created = datetime.fromisoformat(mem["created_at"])
-            days_old = (datetime.now(timezone.utc) - created).total_seconds() / 86400
-        except (ValueError, TypeError):
-            continue
+            try:
+                created = datetime.fromisoformat(mem["created_at"])
+                days_old = (datetime.now(timezone.utc) - created).total_seconds() / 86400
+            except (ValueError, TypeError):
+                continue
 
-        if days_old < max_days:
-            continue
+            if days_old < max_days:
+                continue
 
-        salience = compute_salience(
-            mem["memory_type"],
-            mem["created_at"],
-            mem["access_count"],
-            mem["last_accessed_at"],
-        )
-
-        if salience < _SALIENCE_THRESHOLD:
-            to_soft_delete.append(
-                {
-                    "id": mem["id"],
-                    "memory_type": mem["memory_type"],
-                    "tier": tier,
-                    "salience": salience,
-                    "days_old": round(days_old, 1),
-                }
+            salience = compute_salience(
+                mem["memory_type"],
+                mem["created_at"],
+                mem["access_count"],
+                mem["last_accessed_at"],
             )
 
-            if not dry_run:
-                conn.execute(
-                    "UPDATE memories SET deleted_at = ?, grace_until = ?, salience = ? WHERE id = ?",
-                    (now, grace, salience, mem["id"]),
+            if salience < _SALIENCE_THRESHOLD:
+                to_soft_delete.append(
+                    {
+                        "id": mem["id"],
+                        "memory_type": mem["memory_type"],
+                        "tier": tier,
+                        "salience": salience,
+                        "days_old": round(days_old, 1),
+                    }
                 )
 
-    if not dry_run and to_soft_delete:
-        conn.commit()
+                if not dry_run:
+                    conn.execute(
+                        "UPDATE memories SET deleted_at = ?, grace_until = ?, salience = ? WHERE id = ?",
+                        (now, grace, salience, mem["id"]),
+                    )
 
-    conn.close()
+        if not dry_run and to_soft_delete:
+            conn.commit()
+    finally:
+        conn.close()
 
     return {
         "soft_deleted": to_soft_delete,
@@ -193,24 +198,26 @@ def forget_sweep(
 
 def update_salience_for_all(db_path: Path) -> int:
     conn = get_connection(db_path)
-    init_schema(conn)
+    try:
+        init_schema(conn)
 
-    rows = conn.execute(
-        "SELECT id, memory_type, created_at, access_count, last_accessed_at FROM memories "
-        "WHERE deleted_at IS NULL"
-    ).fetchall()
+        rows = conn.execute(
+            "SELECT id, memory_type, created_at, access_count, last_accessed_at FROM memories "
+            "WHERE deleted_at IS NULL"
+        ).fetchall()
 
-    updated = 0
-    for row in rows:
-        s = compute_salience(
-            row["memory_type"],
-            row["created_at"],
-            row["access_count"],
-            row["last_accessed_at"],
-        )
-        conn.execute("UPDATE memories SET salience = ? WHERE id = ?", (s, row["id"]))
-        updated += 1
+        updated = 0
+        for row in rows:
+            s = compute_salience(
+                row["memory_type"],
+                row["created_at"],
+                row["access_count"],
+                row["last_accessed_at"],
+            )
+            conn.execute("UPDATE memories SET salience = ? WHERE id = ?", (s, row["id"]))
+            updated += 1
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+    finally:
+        conn.close()
     return updated

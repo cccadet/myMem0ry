@@ -59,6 +59,9 @@ input[type=text]:focus{outline:none;border-color:var(--accent)}
 .btn{background:var(--accent);color:var(--bg);border:none;padding:.4rem 1rem;border-radius:6px;
   cursor:pointer;font-size:.9rem}
 .btn:hover{opacity:.85}
+.btn-danger{background:var(--red);color:#fff;border:none;padding:.4rem 1rem;border-radius:6px;
+  cursor:pointer;font-size:.9rem}
+.btn-danger:hover{opacity:.85}
 table{width:100%;border-collapse:collapse;margin:.5rem 0}
 th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--border)}
 th{color:var(--text2);font-weight:600;font-size:.85rem}

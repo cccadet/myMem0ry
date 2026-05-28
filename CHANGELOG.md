@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-05-28
+
+### Fixed
+
+- `/hook` endpoint now processes events in a background thread, returning 202 immediately.
+  Previously, synchronous processing blocked the single-threaded uvicorn server, causing
+  `save_memory` and other MCP tool calls to hang while waiting for DB locks.
+- All DB operations now use `try/finally` to guarantee connection cleanup, preventing
+  leaked connections from holding SQLite write locks.
+- Hook error isolation: failures in conversation archiving, session-end, or auto-handoff
+  no longer prevent the observation from being recorded.
+
 ## [0.14.3] - 2026-05-28
 
 ### Fixed
@@ -94,7 +106,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.3...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.4...HEAD
+[0.14.4]: https://github.com/cccadet/myMem0ry/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/cccadet/myMem0ry/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/cccadet/myMem0ry/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/cccadet/myMem0ry/compare/v0.14.0...v0.14.1

@@ -36,15 +36,17 @@ def create_observation(
     now = _now_iso()
 
     conn = get_connection(db_path)
-    init_schema(conn)
-    conn.execute(
-        "INSERT INTO observations(id, session_id, kind, agent, cwd, "
-        "project_id, title, body, created_at) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (obs_id, session_id, kind, agent, cwd, project_id, title, body, now),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        init_schema(conn)
+        conn.execute(
+            "INSERT INTO observations(id, session_id, kind, agent, cwd, "
+            "project_id, title, body, created_at) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (obs_id, session_id, kind, agent, cwd, project_id, title, body, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
     try:
         record_audit(
@@ -61,6 +63,32 @@ def create_observation(
     return obs_id
 
 
+def delete_observation(db_path: Path, observation_id: str) -> bool:
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        cursor = conn.execute(
+            "DELETE FROM observations WHERE id = ?", (observation_id,)
+        )
+        conn.commit()
+        affected = cursor.rowcount
+    finally:
+        conn.close()
+
+    if affected > 0:
+        try:
+            record_audit(
+                db_path,
+                action="delete",
+                target_type="observation",
+                target_id=observation_id,
+            )
+        except Exception:
+            pass
+
+    return affected > 0
+
+
 def get_session_observations(
     db_path: Path,
     session_id: str,
@@ -68,20 +96,21 @@ def get_session_observations(
     top_k: int = 100,
 ) -> list[dict[str, Any]]:
     conn = get_connection(db_path)
-    init_schema(conn)
+    try:
+        init_schema(conn)
 
-    if kind:
-        rows = conn.execute(
-            "SELECT * FROM observations WHERE session_id = ? AND kind = ? "
-            "ORDER BY created_at DESC LIMIT ?",
-            (session_id, kind, top_k),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM observations WHERE session_id = ? "
-            "ORDER BY created_at DESC LIMIT ?",
-            (session_id, top_k),
-        ).fetchall()
-
-    conn.close()
+        if kind:
+            rows = conn.execute(
+                "SELECT * FROM observations WHERE session_id = ? AND kind = ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (session_id, kind, top_k),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM observations WHERE session_id = ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (session_id, top_k),
+            ).fetchall()
+    finally:
+        conn.close()
     return [dict(row) for row in rows]

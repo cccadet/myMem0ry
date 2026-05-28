@@ -467,17 +467,20 @@ async def hook_endpoint(request: Any) -> Any:
     if not isinstance(payload, dict) or not payload.get("session_id"):
         return JSONResponse({"error": "session_id required"}, status_code=400)
 
-    try:
-        from .hooks.router import handle_hook_event
+    import threading
 
-        obs_id = handle_hook_event(_db_path(), payload)
-        return JSONResponse({"status": "accepted", "id": obs_id}, status_code=202)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return JSONResponse({"error": str(e)}, status_code=500)
+    db = _db_path()
+
+    def _process() -> None:
+        try:
+            from .hooks.router import handle_hook_event
+            handle_hook_event(db, payload)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    threading.Thread(target=_process, daemon=True).start()
+    return JSONResponse({"status": "accepted"}, status_code=202)
 
 
 @mcp.custom_route("/handoff/accept", methods=["GET"])

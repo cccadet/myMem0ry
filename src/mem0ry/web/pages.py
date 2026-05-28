@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from ..db.connection import get_connection
 from ..db.schema import init_schema
@@ -18,6 +18,16 @@ from .templates import (
     _memory_card,
     _tag,
 )
+
+
+def _delete_form(target_id: str, target_type: str, label: str) -> str:
+    action = f"/{target_type}/{target_id}/delete"
+    return (
+        f'<form method="post" action="{action}" '
+        f'style="display:inline" '
+        f'onsubmit="return confirm(\'Delete this {label}?\')">'
+        f'<button type="submit" class="btn btn-danger">Delete</button></form>'
+    )
 
 
 def dashboard(request: Request) -> HTMLResponse:
@@ -92,30 +102,61 @@ def projects_page(request: Request) -> HTMLResponse:
     conn = get_connection(db)
     init_schema(conn)
 
-    projects = conn.execute(
+    mem_projects: dict[str, dict[str, Any]] = {}
+    for row in conn.execute(
         "SELECT project_id, project_path, count(*) as cnt FROM memories "
         "WHERE project_id IS NOT NULL AND deleted_at IS NULL "
-        "GROUP BY project_id ORDER BY cnt DESC"
-    ).fetchall()
+        "GROUP BY project_id"
+    ).fetchall():
+        r = dict(row)
+        mem_projects[r["project_id"]] = {
+            "project_id": r["project_id"],
+            "project_path": r.get("project_path"),
+            "mem_cnt": r["cnt"],
+            "obs_cnt": 0,
+        }
+
+    for row in conn.execute(
+        "SELECT project_id, count(*) as cnt FROM observations "
+        "WHERE project_id IS NOT NULL GROUP BY project_id"
+    ).fetchall():
+        r = dict(row)
+        pid = r["project_id"]
+        if pid in mem_projects:
+            mem_projects[pid]["obs_cnt"] = r["cnt"]
+        else:
+            mem_projects[pid] = {
+                "project_id": pid,
+                "project_path": None,
+                "mem_cnt": 0,
+                "obs_cnt": r["cnt"],
+            }
 
     global_cnt = conn.execute(
         "SELECT count(*) FROM memories WHERE scope='global' AND deleted_at IS NULL"
     ).fetchone()[0]
     conn.close()
 
+    sorted_projects = sorted(
+        mem_projects.values(),
+        key=lambda p: p["mem_cnt"] + p["obs_cnt"],
+        reverse=True,
+    )
+
     rows_html = "".join(
         f"""<tr>
-  <td><a href="/project/{html.escape(dict(row)['project_id'])}">{_esc(dict(row)['project_id'])}</a></td>
-  <td class="meta">{_esc(dict(row).get('project_path'))}</td>
-  <td>{row['cnt']}</td>
+  <td><a href="/project/{html.escape(p['project_id'])}">{_esc(p['project_id'])}</a></td>
+  <td class="meta">{_esc(p.get('project_path'))}</td>
+  <td>{p['mem_cnt']}</td>
+  <td>{p['obs_cnt']}</td>
 </tr>"""
-        for row in projects
+        for p in sorted_projects
     )
 
     body = f"""<h2>Global Memories</h2>
 <div class="card"><a href="/project/global">{global_cnt} global memories</a></div>
 <h2>Projects</h2>
-<table><tr><th>Project ID</th><th>Path</th><th>Memories</th></tr>
+<table><tr><th>Project ID</th><th>Path</th><th>Memories</th><th>Observations</th></tr>
 {rows_html}</table>"""
 
     return HTMLResponse(_layout("Projects", body, "projects"))
@@ -198,6 +239,7 @@ def memory_detail(request: Request) -> HTMLResponse:
   </div>
   <div class="meta">Project: {_esc(m.get('project_id'))} &middot; Context: {_esc(m.get('context'))} &middot; Session: {_esc(m.get('session_id'))}</div>
   {f'<div>{tags_html}</div>' if tags else ''}
+  <div style="margin-top:.5rem">{_delete_form(mid, 'memory', 'memory')}</div>
 </div>
 <h3>Content</h3>
 <pre>{content}</pre>"""
@@ -223,6 +265,7 @@ def observation_detail(request: Request) -> HTMLResponse:
 
     o = dict(row)
     body_text = _esc(o.get("body") or "")
+    oid = o["id"]
 
     body = f"""<div class="card">
   <h2>{_esc(o.get('title') or o['id'])}</h2>
@@ -233,6 +276,7 @@ def observation_detail(request: Request) -> HTMLResponse:
     Session: {_esc(o.get('session_id'))}
   </div>
   <div class="meta">Project: {_esc(o.get('project_id'))} &middot; CWD: {_esc(o.get('cwd'))}</div>
+  <div style="margin-top:.5rem">{_delete_form(oid, 'observation', 'observation')}</div>
 </div>
 <h3>Body</h3>
 <pre>{body_text if body_text else '<em class="meta">empty</em>'}</pre>"""
@@ -383,3 +427,19 @@ def api_memories(request: Request) -> JSONResponse:
     conn.close()
 
     return JSONResponse([dict(r) for r in rows])
+
+
+def delete_memory_page(request: Request) -> Any:
+    from ..db.store import delete_memory
+
+    mid = request.path_params["memory_id"]
+    delete_memory(_db_path(), mid)
+    return RedirectResponse(url="/", status_code=303)
+
+
+def delete_observation_page(request: Request) -> Any:
+    from ..db.store import delete_observation
+
+    oid = request.path_params["observation_id"]
+    delete_observation(_db_path(), oid)
+    return RedirectResponse(url="/", status_code=303)

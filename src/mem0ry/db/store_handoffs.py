@@ -38,27 +38,29 @@ def begin_handoff(
     ns_json = json.dumps(next_steps or [])
 
     conn = get_connection(db_path)
-    init_schema(conn)
-    conn.execute(
-        "INSERT INTO handoffs(id, session_id, from_agent, project_id, project_path, "
-        "context, status, summary, open_questions, next_steps, created_at, expires_at) "
-        "VALUES(?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)",
-        (
-            ho_id,
-            session_id,
-            from_agent,
-            project_id,
-            project_path,
-            context,
-            summary,
-            oq_json,
-            ns_json,
-            now,
-            expires,
-        ),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        init_schema(conn)
+        conn.execute(
+            "INSERT INTO handoffs(id, session_id, from_agent, project_id, project_path, "
+            "context, status, summary, open_questions, next_steps, created_at, expires_at) "
+            "VALUES(?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)",
+            (
+                ho_id,
+                session_id,
+                from_agent,
+                project_id,
+                project_path,
+                context,
+                summary,
+                oq_json,
+                ns_json,
+                now,
+                expires,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
     try:
         record_audit(
@@ -81,36 +83,40 @@ def accept_handoff(
     accepted_by: str | None = None,
 ) -> dict[str, Any] | None:
     conn = get_connection(db_path)
-    init_schema(conn)
+    try:
+        init_schema(conn)
 
-    _expire_old_handoffs(conn)
+        _expire_old_handoffs(conn)
 
-    query = "SELECT * FROM handoffs WHERE status = 'open'"
-    params: list[Any] = []
+        query = "SELECT * FROM handoffs WHERE status = 'open'"
+        params: list[Any] = []
 
-    if project_id:
-        query += " AND (project_id = ? OR project_id IS NULL)"
-        params.append(project_id)
+        if project_id:
+            query += " AND (project_id = ? OR project_id IS NULL)"
+            params.append(project_id)
 
-    query += " ORDER BY created_at DESC LIMIT 1"
+        query += " ORDER BY created_at DESC LIMIT 1"
 
-    row = conn.execute(query, params).fetchone()
-    if not row:
+        row = conn.execute(query, params).fetchone()
+        if not row:
+            return None
+
+        ho = dict(row)
+        now = _now_iso()
+        conn.execute(
+            "UPDATE handoffs SET status = 'accepted', accepted_by = ?, accepted_at = ? WHERE id = ?",
+            (accepted_by, now, ho["id"]),
+        )
+        conn.commit()
+
+        ho["status"] = "accepted"
+        ho["accepted_by"] = accepted_by
+        ho["accepted_at"] = now
+    finally:
         conn.close()
-        return None
 
-    ho = dict(row)
-    now = _now_iso()
-    conn.execute(
-        "UPDATE handoffs SET status = 'accepted', accepted_by = ?, accepted_at = ? WHERE id = ?",
-        (accepted_by, now, ho["id"]),
-    )
-    conn.commit()
-    conn.close()
-
-    ho["status"] = "accepted"
-    ho["accepted_by"] = accepted_by
-    ho["accepted_at"] = now
+    ho["open_questions"] = json.loads(ho.get("open_questions") or "[]")
+    ho["next_steps"] = json.loads(ho.get("next_steps") or "[]")
     ho["open_questions"] = json.loads(ho.get("open_questions") or "[]")
     ho["next_steps"] = json.loads(ho.get("next_steps") or "[]")
 
@@ -133,21 +139,24 @@ def pending_handoff(
     project_id: str | None,
 ) -> dict[str, Any] | None:
     conn = get_connection(db_path)
-    init_schema(conn)
+    try:
+        init_schema(conn)
 
-    _expire_old_handoffs(conn)
+        _expire_old_handoffs(conn)
 
-    query = "SELECT * FROM handoffs WHERE status = 'open'"
-    params: list[Any] = []
+        query = "SELECT * FROM handoffs WHERE status = 'open'"
+        params: list[Any] = []
 
-    if project_id:
-        query += " AND (project_id = ? OR project_id IS NULL)"
-        params.append(project_id)
+        if project_id:
+            query += " AND (project_id = ? OR project_id IS NULL)"
+            params.append(project_id)
 
-    query += " ORDER BY created_at DESC LIMIT 1"
+        query += " ORDER BY created_at DESC LIMIT 1"
 
-    row = conn.execute(query, params).fetchone()
-    conn.close()
+        row = conn.execute(query, params).fetchone()
+    finally:
+        conn.close()
+
     if not row:
         return None
 
@@ -163,12 +172,15 @@ def auto_handoff_from_session(db_path: Path, session_id: str, agent: str) -> str
         return None
 
     conn = get_connection(db_path)
-    init_schema(conn)
-    existing = conn.execute(
-        "SELECT id FROM handoffs WHERE session_id = ? AND status = 'open' LIMIT 1",
-        (session_id,),
-    ).fetchone()
-    conn.close()
+    try:
+        init_schema(conn)
+        existing = conn.execute(
+            "SELECT id FROM handoffs WHERE session_id = ? AND status = 'open' LIMIT 1",
+            (session_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
     if existing:
         return None
 

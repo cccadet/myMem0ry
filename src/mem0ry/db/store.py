@@ -13,6 +13,7 @@ from .store_memories import (  # noqa: F401
     touch_memory,
     track_reads,
     decay_memories,
+    delete_memory,
     _VALID_SCOPES,
     _VALID_SOURCES,
     _VALID_MEMORY_TYPES,
@@ -21,6 +22,7 @@ from .store_memories import (  # noqa: F401
 from .store_observations import (  # noqa: F401
     create_observation,
     get_session_observations,
+    delete_observation,
     _VALID_KINDS,
 )
 from .store_handoffs import (  # noqa: F401

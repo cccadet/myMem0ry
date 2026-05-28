@@ -99,32 +99,44 @@ def handle_hook_event(
     if kind == "log":
         from ..db.store import create_memory
 
-        create_memory(
-            db_path,
-            content=payload.get("body") or payload.get("title") or "",
-            scope="session",
-            session_id=payload["session_id"],
-            project_id=project_id,
-            project_path=payload.get("cwd"),
-            memory_type="log",
-            source="hook",
-            title=payload.get("title") or "log",
-        )
+        try:
+            create_memory(
+                db_path,
+                content=payload.get("body") or payload.get("title") or "",
+                scope="session",
+                session_id=payload["session_id"],
+                project_id=project_id,
+                project_path=payload.get("cwd"),
+                memory_type="log",
+                source="hook",
+                title=payload.get("title") or "log",
+            )
+        except Exception:
+            pass
 
     if kind == "session-end":
         messages = payload.get("messages")
         if messages and isinstance(messages, list):
             title = payload.get("title") or f"Session {payload['session_id']}"
             summary = payload.get("body")
-            _write_conversation_md(
-                title=title,
-                messages=messages,
-                summary=summary,
-            )
+            try:
+                _write_conversation_md(
+                    title=title,
+                    messages=messages,
+                    summary=summary,
+                )
+            except Exception:
+                pass
 
-        end_session(db_path, payload["session_id"], summary=payload.get("body"))
+        try:
+            end_session(db_path, payload["session_id"], summary=payload.get("body"))
+        except Exception:
+            pass
 
-        agent = payload.get("agent") or "unknown"
-        auto_handoff_from_session(db_path, payload["session_id"], agent)
+        try:
+            agent = payload.get("agent") or "unknown"
+            auto_handoff_from_session(db_path, payload["session_id"], agent)
+        except Exception:
+            pass
 
     return obs_id
