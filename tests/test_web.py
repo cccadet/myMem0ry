@@ -26,7 +26,7 @@ def tmp_db(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client(tmp_db: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    monkeypatch.setattr("mem0ry.web._db_path", lambda: tmp_db)
+    monkeypatch.setattr("mem0ry.web.pages._db_path", lambda: tmp_db)
     app = Starlette(routes=get_web_routes())
     return TestClient(app)
 
@@ -51,7 +51,7 @@ def _seed(db_path: Path) -> list[str]:
 
 
 def test_dashboard_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("mem0ry.web._db_path", lambda: tmp_path / "missing.db")
+    monkeypatch.setattr("mem0ry.web.pages._db_path", lambda: tmp_path / "missing.db")
     app = Starlette(routes=get_web_routes())
     c = TestClient(app)
     resp = c.get("/")
@@ -155,7 +155,7 @@ def test_api_memories_with_query(client: TestClient, tmp_db: Path) -> None:
 
 
 def test_api_memories_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("mem0ry.web._db_path", lambda: tmp_path / "missing.db")
+    monkeypatch.setattr("mem0ry.web.pages._db_path", lambda: tmp_path / "missing.db")
     app = Starlette(routes=get_web_routes())
     c = TestClient(app)
     resp = c.get("/api/memories")

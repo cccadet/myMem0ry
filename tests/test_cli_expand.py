@@ -22,7 +22,7 @@ def _mock_expander(scores: list[tuple[str, float]]) -> MagicMock:
     return expander
 
 
-@patch("mem0ry.cli.main._get_expander")
+@patch("mem0ry.cli.conversation._get_expander")
 def test_expand_small_scores_formats_correctly(mock_get: MagicMock) -> None:
     """Scores < 10 must render with 4 decimal places, no crash."""
     mock_get.return_value = _mock_expander(
@@ -39,7 +39,7 @@ def test_expand_small_scores_formats_correctly(mock_get: MagicMock) -> None:
     assert "0.6321" in result.output
 
 
-@patch("mem0ry.cli.main._get_expander")
+@patch("mem0ry.cli.conversation._get_expander")
 def test_expand_large_scores_formats_correctly(mock_get: MagicMock) -> None:
     """Scores >= 10 must widen the column, no crash."""
     mock_get.return_value = _mock_expander(
@@ -54,7 +54,7 @@ def test_expand_large_scores_formats_correctly(mock_get: MagicMock) -> None:
     assert "15.3000" in result.output
 
 
-@patch("mem0ry.cli.main._get_expander")
+@patch("mem0ry.cli.conversation._get_expander")
 def test_expand_negative_scores(mock_get: MagicMock) -> None:
     """Negative scores (from spaCy filtering) must not crash formatting."""
     mock_get.return_value = _mock_expander(
@@ -68,7 +68,7 @@ def test_expand_negative_scores(mock_get: MagicMock) -> None:
     assert result.exit_code == 0, result.output
 
 
-@patch("mem0ry.cli.main._get_expander")
+@patch("mem0ry.cli.conversation._get_expander")
 def test_expand_single_result(mock_get: MagicMock) -> None:
     """Single result must not crash max() on a one-element list."""
     mock_get.return_value = _mock_expander(
@@ -82,7 +82,7 @@ def test_expand_single_result(mock_get: MagicMock) -> None:
     assert "lonely" in result.output
 
 
-@patch("mem0ry.cli.main._get_expander")
+@patch("mem0ry.cli.conversation._get_expander")
 def test_expand_no_results(mock_get: MagicMock) -> None:
     """Empty results must print 'Nenhum token similar encontrado'."""
     mock_get.return_value = _mock_expander([])

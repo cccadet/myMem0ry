@@ -13,7 +13,7 @@ runner = CliRunner()
 
 
 def test_backup_nothing(tmp_path: Path) -> None:
-    import mem0ry.cli.main as mod
+    import mem0ry.cli.backup as mod
     from unittest.mock import patch
 
     with patch.object(
@@ -29,7 +29,7 @@ def test_backup_nothing(tmp_path: Path) -> None:
 
 
 def test_backup_creates_tarball(tmp_path: Path) -> None:
-    import mem0ry.cli.main as mod
+    import mem0ry.cli.backup as mod
     from mem0ry.db.connection import get_connection
     from mem0ry.db.schema import init_schema
     from unittest.mock import patch
@@ -54,7 +54,7 @@ def test_backup_creates_tarball(tmp_path: Path) -> None:
 
 
 def test_restore_from_tarball(tmp_path: Path) -> None:
-    import mem0ry.cli.main as mod
+    import mem0ry.cli.backup as mod
     from unittest.mock import patch
 
     src_dir = tmp_path / "source"

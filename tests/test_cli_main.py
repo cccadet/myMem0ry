@@ -112,13 +112,13 @@ def test_dataset_missing_source(tmp_path: Path) -> None:
     assert "Dataset built" in result.output
 
 
-@patch("mem0ry.cli.main.build_bm25_index")
-@patch("mem0ry.cli.main.build_fts_index")
+@patch("mem0ry.cli.conversation.build_bm25_index")
+@patch("mem0ry.cli.conversation.build_fts_index")
 def test_index_command(
     mock_fts: MagicMock, mock_bm25: MagicMock, tmp_path: Path
 ) -> None:
     (tmp_path / "test.md").write_text("content", encoding="utf-8")
-    with patch("mem0ry.cli.main._build_vector_index") as mock_vec:
+    with patch("mem0ry.cli.conversation._build_vector_index") as mock_vec:
         result = runner.invoke(app, ["index", "--conversations", str(tmp_path)])
         assert result.exit_code == 0
         mock_bm25.assert_called_once()
@@ -126,7 +126,7 @@ def test_index_command(
         mock_vec.assert_called_once()
 
 
-@patch("mem0ry.cli.main.build_bm25_index")
+@patch("mem0ry.cli.conversation.build_bm25_index")
 def test_index_bm25_only(mock_bm25: MagicMock, tmp_path: Path) -> None:
     (tmp_path / "test.md").write_text("content", encoding="utf-8")
     result = runner.invoke(
@@ -136,7 +136,7 @@ def test_index_bm25_only(mock_bm25: MagicMock, tmp_path: Path) -> None:
     mock_bm25.assert_called_once()
 
 
-@patch("mem0ry.cli.main.build_fts_index")
+@patch("mem0ry.cli.conversation.build_fts_index")
 def test_index_fts5_only(mock_fts: MagicMock, tmp_path: Path) -> None:
     (tmp_path / "test.md").write_text("content", encoding="utf-8")
     result = runner.invoke(
@@ -163,7 +163,7 @@ def _setup_db(tmp_path: Path) -> Path:
 
 
 def test_context_no_db(tmp_path: Path) -> None:
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(tmp_path / "missing.db")
         result = runner.invoke(app, ["context", "--cwd", str(tmp_path)])
     assert result.exit_code == 0
@@ -178,7 +178,7 @@ def test_context_returns_memories(tmp_path: Path) -> None:
         db_path, content="global fact", scope="global", memory_type="fact", title="G1"
     )
 
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
         result = runner.invoke(app, ["context", "--cwd", str(tmp_path)])
     assert result.exit_code == 0
@@ -188,7 +188,7 @@ def test_context_returns_memories(tmp_path: Path) -> None:
 def test_context_empty_db(tmp_path: Path) -> None:
     db_path = _setup_db(tmp_path)
 
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
         result = runner.invoke(app, ["context", "--cwd", str(tmp_path)])
     assert result.exit_code == 0
@@ -198,7 +198,7 @@ def test_context_empty_db(tmp_path: Path) -> None:
 def test_save_creates_memory(tmp_path: Path) -> None:
     db_path = _setup_db(tmp_path)
 
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
         result = runner.invoke(
             app, ["save", "Test Note", "Important content", "--cwd", str(tmp_path)]
@@ -216,7 +216,7 @@ def test_save_creates_memory(tmp_path: Path) -> None:
 def test_save_with_scope(tmp_path: Path) -> None:
     db_path = _setup_db(tmp_path)
 
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
         result = runner.invoke(
             app,
@@ -243,7 +243,7 @@ def test_save_with_scope(tmp_path: Path) -> None:
 def test_save_no_content_no_stdin(tmp_path: Path) -> None:
     db_path = _setup_db(tmp_path)
 
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
         result = runner.invoke(app, ["save", "Empty", "--cwd", str(tmp_path)])
     assert result.exit_code == 1
@@ -253,7 +253,7 @@ def test_save_no_content_no_stdin(tmp_path: Path) -> None:
 def test_log_creates_session_memory(tmp_path: Path) -> None:
     db_path = _setup_db(tmp_path)
 
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
         result = runner.invoke(
             app, ["log", "user asked about X", "--cwd", str(tmp_path)]
@@ -270,7 +270,7 @@ def test_log_creates_session_memory(tmp_path: Path) -> None:
 def test_log_with_role(tmp_path: Path) -> None:
     db_path = _setup_db(tmp_path)
 
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
         result = runner.invoke(
             app,
@@ -294,7 +294,7 @@ def test_log_with_role(tmp_path: Path) -> None:
 def test_log_empty_content_is_noop(tmp_path: Path) -> None:
     db_path = _setup_db(tmp_path)
 
-    with patch("mem0ry.cli.main.MemoryConfig") as mock_cfg:
+    with patch("mem0ry.cli.memory.MemoryConfig") as mock_cfg:
         mock_cfg.return_value.db_path = str(db_path)
         result = runner.invoke(app, ["log", "--cwd", str(tmp_path)])
     assert result.exit_code == 0
