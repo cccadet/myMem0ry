@@ -205,6 +205,41 @@ def memory_detail(request: Request) -> HTMLResponse:
     return HTMLResponse(_layout(f"Memory: {m.get('title', mid)}", body))
 
 
+def observation_detail(request: Request) -> HTMLResponse:
+    oid = request.path_params["observation_id"]
+    db = _db_path()
+
+    if not db.exists():
+        return HTMLResponse(_layout("Observation", _NO_DB))
+
+    conn = get_connection(db)
+    init_schema(conn)
+
+    row = conn.execute("SELECT * FROM observations WHERE id=?", (oid,)).fetchone()
+    conn.close()
+
+    if not row:
+        return HTMLResponse(_layout("Observation", f'<div class="card"><p>Observation {oid} not found.</p></div>'))
+
+    o = dict(row)
+    body_text = _esc(o.get("body") or "")
+
+    body = f"""<div class="card">
+  <h2>{_esc(o.get('title') or o['id'])}</h2>
+  <div>{_tag(o.get('kind', 'other'), o.get('kind', 'other'))}</div>
+  <div class="meta">
+    Created: {(o.get('created_at') or '')[:19]} &middot;
+    Agent: {_esc(o.get('agent'))} &middot;
+    Session: {_esc(o.get('session_id'))}
+  </div>
+  <div class="meta">Project: {_esc(o.get('project_id'))} &middot; CWD: {_esc(o.get('cwd'))}</div>
+</div>
+<h3>Body</h3>
+<pre>{body_text if body_text else '<em class="meta">empty</em>'}</pre>"""
+
+    return HTMLResponse(_layout(f"Observation: {o.get('title', oid)}", body))
+
+
 def search_page(request: Request) -> HTMLResponse:
     q = request.query_params.get("q", "")
     scope = request.query_params.get("scope", "")
@@ -268,6 +303,18 @@ def search_page(request: Request) -> HTMLResponse:
     return HTMLResponse(_layout("Search", body, "search"))
 
 
+def _target_link(row: dict[str, Any]) -> str:
+    ttype = row.get("target_type", "")
+    tid = row.get("target_id", "")
+    if ttype == "observation":
+        href = f"/observation/{tid}"
+    elif ttype == "handoff":
+        href = f"/handoff/{tid}"
+    else:
+        href = f"/memory/{tid}"
+    return f'<a href="{href}">{_esc(tid)}</a>'
+
+
 def audit_page(request: Request) -> HTMLResponse:
     db = _db_path()
     if not db.exists():
@@ -286,7 +333,7 @@ def audit_page(request: Request) -> HTMLResponse:
   <td class="meta">{(dict(row).get('created_at') or '')[:19]}</td>
   <td>{_esc(dict(row)['action'])}</td>
   <td>{_esc(dict(row)['target_type'])}</td>
-  <td><a href="/memory/{row['target_id']}">{_esc(row['target_id'])}</a></td>
+  <td>{_target_link(dict(row))}</td>
   <td class="meta">{_esc(dict(row).get('agent'))}</td>
   <td class="meta" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{_esc(dict(row).get('details'))}</td>
 </tr>"""

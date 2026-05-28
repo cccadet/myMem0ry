@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-05-28
+
+### Fixed
+
+- Audit log links for observations now point to `/observation/{id}` instead of `/memory/{id}`,
+  which caused "Memory not found" errors. New observation detail page added to the web UI.
+
 ## [0.14.1] - 2026-05-28
 
 ### Fixed
@@ -79,7 +86,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/cccadet/myMem0ry/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/cccadet/myMem0ry/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/cccadet/myMem0ry/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/cccadet/myMem0ry/releases/tag/v0.13.0
