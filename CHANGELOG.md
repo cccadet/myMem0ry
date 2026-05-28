@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-05-28
+
+### Added
+
+- `mymem0ry hooks` — new CLI command: `--path` prints hooks directory, `--config` prints
+  settings.json snippet, `--install` copies hooks for detected agent
+- Hooks now included in PyPI wheel (force-include in hatchling)
+- Updated docs across README, install guide, usage guide — all use `mymem0ry hooks --config`
+
+## [0.13.0] - 2026-05-27
+
+### Added
+
+- PyPI release. No code changes.
+
 ## [0.12.2] - 2026-05-27
 
 ### Fixed
@@ -57,6 +72,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/cccadet/myMem0ry/compare/v0.2.0...v0.3.0
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/cccadet/myMem0ry/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/cccadet/myMem0ry/releases/tag/v0.13.0
+[0.12.2]: https://github.com/cccadet/myMem0ry/compare/v0.3.0...v0.12.2
 [0.2.0]: https://github.com/cccadet/myMem0ry/releases/tag/v0.2.0
