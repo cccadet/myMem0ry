@@ -22,6 +22,30 @@ class ClaudeCodeParser(BaseParser):
         convs = parser.parse(Path("session.jsonl"))
     """
 
+    def _parse_line(self, line: str) -> ParsedMessage | None:
+        line = line.strip()
+        if not line:
+            return None
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+
+        msg_type = entry.get("type", "")
+        if msg_type not in ("human", "assistant"):
+            return None
+
+        content = self._extract_text(entry)
+        if not content.strip():
+            return None
+
+        return ParsedMessage(
+            role="user" if msg_type == "human" else "assistant",
+            content=content.strip(),
+            created_at=str(entry.get("timestamp") or entry.get("time") or ""),
+            message_id=entry.get("uuid"),
+        )
+
     def parse(self, path: Path) -> list[ParsedConversation]:
         lines = path.read_text(encoding="utf-8").splitlines()
 
@@ -29,34 +53,12 @@ class ClaudeCodeParser(BaseParser):
         first_ts: str | None = None
 
         for line in lines:
-            line = line.strip()
-            if not line:
+            msg = self._parse_line(line)
+            if msg is None:
                 continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            msg_type = entry.get("type", "")
-            if msg_type not in ("human", "assistant"):
-                continue
-
-            content = self._extract_text(entry)
-            if not content.strip():
-                continue
-
-            ts = entry.get("timestamp") or entry.get("time")
-            if first_ts is None and ts:
-                first_ts = str(ts)
-
-            messages.append(
-                ParsedMessage(
-                    role="user" if msg_type == "human" else "assistant",
-                    content=content.strip(),
-                    created_at=str(ts) if ts else None,
-                    message_id=entry.get("uuid"),
-                )
-            )
+            if first_ts is None and msg.created_at:
+                first_ts = msg.created_at
+            messages.append(msg)
 
         if not messages:
             return []

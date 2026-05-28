@@ -19,6 +19,9 @@ from ..pipeline.dataset import build_dataset_from_openai
 
 from ..conversations.spacy_expand import SpacyConceptSearch
 
+_HELP_WORKDIR = "Working directory"
+_HELP_SESSION = "Session ID"
+
 app = typer.Typer(help="myMem0ry — personal memory search system")
 
 
@@ -72,8 +75,6 @@ def _build_vector_index(conv_dir: Path, config: MemoryConfig) -> None:
 
 def _get_expander(config: MemoryConfig) -> SpacyConceptSearch:
     """Instantiate the spaCy concept search backend."""
-    from ..conversations.spacy_expand import SpacyConceptSearch
-
     typer.echo(f"[expand] Carregando spaCy ({config.spacy_model})...")
     return SpacyConceptSearch(model_name=config.spacy_model)
 
@@ -397,6 +398,74 @@ def stats() -> None:
             typer.echo(f"  {proj['project_id']}: {proj['count']}")
 
 
+def _download_spacy_model(model: str) -> None:
+    import shutil
+    import subprocess
+    import sys
+
+    from spacy.cli.download import get_compatibility, get_version
+    import spacy.about
+
+    compat = get_compatibility()
+    ver = get_version(model, compat)
+    wheel_url = (
+        f"{spacy.about.__download_url__}"
+        f"/{model}-{ver}"
+        f"/{model}-{ver}-py3-none-any.whl"
+    )
+    uv = shutil.which("uv")
+    cmd = [uv, "pip", "install", "--python", sys.executable, wheel_url] if uv else [
+        sys.executable, "-m", "pip", "install", wheel_url
+    ]
+    subprocess.check_call(cmd)
+
+
+def _check_spacy(config: MemoryConfig, ok: Any, fail: Any) -> None:
+    typer.echo("[1/6] spaCy model")
+    try:
+        import spacy
+
+        nlp = spacy.util.get_installed_models()
+        if config.spacy_model in nlp:
+            ok(f"{config.spacy_model} instalado")
+        else:
+            pkg_name = config.spacy_model.replace("_", "-")
+            typer.echo(f"  Baixando {pkg_name}...")
+            _download_spacy_model(config.spacy_model)
+            ok(f"{config.spacy_model} instalado")
+    except ImportError:
+        fail("spacy nao instalado")
+
+
+def _check_db(config: MemoryConfig, ok: Any, warn: Any, fail: Any) -> None:
+    typer.echo("[3/6] Database")
+    db_path = Path(config.db_path)
+    if not db_path.exists():
+        warn(f"DB nao encontrado em {db_path} (corra mymem0ry migrate)")
+        return
+    try:
+        from ..db.schema import init_schema
+        from ..db.connection import get_connection
+
+        conn = get_connection(db_path)
+        init_schema(conn)
+        row = conn.execute(
+            "SELECT value FROM schema_meta WHERE key='version'"
+        ).fetchone()
+        conn.close()
+        ok(f"schema v{row['value']} em {db_path}")
+    except Exception as e:
+        fail(f"erro ao abrir DB: {e}")
+
+
+def _check_index(label: str, path: Path, ok: Any, warn: Any, hint: str) -> None:
+    typer.echo(label)
+    if path.exists():
+        ok(f"{path}")
+    else:
+        warn(f"indice {hint} nao encontrado (corra mymem0ry index --backend {hint})")
+
+
 @app.command()
 def doctor() -> None:
     """Check system health: dependencies, indexes, database, permissions."""
@@ -420,42 +489,7 @@ def doctor() -> None:
 
     typer.echo("myMem0ry doctor\n")
 
-    typer.echo("[1/6] spaCy model")
-    try:
-        import spacy
-
-        nlp = spacy.util.get_installed_models()
-        if config.spacy_model in nlp:
-            ok(f"{config.spacy_model} instalado")
-        else:
-            pkg_name = config.spacy_model.replace("_", "-")
-            typer.echo(f"  Baixando {pkg_name}...")
-            import shutil
-            import subprocess
-            import sys
-
-            from spacy.cli.download import get_compatibility, get_version
-            import spacy.about
-
-            compat = get_compatibility()
-            ver = get_version(config.spacy_model, compat)
-            wheel_url = (
-                f"{spacy.about.__download_url__}"
-                f"/{config.spacy_model}-{ver}"
-                f"/{config.spacy_model}-{ver}-py3-none-any.whl"
-            )
-            uv = shutil.which("uv")
-            if uv:
-                subprocess.check_call(
-                    [uv, "pip", "install", "--python", sys.executable, wheel_url]
-                )
-            else:
-                subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", wheel_url]
-                )
-            ok(f"{config.spacy_model} instalado")
-    except ImportError:
-        fail("spacy nao instalado")
+    _check_spacy(config, ok, fail)
 
     typer.echo("[2/6] sqlite-vec")
     try:
@@ -465,46 +499,12 @@ def doctor() -> None:
     except ImportError:
         fail("sqlite-vec nao instalado")
 
-    typer.echo("[3/6] Database")
-    db_path = Path(config.db_path)
-    if db_path.exists():
-        try:
-            from ..db.schema import init_schema
-            from ..db.connection import get_connection
+    _check_db(config, ok, warn, fail)
 
-            conn = get_connection(db_path)
-            init_schema(conn)
-            row = conn.execute(
-                "SELECT value FROM schema_meta WHERE key='version'"
-            ).fetchone()
-            conn.close()
-            ok(f"schema v{row['value']} em {db_path}")
-        except Exception as e:
-            fail(f"erro ao abrir DB: {e}")
-    else:
-        warn(f"DB nao encontrado em {db_path} (corra mymem0ry migrate)")
-
-    typer.echo("[4/6] Indice BM25")
     conv_dir = Path(config.conversations_dir)
-    bm25_path = conv_dir / ".bm25_index.pkl"
-    if bm25_path.exists():
-        ok(f"{bm25_path}")
-    else:
-        warn("indice BM25 nao encontrado (corra mymem0ry index --backend bm25)")
-
-    typer.echo("[5/6] Indice FTS5")
-    fts_path = conv_dir / ".fts5_index.db"
-    if fts_path.exists():
-        ok(f"{fts_path}")
-    else:
-        warn("indice FTS5 nao encontrado (corra mymem0ry index --backend fts5)")
-
-    typer.echo("[6/6] Indice vector")
-    vec_path = Path(config.vector_db_path)
-    if vec_path.exists():
-        ok(f"{vec_path}")
-    else:
-        warn("indice vector nao encontrado (corra mymem0ry index --backend vector)")
+    _check_index("[4/6] Indice BM25", conv_dir / ".bm25_index.pkl", ok, warn, "bm25")
+    _check_index("[5/6] Indice FTS5", conv_dir / ".fts5_index.db", ok, warn, "fts5")
+    _check_index("[6/6] Indice vector", Path(config.vector_db_path), ok, warn, "vector")
 
     typer.echo("")
     if errors:
@@ -548,7 +548,7 @@ def context(
         "", "--cwd", help="Working directory to resolve context from"
     ),
     top_k: int = typer.Option(5, "--top-k", "-k", help="Number of memories to load"),
-    session: str = typer.Option("", "--session", "-s", help="Session ID"),
+    session: str = typer.Option("", "--session", "-s", help=_HELP_SESSION),
 ) -> None:
     """Load aggregated context for the current project. Prints to stdout for hooks."""
 
@@ -586,11 +586,11 @@ def context(
 def save(
     title: str = typer.Argument(..., help="Memory title"),
     content: str = typer.Argument("", help="Memory content (reads stdin if empty)"),
-    cwd: str = typer.Option("", "--cwd", help="Working directory"),
+    cwd: str = typer.Option("", "--cwd", help=_HELP_WORKDIR),
     scope: str = typer.Option("session", "--scope", "-s", help="Memory scope"),
     memory_type: str = typer.Option("log", "--type", "-t", help="Memory type"),
     source: str = typer.Option("manual", "--source", help="Source agent"),
-    session: str = typer.Option("", "--session", help="Session ID"),
+    session: str = typer.Option("", "--session", help=_HELP_SESSION),
 ) -> None:
     """Save a memory. Reads content from stdin if not provided as argument."""
 
@@ -631,9 +631,9 @@ def save(
 @app.command()
 def log(
     content: str = typer.Argument("", help="Log message (reads stdin if empty)"),
-    cwd: str = typer.Option("", "--cwd", help="Working directory"),
+    cwd: str = typer.Option("", "--cwd", help=_HELP_WORKDIR),
     role: str = typer.Option("user", "--role", "-r", help="Role: user or assistant"),
-    session: str = typer.Option("", "--session", help="Session ID"),
+    session: str = typer.Option("", "--session", help=_HELP_SESSION),
 ) -> None:
     """Quick-log a message to session memory. Reads from stdin if no argument."""
 
@@ -845,8 +845,8 @@ def observe(
         help="Event kind: session-start, user-prompt, post-tool-use, pre-compact, session-end",
     ),
     content: str = typer.Argument("", help="Event content (reads stdin if empty)"),
-    cwd: str = typer.Option("", "--cwd", help="Working directory"),
-    session: str = typer.Option("", "--session", "-s", help="Session ID"),
+    cwd: str = typer.Option("", "--cwd", help=_HELP_WORKDIR),
+    session: str = typer.Option("", "--session", "-s", help=_HELP_SESSION),
     agent: str = typer.Option("manual", "--agent", "-a", help="Agent name"),
 ) -> None:
     """Send a lifecycle observation to the server. CLI fallback for hooks."""
@@ -898,12 +898,73 @@ def observe(
         typer.echo(f"Server not reachable: {e}", err=True)
 
 
+def _handoff_begin(work_dir: str, summary: str, session: str) -> None:
+    from ..db.store import begin_handoff
+    from ..utils.git_context import resolve_full_context
+
+    config = MemoryConfig()
+    db_path = Path(config.db_path)
+    resolved = resolve_full_context(Path(work_dir), session or None)
+
+    ho_id = begin_handoff(
+        db_path,
+        session_id=resolved.get("session_id") or "cli-handoff",
+        from_agent="cli",
+        summary=summary,
+        project_id=resolved.get("project_id"),
+        project_path=resolved.get("project_path"),
+        context=resolved.get("context"),
+    )
+    typer.echo(f"Handoff {ho_id} created.")
+
+
+def _handoff_accept(work_dir: str) -> None:
+    from ..db.store import accept_handoff
+    from ..utils.git_context import resolve_full_context
+
+    config = MemoryConfig()
+    db_path = Path(config.db_path)
+    resolved = resolve_full_context(Path(work_dir))
+
+    ho = accept_handoff(
+        db_path,
+        project_id=resolved.get("project_id"),
+        accepted_by="cli",
+    )
+    if not ho:
+        typer.echo("No pending handoff found.")
+        return
+
+    typer.echo(f"Handoff from {ho['from_agent']} ({ho['created_at'][:10]}):")
+    typer.echo(f"  {ho['summary']}")
+    if ho.get("open_questions"):
+        typer.echo("\n  Open questions:")
+        for q in ho["open_questions"]:
+            typer.echo(f"    - {q}")
+    if ho.get("next_steps"):
+        typer.echo("\n  Next steps:")
+        for s in ho["next_steps"]:
+            typer.echo(f"    - {s}")
+
+
+def _handoff_status() -> None:
+    from ..daemon import server_status
+
+    info = server_status()
+    if info["running"]:
+        typer.echo(f"Server running (pid {info['pid']}) at {info['url']}")
+        if info.get("health"):
+            typer.echo(f"Health: {info['health']}")
+    else:
+        typer.echo("Server not running.")
+
+
 @app.command()
 def handoff(
     action: str = typer.Argument(..., help="Action: begin, accept, status"),
-    cwd: str = typer.Option("", "--cwd", help="Working directory"),
+    cwd: str = typer.Option("", "--cwd", help=_HELP_WORKDIR),
     summary: str = typer.Option("", "--summary", "-m", help="Handoff summary"),
-    session: str = typer.Option("", "--session", "-s", help="Session ID"),
+    session: str = typer.Option("", "--session", "-s", help=_HELP_SESSION),
 ) -> None:
     """Manage cross-agent handoffs: begin, accept, or check status."""
 
@@ -913,64 +974,11 @@ def handoff(
         if not summary:
             typer.echo("Summary is required for 'begin'. Use --summary.", err=True)
             raise typer.Exit(code=1)
-
-        from ..db.store import begin_handoff
-        from ..utils.git_context import resolve_full_context
-
-        config = MemoryConfig()
-        db_path = Path(config.db_path)
-        resolved = resolve_full_context(Path(work_dir), session or None)
-
-        ho_id = begin_handoff(
-            db_path,
-            session_id=resolved.get("session_id") or "cli-handoff",
-            from_agent="cli",
-            summary=summary,
-            project_id=resolved.get("project_id"),
-            project_path=resolved.get("project_path"),
-            context=resolved.get("context"),
-        )
-        typer.echo(f"Handoff {ho_id} created.")
-
+        _handoff_begin(work_dir, summary, session)
     elif action == "accept":
-        from ..db.store import accept_handoff
-        from ..utils.git_context import resolve_full_context
-
-        config = MemoryConfig()
-        db_path = Path(config.db_path)
-        resolved = resolve_full_context(Path(work_dir))
-
-        ho = accept_handoff(
-            db_path,
-            project_id=resolved.get("project_id"),
-            accepted_by="cli",
-        )
-        if not ho:
-            typer.echo("No pending handoff found.")
-            return
-
-        typer.echo(f"Handoff from {ho['from_agent']} ({ho['created_at'][:10]}):")
-        typer.echo(f"  {ho['summary']}")
-        if ho.get("open_questions"):
-            typer.echo("\n  Open questions:")
-            for q in ho["open_questions"]:
-                typer.echo(f"    - {q}")
-        if ho.get("next_steps"):
-            typer.echo("\n  Next steps:")
-            for s in ho["next_steps"]:
-                typer.echo(f"    - {s}")
-
+        _handoff_accept(work_dir)
     elif action == "status":
-        from ..daemon import server_status
-
-        info = server_status()
-        if info["running"]:
-            typer.echo(f"Server running (pid {info['pid']}) at {info['url']}")
-            if info.get("health"):
-                typer.echo(f"Health: {info['health']}")
-        else:
-            typer.echo("Server not running.")
-
+        _handoff_status()
     else:
         typer.echo(f"Unknown action: {action}. Use: begin, accept, status", err=True)
         raise typer.Exit(code=1)

@@ -18,12 +18,12 @@ case "$EVENT" in
 esac
 
 CONTENT=""
-if [ ! -t 0 ]; then
+if [[ ! -t 0 ]]; then
     CONTENT="$(head -c 4096)"
 fi
 
 BODY_FIELD=""
-if [ -n "$CONTENT" ]; then
+if [[ -n "$CONTENT" ]]; then
     CONTENT_ESCAPED=$(printf '%s' "$CONTENT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo '""')
     BODY_FIELD="\"body\":${CONTENT_ESCAPED},"
 fi
@@ -33,9 +33,9 @@ curl -sf --max-time 0.2 -X POST "${SERVER}/hook" \
   -d "{${BODY_FIELD}\"kind\":\"${KIND}\",\"session_id\":\"${SESSION_ID}\",\"cwd\":\"${CWD}\",\"agent\":\"opencode\"}" \
   2>/dev/null || true
 
-if [ "$KIND" = "session-start" ]; then
+if [[ "$KIND" == "session-start" ]]; then
     HANDOFF=$(curl -sf --max-time 1 "${SERVER}/handoff/accept?cwd=${CWD}&agent=opencode" 2>/dev/null || echo "")
-    if [ -n "$HANDOFF" ] && [ "$HANDOFF" != "null" ] && [ "$HANDOFF" != "" ]; then
+    if [[ -n "$HANDOFF" ]] && [[ "$HANDOFF" != "null" ]] && [[ "$HANDOFF" != "" ]]; then
         echo "📥 myMem0ry: pending handoff"
         echo "$HANDOFF" | python3 -c "
 import sys, json

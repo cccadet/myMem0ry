@@ -18,12 +18,12 @@ case "$EVENT" in
 esac
 
 CONTENT=""
-if [ ! -t 0 ]; then
+if [[ ! -t 0 ]]; then
     CONTENT="$(head -c 4096)"
 fi
 
 BODY_FIELD=""
-if [ -n "$CONTENT" ]; then
+if [[ -n "$CONTENT" ]]; then
     CONTENT_ESCAPED=$(printf '%s' "$CONTENT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo '""')
     BODY_FIELD="\"body\":${CONTENT_ESCAPED},"
 fi

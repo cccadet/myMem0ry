@@ -102,7 +102,7 @@ def test_compute_salience_access_count_boosts() -> None:
 
 def test_compute_salience_invalid_date() -> None:
     s = compute_salience("log", "not-a-date", 0, None)
-    assert s == 0.5
+    assert s == pytest.approx(0.5)
 
 
 def test_pin_memory(db: Path) -> None:

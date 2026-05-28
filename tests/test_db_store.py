@@ -107,7 +107,7 @@ def test_get_context_empty(db: Path) -> None:
 
 
 def test_get_context_cascata(db: Path) -> None:
-    create_memory(db, content="global fact", scope="global", title="G1")
+    create_memory(db, content="global fact", scope="global", title="G1", memory_type="fact")
     create_memory(
         db,
         content="project fact",
@@ -146,7 +146,7 @@ def test_get_context_cascata(db: Path) -> None:
 
 
 def test_get_context_only_global(db: Path) -> None:
-    create_memory(db, content="global only", scope="global", title="G1")
+    create_memory(db, content="global only", scope="global", title="G1", memory_type="fact")
     result = get_context(db, top_k=5)
     assert len(result) == 1
     assert result[0]["scope"] == "global"

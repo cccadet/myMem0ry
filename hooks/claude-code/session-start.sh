@@ -14,7 +14,7 @@ curl -sf --max-time 0.2 -X POST "${SERVER}/hook" \
   2>/dev/null || true
 
 HANDOFF=$(curl -sf --max-time 1 "${SERVER}/handoff/accept?cwd=${CWD}&agent=claude-code" 2>/dev/null || echo "")
-if [ -n "$HANDOFF" ] && [ "$HANDOFF" != "null" ] && [ "$HANDOFF" != "" ]; then
+if [[ -n "$HANDOFF" ]] && [[ "$HANDOFF" != "null" ]] && [[ "$HANDOFF" != "" ]]; then
   echo "📥 myMem0ry: pending handoff"
   echo "$HANDOFF" | python3 -c "
 import sys, json

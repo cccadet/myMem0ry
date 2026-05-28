@@ -15,6 +15,9 @@ from .config import MemoryConfig
 from .db.connection import get_connection
 from .db.schema import init_schema
 
+_TITLE_AUDIT = "Audit Log"
+_NO_DB = '<div class="card"><p>No database found.</p></div>'
+
 
 def _db_path() -> Path:
     return Path(MemoryConfig().db_path)
@@ -77,7 +80,7 @@ def _layout(title: str, body: str, nav_active: str = "dashboard") -> str:
         ("dashboard", "/", "Dashboard"),
         ("projects", "/projects", "Projects"),
         ("search", "/search", "Search"),
-        ("audit", "/audit", "Audit Log"),
+        ("audit", "/audit", _TITLE_AUDIT),
     ]
     nav = "".join(
         f'<a href="{href}" class="{"active" if key == nav_active else ""}">{label}</a>'
@@ -121,7 +124,7 @@ def _memory_card(m: dict[str, Any]) -> str:
 </div>"""
 
 
-async def dashboard(request: Request) -> HTMLResponse:
+def dashboard(request: Request) -> HTMLResponse:
     db = _db_path()
     body_parts: list[str] = []
 
@@ -185,10 +188,10 @@ async def dashboard(request: Request) -> HTMLResponse:
     return HTMLResponse(_layout("Dashboard", "\n".join(body_parts)))
 
 
-async def projects_page(request: Request) -> HTMLResponse:
+def projects_page(request: Request) -> HTMLResponse:
     db = _db_path()
     if not db.exists():
-        return HTMLResponse(_layout("Projects", '<div class="card"><p>No database found.</p></div>', "projects"))
+        return HTMLResponse(_layout("Projects", _NO_DB, "projects"))
 
     conn = get_connection(db)
     init_schema(conn)
@@ -222,12 +225,12 @@ async def projects_page(request: Request) -> HTMLResponse:
     return HTMLResponse(_layout("Projects", body, "projects"))
 
 
-async def project_detail(request: Request) -> HTMLResponse:
+def project_detail(request: Request) -> HTMLResponse:
     pid = request.path_params["project_id"]
     db = _db_path()
 
     if not db.exists():
-        return HTMLResponse(_layout("Project", '<div class="card"><p>No database found.</p></div>'))
+        return HTMLResponse(_layout("Project", _NO_DB))
 
     conn = get_connection(db)
     init_schema(conn)
@@ -263,12 +266,12 @@ async def project_detail(request: Request) -> HTMLResponse:
     return HTMLResponse(_layout(f"Project: {pid}", body))
 
 
-async def memory_detail(request: Request) -> HTMLResponse:
+def memory_detail(request: Request) -> HTMLResponse:
     mid = request.path_params["memory_id"]
     db = _db_path()
 
     if not db.exists():
-        return HTMLResponse(_layout("Memory", '<div class="card"><p>No database found.</p></div>'))
+        return HTMLResponse(_layout("Memory", _NO_DB))
 
     conn = get_connection(db)
     init_schema(conn)
@@ -306,7 +309,7 @@ async def memory_detail(request: Request) -> HTMLResponse:
     return HTMLResponse(_layout(f"Memory: {m.get('title', mid)}", body))
 
 
-async def search_page(request: Request) -> HTMLResponse:
+def search_page(request: Request) -> HTMLResponse:
     q = request.query_params.get("q", "")
     scope = request.query_params.get("scope", "")
     mtype = request.query_params.get("type", "")
@@ -369,10 +372,10 @@ async def search_page(request: Request) -> HTMLResponse:
     return HTMLResponse(_layout("Search", body, "search"))
 
 
-async def audit_page(request: Request) -> HTMLResponse:
+def audit_page(request: Request) -> HTMLResponse:
     db = _db_path()
     if not db.exists():
-        return HTMLResponse(_layout("Audit Log", '<div class="card"><p>No database found.</p></div>', "audit"))
+        return HTMLResponse(_layout(_TITLE_AUDIT, _NO_DB, "audit"))
 
     conn = get_connection(db)
     init_schema(conn)
@@ -400,10 +403,10 @@ async def audit_page(request: Request) -> HTMLResponse:
 {rows_html}
 </table>"""
 
-    return HTMLResponse(_layout("Audit Log", body, "audit"))
+    return HTMLResponse(_layout(_TITLE_AUDIT, body, "audit"))
 
 
-async def api_memories(request: Request) -> JSONResponse:
+def api_memories(request: Request) -> JSONResponse:
     db = _db_path()
     if not db.exists():
         return JSONResponse([])

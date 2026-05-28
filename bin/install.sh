@@ -37,7 +37,7 @@ detect_agent() {
 
 install_claude() {
     echo "Installing mymem0ry for Claude Code..."
-    if [ "$SOURCE" = "mymem0ry" ]; then
+    if [[ "$SOURCE" == "mymem0ry" ]]; then
         claude mcp add --scope user mymem0ry -- mymem0ry-mcp
     else
         local repo_path
@@ -51,7 +51,7 @@ install_opencode() {
     echo "Installing mymem0ry for OpenCode..."
     echo ""
     echo "Add this to your opencode.json:"
-    if [ "$SOURCE" = "mymem0ry" ]; then
+    if [[ "$SOURCE" == "mymem0ry" ]]; then
         echo '  "mcpServers": {'
         echo '    "mymem0ry": {'
         echo '      "command": "mymem0ry-mcp"'
@@ -71,7 +71,7 @@ install_opencode() {
 
 install_codex() {
     echo "Installing mymem0ry for Codex CLI..."
-    if [ "$SOURCE" = "mymem0ry" ]; then
+    if [[ "$SOURCE" == "mymem0ry" ]]; then
         codex mcp add mymem0ry -- mymem0ry-mcp
     else
         local repo_path
@@ -83,7 +83,7 @@ install_codex() {
 
 install_code() {
     echo "Installing mymem0ry for VS Code..."
-    if [ "$SOURCE" = "mymem0ry" ]; then
+    if [[ "$SOURCE" == "mymem0ry" ]]; then
         code --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
     else
         local repo_path
@@ -95,7 +95,7 @@ install_code() {
 
 install_cursor() {
     echo "Installing mymem0ry for Cursor..."
-    if [ "$SOURCE" = "mymem0ry" ]; then
+    if [[ "$SOURCE" == "mymem0ry" ]]; then
         cursor --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
     else
         local repo_path
@@ -107,9 +107,9 @@ install_cursor() {
 
 AGENT="${1:-}"
 
-if [ -z "$AGENT" ]; then
+if [[ -z "$AGENT" ]]; then
     AGENT="$(detect_agent)"
-    if [ -z "$AGENT" ]; then
+    if [[ -z "$AGENT" ]]; then
         echo "Could not auto-detect agent. Usage: bin/install.sh <claude|opencode|codex|code|cursor>"
         exit 1
     fi

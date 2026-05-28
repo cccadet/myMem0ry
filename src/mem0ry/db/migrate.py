@@ -10,6 +10,8 @@ from pathlib import Path
 from .connection import get_connection
 from .schema import init_schema
 
+_VERSION_SQL = "SELECT value FROM schema_meta WHERE key='version'"
+
 
 _HEADER_RE = re.compile(
     r"^#\s+(?P<title>.+?)\s*$\n"
@@ -157,9 +159,7 @@ def migrate_v3_to_v4(db_path: Path) -> dict:
     conn = get_connection(db_path)
     init_schema(conn)
 
-    version_row = conn.execute(
-        "SELECT value FROM schema_meta WHERE key='version'"
-    ).fetchone()
+    version_row = conn.execute(_VERSION_SQL).fetchone()
     old_version = int(version_row["value"]) if version_row else 3
 
     conn.close()
@@ -174,9 +174,7 @@ def migrate_v4_to_v5(db_path: Path) -> dict:
     """
     conn = get_connection(db_path)
 
-    version_row = conn.execute(
-        "SELECT value FROM schema_meta WHERE key='version'"
-    ).fetchone()
+    version_row = conn.execute(_VERSION_SQL).fetchone()
     old_version = int(version_row["value"]) if version_row else 4
 
     new_cols = [
@@ -222,9 +220,7 @@ def migrate_v5_to_v6(db_path: Path) -> dict:
     conn = get_connection(db_path)
     init_schema(conn)
 
-    version_row = conn.execute(
-        "SELECT value FROM schema_meta WHERE key='version'"
-    ).fetchone()
+    version_row = conn.execute(_VERSION_SQL).fetchone()
     old_version = int(version_row["value"]) if version_row else 5
 
     conn.execute(

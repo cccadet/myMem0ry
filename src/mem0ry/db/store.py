@@ -145,20 +145,13 @@ def get_context(
             )
         )
 
-    if context and project_id:
-        queries.append(
-            (
-                "SELECT * FROM memories WHERE scope = 'context' AND context = ? AND project_id = ? ORDER BY created_at DESC",
-                [context, project_id],
-            )
-        )
-    elif context:
-        queries.append(
-            (
-                "SELECT * FROM memories WHERE scope = 'context' AND context = ? ORDER BY created_at DESC",
-                [context],
-            )
-        )
+    if context:
+        params = [context]
+        sql = "SELECT * FROM memories WHERE scope = 'context' AND context = ?"
+        if project_id:
+            sql += " AND project_id = ?"
+            params.append(project_id)
+        queries.append((sql + " ORDER BY created_at DESC", params))
 
     if project_id:
         queries.append(
@@ -170,7 +163,7 @@ def get_context(
 
     queries.append(
         (
-            "SELECT * FROM memories WHERE scope = 'global' AND type != 'log' ORDER BY created_at DESC",
+            "SELECT * FROM memories WHERE scope = 'global' AND memory_type != 'log' ORDER BY created_at DESC",
             [],
         )
     )
