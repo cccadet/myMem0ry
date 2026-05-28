@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-05-28
+
+### Fixed
+
+- `save_memory` without `cwd`: `_resolve_cwd` now falls back to `Path.cwd()` instead of
+  returning `project_id=None`. Previously, memories saved with `scope="project"` but no
+  `cwd` argument would have `project_id=NULL`, causing the projects count in the dashboard
+  to show 0.
+- Warning log added when `scope` is `project` or `context` but `project_id` resolves to `None`,
+  making it easier to diagnose misconfigured agents.
+
 ## [0.14.4] - 2026-05-28
 
 ### Fixed
@@ -106,7 +117,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.4...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.5...HEAD
+[0.14.5]: https://github.com/cccadet/myMem0ry/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/cccadet/myMem0ry/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/cccadet/myMem0ry/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/cccadet/myMem0ry/compare/v0.14.1...v0.14.2
