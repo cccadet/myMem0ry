@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-05-28
+
+### Fixed
+
+- `mymem0ry hooks --config` now generates correct JSON format for Claude Code hooks
+  (wraps each command in `{"type": "command", "command": "..."}` array)
+
 ## [0.14.0] - 2026-05-28
 
 ### Added
@@ -72,7 +79,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.1...HEAD
+[0.14.1]: https://github.com/cccadet/myMem0ry/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/cccadet/myMem0ry/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/cccadet/myMem0ry/releases/tag/v0.13.0
 [0.12.2]: https://github.com/cccadet/myMem0ry/compare/v0.3.0...v0.12.2
