@@ -170,7 +170,7 @@ def get_context(
 
     queries.append(
         (
-            "SELECT * FROM memories WHERE scope = 'global' ORDER BY created_at DESC",
+            "SELECT * FROM memories WHERE scope = 'global' AND type != 'log' ORDER BY created_at DESC",
             [],
         )
     )
