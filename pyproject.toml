@@ -1,7 +1,7 @@
 [project]
 name = "mymem0ry"
 version = "0.12.2"
-description = "Personal memory search system with semantic query expansion"
+description = "Personal memory system for AI coding agents — offline, zero API keys, cross-agent handoffs, semantic search"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -9,14 +9,21 @@ authors = [
 ]
 requires-python = ">=3.11"
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+"Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Utilities",
+    "Typing :: Typed",
 ]
-keywords = ["memory", "mcp", "spacy", "semantic-search", "ai-agent"]
+keywords = ["memory", "mcp", "spacy", "semantic-search", "ai-agent", "claude-code", "opencode", "codex", "cross-agent", "handoff"]
 dependencies = [
     "python-dotenv>=1.0",
     "pydantic>=2.12.5",
@@ -30,6 +37,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/cccadet/myMem0ry"
+Documentation = "https://github.com/cccadet/myMem0ry#readme"
+Repository = "https://github.com/cccadet/myMem0ry"
 Issues = "https://github.com/cccadet/myMem0ry/issues"
 Changelog = "https://github.com/cccadet/myMem0ry/blob/main/CHANGELOG.md"
 

@@ -1,26 +1,35 @@
+<div align="center">
+
 # myMem0ry
 
-> Personal memory for AI coding agents. Offline. Zero API keys. Works with any agent.
+**Personal memory for AI coding agents. Offline. Zero API keys. Works with any agent.**
 
 [![CI](https://github.com/cccadet/myMem0ry/actions/workflows/ci.yml/badge.svg)](https://github.com/cccadet/myMem0ry/actions/workflows/ci.yml)
+[![Publish](https://github.com/cccadet/myMem0ry/actions/workflows/publish.yml/badge.svg)](https://github.com/cccadet/myMem0ry/actions/workflows/publish.yml)
+[![PyPI](https://img.shields.io/pypi/v/mymem0ry?color=blue)](https://pypi.org/project/mymem0ry/)
+[![Python](https://img.shields.io/pypi/pyversions/mymem0ry)](https://pypi.org/project/mymem0ry/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## What it does
+</div>
+
+---
 
 Persistent memory that any AI agent can read and write. Quit Claude Code mid-task, open Codex in the same directory — it picks up where you left off.
 
-- **Scoped memory**: session → context (branch) → project → global
-- **Cross-agent handoffs**: typed handoff records with summary, open questions, next steps
-- **Auto-resolves context** from `cwd` (git branch, remote URL)
-- **Semantic search**: spaCy + sqlite-vec + BM25/FTS5/hybrid RRF fusion
-- **Lifecycle hooks**: fire-and-forget HTTP endpoint, payload sanitization, immutable observations
-- **Retention**: salience-based decay with tiers (working/procedural/semantic), pin/unpin
-- **Auth**: Bearer token, host allowlisting, CORS (for HTTP transport)
-- **Web UI**: dark mode read-only viewer (dashboard, projects, search, audit log)
-- **Backup/restore**: tarball CLI commands
+## Features
+
+- **Scoped memory** — session → context (branch) → project → global, resolved automatically from `cwd`
+- **Cross-agent handoffs** — typed records with summary, open questions, next steps
+- **Semantic search** — spaCy + sqlite-vec + BM25/FTS5/hybrid RRF fusion
+- **Lifecycle hooks** — fire-and-forget HTTP endpoint, payload sanitization, immutable observations
+- **Zero LLM tokens for writes** — bulk writes (conversation archiving, logging) via hooks only
+- **Retention** — salience-based decay with tiers (working/procedural/semantic), pin/unpin
+- **Auth** — Bearer token, host allowlisting, CORS
+- **Web UI** — dark mode read-only viewer (dashboard, projects, search, audit log)
+- **Backup/restore** — tarball CLI commands
+- **Multi-agent** — Claude Code, OpenCode, Codex, Cursor, Gemini CLI, VS Code, Docker
 
 ## Install
-
-### Prerequisites
 
 ```bash
 pip install uv        # or: curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -33,38 +42,15 @@ For Portuguese: set `SPACY_MODEL=pt_core_news_lg` in `.env` before running `myme
 **Zero config**: after install, just add the MCP server + hooks to your agent config below.
 The HTTP server auto-starts when the MCP server runs — no separate `serve` command needed.
 
+## Agent Setup
+
 ### Claude Code
 
 ```bash
 claude mcp add --scope user mymem0ry -- mymem0ry-mcp
 ```
 
-### OpenCode
-
-Add to `~/.config/opencode/opencode.json` (global) or `./opencode.json` (project):
-
-```json
-{
-  "mcp": {
-    "mymem0ry": {
-      "type": "local",
-      "command": ["mymem0ry-mcp"],
-      "enabled": true
-    }
-  },
-  "hooks": {
-    "session-start": "curl -s -m 2 -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' -d '{\"kind\":\"session-start\",\"session_id\":\"'$OPENCODE_SESSION_ID'\",\"agent\":\"opencode\",\"cwd\":\"'$PWD'\"}' > /dev/null 2>&1",
-    "session-end": "curl -s -m 2 -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' -d '{\"kind\":\"session-end\",\"session_id\":\"'$OPENCODE_SESSION_ID'\",\"agent\":\"opencode\",\"cwd\":\"'$PWD'\"}' > /dev/null 2>&1"
-  }
-}
-```
-
-The hooks POST lifecycle events to `POST /hook` (fire-and-forget, 2s timeout).
-No manual server start needed — the HTTP server auto-starts when the MCP server runs (e.g., when your agent starts).
-
-### Claude Code
-
-MCP + hooks em `~/.claude/settings.json`:
+MCP + hooks in `~/.claude/settings.json`:
 
 ```json
 {
@@ -91,8 +77,25 @@ MCP + hooks em `~/.claude/settings.json`:
 }
 ```
 
-Os scripts de hook: `~/.local/share/mymem0ry/hooks/claude-code/session-start.sh` e `session-end.sh`.
-Eles recebem o payload completo no stdin (incluindo `messages` no session-end) e encaminham para `POST /hook`.
+### OpenCode
+
+Add to `~/.config/opencode/opencode.json` (global) or `./opencode.json` (project):
+
+```json
+{
+  "mcp": {
+    "mymem0ry": {
+      "type": "local",
+      "command": ["mymem0ry-mcp"],
+      "enabled": true
+    }
+  },
+  "hooks": {
+    "session-start": "curl -s -m 2 -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' -d '{\"kind\":\"session-start\",\"session_id\":\"'$OPENCODE_SESSION_ID'\",\"agent\":\"opencode\",\"cwd\":\"'$PWD'\"}' > /dev/null 2>&1",
+    "session-end": "curl -s -m 2 -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' -d '{\"kind\":\"session-end\",\"session_id\":\"'$OPENCODE_SESSION_ID'\",\"agent\":\"opencode\",\"cwd\":\"'$PWD'\"}' > /dev/null 2>&1"
+  }
+}
+```
 
 ### Codex CLI
 
@@ -123,19 +126,19 @@ docker compose -f docker/docker-compose.yml up -d
 curl http://127.0.0.1:49374/health
 ```
 
-For detailed per-agent instructions (manual config, HTTP mode): [docs/install.md](docs/install.md)
+For detailed per-agent instructions: [docs/install.md](docs/install.md)
 
-### Lifecycle Hooks (per-agent setup)
+## Lifecycle Hooks
 
-Lifecycle hooks POST to `POST /hook` on the myMem0ry HTTP server.
+Hooks POST lifecycle events to `POST /hook` on the myMem0ry HTTP server.
 The server auto-starts when the MCP server runs — no manual `serve` step needed.
 
-| Agent | Lifecycle hooks | How it works |
+| Agent | Hooks | How |
 |---|---|---|
-| **OpenCode** | ✅ Nativo | `hooks` em `opencode.json` com `$OPENCODE_SESSION_ID` (ver acima) |
-| **Claude Code** | ✅ Nativo | `hooks` em `~/.claude/settings.json` — scripts recebem payload completo no stdin, incluindo `messages` no session-end |
-| **Codex CLI** | ✅ Hook scripts | `codex hook add session-end ./hook-session-end.sh` |
-| **Genérico** | — | `curl -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' ...` |
+| **OpenCode** | Native | `hooks` in `opencode.json` with `$OPENCODE_SESSION_ID` |
+| **Claude Code** | Native | `hooks` in `~/.claude/settings.json` — scripts receive full payload via stdin |
+| **Codex CLI** | Hook scripts | `codex hook add session-end ./hook-session-end.sh` |
+| **Generic** | Manual | `curl -X POST http://127.0.0.1:49374/hook ...` |
 
 Hook payload fields:
 
@@ -143,13 +146,13 @@ Hook payload fields:
 |---|---|---|
 | `kind` | yes | `session-start`, `session-end`, `log`, `user-prompt`, `post-tool-use`, `pre-compact` |
 | `session_id` | yes | Unique session identifier (max 64 chars) |
-| `agent` | no | `opencode`, `claude-code`, `codex`, `manual`, `hook` (max 64 chars) |
-| `cwd` | no | Working directory for context resolution (max 512 chars) |
+| `agent` | no | `opencode`, `claude-code`, `codex`, `manual`, `hook` |
+| `cwd` | no | Working directory for context resolution |
 | `title` | no | Short label (max 500 chars) |
-| `body` | no | Content (max 10 000 chars) |
-| `messages` | no (session-end) | `[{"role": "user"\|"assistant", "content": "..."}]` — archived as .md |
+| `body` | no | Content (max 10,000 chars) |
+| `messages` | no | `[{"role": "user"|"assistant", "content": "..."}]` — archived as .md |
 
-All payloads are sanitized: secrets (API keys, tokens, Bearer) are redacted, home paths are stripped, and fields are truncated to max lengths.
+All payloads are sanitized: secrets redacted, home paths stripped, fields truncated.
 
 ## Configuration
 
@@ -167,85 +170,63 @@ All via environment variables (or `.env` file in the project root):
 | `MEM0RY_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host allowlist (DNS rebinding protection) |
 | `MEM0RY_CORS_ORIGINS` | _(empty)_ | CORS origins for web UI |
 
-### Custom storage location
-
 ```bash
+# Custom storage location
 export DB_PATH=/path/to/shared/memories.db
 export CONVERSATIONS_DIR=/path/to/shared/conversations
-```
 
-For Portuguese language support:
-
-```bash
+# Portuguese language support
 export SPACY_MODEL=pt_core_news_lg
-mymem0ry doctor       # auto-downloads the model
+mymem0ry doctor
 ```
 
-## Import conversations
+## Import Conversations
 
 myMem0ry auto-detects the format. Supports ChatGPT, Gemini, and Claude exports.
 
 ```bash
-# Auto-detect from default locations (data/openai, data/gemini, data/claude)
-mymem0ry split
+mymem0ry split                                    # Auto-detect
+mymem0ry split --source path/to/chatgpt-export    # Specific source
+mymem0ry split --source path/to/data --type claude-code  # Force parser
 
-# Specific source
-mymem0ry split --source path/to/chatgpt-export
-mymem0ry split --source path/to/gemini-takeout
-mymem0ry split --source path/to/claude-export
-
-# Force parser type
-mymem0ry split --source path/to/data --type openai
-mymem0ry split --source path/to/data --type gemini
-mymem0ry split --source path/to/data --type claude-code
-
-# Then build indexes and migrate to structured memory
-mymem0ry index
-mymem0ry migrate
+mymem0ry index                                    # Build indexes
+mymem0ry migrate                                  # Migrate to structured memory
 ```
 
-## CLI commands
+## CLI Commands
 
 ```bash
 # Context & search
-mymem0ry context --cwd .                    # Load context for current project
-mymem0ry save "Title" "Content" --scope project  # Save a memory
-mymem0ry log "message"                      # Quick session log
-mymem0ry search "query"                     # ripgrep search
-mymem0ry search "query" --backend hybrid --expand
-mymem0ry index                              # Build BM25 + FTS5 + vector indexes
-mymem0ry migrate --reprocess                # Reingest into latest schema
+mymem0ry context --cwd .                          # Load context for current project
+mymem0ry save "Title" "Content" --scope project   # Save a memory
+mymem0ry log "message"                            # Quick session log
+mymem0ry search "query"                           # ripgrep search
+mymem0ry search "query" --backend hybrid --expand # BM25+vector RRF fusion
 
 # Overview
-mymem0ry stats                              # Database overview
-mymem0ry projects                           # List projects with memories
-mymem0ry doctor                             # System health check
+mymem0ry stats                                    # Database overview
+mymem0ry projects                                 # List projects with memories
+mymem0ry doctor                                   # System health check
 
 # Retention
-mymem0ry decay --days 90 --dry-run          # Preview decay
-mymem0ry pin <memory_id>                    # Pin memory (exempt from decay)
-mymem0ry unpin <memory_id>                  # Unpin memory
-mymem0ry forget-sweep --dry-run             # Preview salience-based sweep
+mymem0ry decay --days 90 --dry-run                # Preview decay
+mymem0ry pin <memory_id>                          # Pin memory (exempt from decay)
+mymem0ry unpin <memory_id>
+mymem0ry forget-sweep --dry-run                   # Preview salience-based sweep
 
 # Handoffs
-mymem0ry handoff begin --summary "..."      # Create handoff for next agent
-mymem0ry handoff accept                     # Accept pending handoff
-mymem0ry handoff status                     # Check server status
+mymem0ry handoff begin --summary "..."            # Create handoff for next agent
+mymem0ry handoff accept                           # Accept pending handoff
+mymem0ry handoff status                           # Check server status
 
 # Server & backup
-mymem0ry serve                              # Start HTTP server (MCP + hooks + handoffs + web UI)
-mymem0ry serve --detach                     # Start in background (daemon mode)
-mymem0ry backup --to backup.tar.gz          # Backup DB + conversations
-mymem0ry restore --from backup.tar.gz       # Restore from backup
-
-# Other
-mymem0ry benchmark "query"                  # Compare search backends
-mymem0ry expand "token"                     # Semantically related tokens
-mymem0ry dataset                            # ChatML JSONL (legacy)
-mymem0ry observe session-start              # Send lifecycle observation
+mymem0ry serve                                    # Start HTTP server
+mymem0ry serve --detach                           # Start in background
+mymem0ry backup --to backup.tar.gz                # Backup DB + conversations
+mymem0ry restore --from backup.tar.gz             # Restore from backup
 ```
 
-## Memory scopes
+## Memory Scopes
 
 Resolved automatically from `cwd` — no manual configuration needed:
 
@@ -272,7 +253,7 @@ Resolved automatically from `cwd` — no manual configuration needed:
 | `memory_handoff_accept` | Accept pending handoff |
 | `memory_pin` | Pin a memory (exempt from decay) |
 | `memory_unpin` | Unpin a memory |
-| `memory_forget_sweep` | Sweep stale memories (preview or execute) |
+| `memory_forget_sweep` | Sweep stale memories |
 
 ### Hook writes (zero LLM tokens)
 
@@ -282,10 +263,6 @@ Resolved automatically from `cwd` — no manual configuration needed:
 | `log` | Quick session log (creates session-scoped memory) |
 | `session-start` | Records session start observation |
 | `user-prompt` / `post-tool-use` / `pre-compact` | Lifecycle observations |
-
-All writes go through `POST /hook` (fire-and-forget, 2s timeout). Payloads are sanitized (secrets redacted, paths stripped, fields truncated). The LLM never serializes conversations.
-
-The CLI `mymem0ry observe` can also send lifecycle events and supports `MEM0RY_TOKEN` auth.
 
 ## Web UI
 
@@ -297,7 +274,6 @@ When running in HTTP mode (`MCP_TRANSPORT=streamable-http`), a read-only web UI 
 - `/memory/{id}` — Single memory detail
 - `/search` — Full-text search with scope/type filters
 - `/audit` — Audit log of all mutations
-- `/api/memories` — JSON API endpoint
 
 ## Documentation
 
@@ -317,4 +293,4 @@ uv run ruff check .
 
 ## License
 
-MIT
+[MIT](LICENSE)
