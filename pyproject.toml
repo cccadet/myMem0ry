@@ -1,6 +1,6 @@
 [project]
 name = "mymem0ry"
-version = "0.13.0"
+version = "0.14.0"
 description = "Personal memory system for AI coding agents — offline, zero API keys, cross-agent handoffs, semantic search"
 readme = "README.md"
 license = "MIT"
@@ -54,6 +54,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mem0ry"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"hooks/" = "mem0ry/hooks/"
 
 [dependency-groups]
 dev = [

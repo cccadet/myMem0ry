@@ -38,13 +38,19 @@ Hooks run CLI commands directly — no HTTP server needed. They work with both s
 
 **Claude Code:**
 
-Add to `~/.claude/settings.json`:
+Run this to get the correct paths for your install:
+
+```bash
+mymem0ry hooks --config
+```
+
+Then add the printed snippet to `~/.claude/settings.json`. Example:
 
 ```json
 {
   "hooks": {
-    "session-start": [{"command": "/path/to/myMem0ry/hooks/claude-code/session-start.sh"}],
-    "session-end": [{"command": "/path/to/myMem0ry/hooks/claude-code/session-end.sh"}]
+    "SessionStart": [{"command": "/path/to/hooks/claude-code/session-start.sh"}],
+    "PostToolUse": [{"command": "/path/to/hooks/claude-code/mymem0ry-hook.sh PostToolUse"}]
   }
 }
 ```

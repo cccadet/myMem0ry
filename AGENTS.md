@@ -46,6 +46,8 @@ mymem0ry serve --detach                # Start in background (daemon mode)
 mymem0ry handoff begin --summary "..." # Create handoff for next agent
 mymem0ry handoff accept                # Accept pending handoff
 mymem0ry handoff status                # Check server status
+mymem0ry hooks --config              # Print settings.json snippet for current agent
+mymem0ry hooks --path                # Print hooks directory path
 mymem0ry observe session-start         # Send lifecycle observation (CLI fallback)
 
 # CLI commands used by hooks (legacy, pre-HTTP)

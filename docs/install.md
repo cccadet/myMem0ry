@@ -107,7 +107,16 @@ claude mcp add --scope user mymem0ry -- mymem0ry-mcp
   }
 ```
 
-**Hooks (optional, for auto-capture):** Add to `~/.claude/settings.json`:
+**Hooks (optional, for auto-capture):** Use the new command to get the correct path:
+
+```bash
+mymem0ry hooks --config        # Print settings.json snippet with correct paths
+mymem0ry hooks --path          # Just print the hooks directory
+```
+
+Then copy the snippet into `~/.claude/settings.json`.
+
+**Or manual config** — add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -121,6 +130,8 @@ claude mcp add --scope user mymem0ry -- mymem0ry-mcp
   }
 }
 ```
+
+> Replace `/path/to/myMem0ry/` with the output of `mymem0ry hooks --path`.
 
 ### OpenCode
 

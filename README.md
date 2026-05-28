@@ -52,6 +52,14 @@ claude mcp add --scope user mymem0ry -- mymem0ry-mcp
 
 MCP + hooks in `~/.claude/settings.json`:
 
+First get the correct hooks paths:
+
+```bash
+mymem0ry hooks --config
+```
+
+Then copy the printed snippet into your `settings.json`. Example result:
+
 ```json
 {
   "mcpServers": {
@@ -64,13 +72,13 @@ MCP + hooks in `~/.claude/settings.json`:
     "SessionStart": [
       {
         "matcher": "",
-        "hooks": [{"type": "command", "command": "~/.local/share/mymem0ry/hooks/claude-code/session-start.sh"}]
+        "hooks": [{"type": "command", "command": "/home/user/.local/share/mymem0ry/hooks/claude-code/session-start.sh"}]
       }
     ],
     "SessionEnd": [
       {
         "matcher": "",
-        "hooks": [{"type": "command", "command": "~/.local/share/mymem0ry/hooks/claude-code/session-end.sh"}]
+        "hooks": [{"type": "command", "command": "/home/user/.local/share/mymem0ry/hooks/claude-code/session-end.sh"}]
       }
     ]
   }
@@ -218,6 +226,11 @@ mymem0ry forget-sweep --dry-run                   # Preview salience-based sweep
 mymem0ry handoff begin --summary "..."            # Create handoff for next agent
 mymem0ry handoff accept                           # Accept pending handoff
 mymem0ry handoff status                           # Check server status
+
+# Hooks
+mymem0ry hooks --config                       # Print settings.json snippet
+mymem0ry hooks --path                         # Print hooks directory path
+mymem0ry hooks --install                      # Install hooks for detected agent
 
 # Server & backup
 mymem0ry serve                                    # Start HTTP server
