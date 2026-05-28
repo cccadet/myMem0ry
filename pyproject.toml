@@ -1,6 +1,6 @@
 [project]
 name = "mymem0ry"
-version = "0.12.1"
+version = "0.12.2"
 description = "Personal memory search system with semantic query expansion"
 readme = "README.md"
 license = "MIT"

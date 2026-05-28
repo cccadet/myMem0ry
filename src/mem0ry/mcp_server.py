@@ -548,6 +548,8 @@ def main():
 
     if transport == "stdio":
         ensure_server()
+        mcp.run(transport="stdio")
+        return
     elif transport in ("sse", "streamable-http"):
         allowed = parse_allowed_hosts(config.allowed_hosts)
 
