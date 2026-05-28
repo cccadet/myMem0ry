@@ -122,10 +122,15 @@ Then copy the snippet into `~/.claude/settings.json`.
 {
   "hooks": {
     "SessionStart": [{
-      "command": "/path/to/myMem0ry/hooks/claude-code/session-start.sh"
+      "hooks": [
+        { "type": "command", "command": "/path/to/myMem0ry/hooks/claude-code/session-start.sh" }
+      ]
     }],
     "PostToolUse": [{
-      "command": "/path/to/myMem0ry/hooks/claude-code/mymem0ry-hook.sh PostToolUse"
+      "matcher": "",
+      "hooks": [
+        { "type": "command", "command": "/path/to/myMem0ry/hooks/claude-code/mymem0ry-hook.sh PostToolUse" }
+      ]
     }]
   }
 }

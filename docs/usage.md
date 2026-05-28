@@ -49,8 +49,8 @@ Then add the printed snippet to `~/.claude/settings.json`. Example:
 ```json
 {
   "hooks": {
-    "SessionStart": [{"command": "/path/to/hooks/claude-code/session-start.sh"}],
-    "PostToolUse": [{"command": "/path/to/hooks/claude-code/mymem0ry-hook.sh PostToolUse"}]
+    "SessionStart": [{"hooks": [{"type": "command", "command": "/path/to/hooks/claude-code/session-start.sh"}]}],
+    "PostToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "/path/to/hooks/claude-code/mymem0ry-hook.sh PostToolUse"}]}]
   }
 }
 ```
