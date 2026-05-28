@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-05-28
+
+### Fixed
+
+- SQLite busy timeout added (15s) to prevent lock contention between concurrent
+  hooks, MCP tools, and web UI requests. Previously, the default 5s timeout could
+  cause `save_memory` and other writes to hang indefinitely under concurrent access.
+
 ## [0.14.2] - 2026-05-28
 
 ### Fixed
@@ -86,7 +94,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.3...HEAD
+[0.14.3]: https://github.com/cccadet/myMem0ry/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/cccadet/myMem0ry/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/cccadet/myMem0ry/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/cccadet/myMem0ry/compare/v0.13.0...v0.14.0

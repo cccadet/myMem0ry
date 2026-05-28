@@ -15,7 +15,8 @@ def get_connection(db_path: Path) -> sqlite3.Connection:
     WAL journal mode for concurrent read/write support.
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=15)
+    conn.execute("PRAGMA busy_timeout=15000")
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.enable_load_extension(True)
