@@ -146,18 +146,21 @@ def _spawn_detached(cmd: list[str], env: dict[str, str]) -> subprocess.Popen[byt
         kwargs["start_new_session"] = True
         return subprocess.Popen(cmd, **kwargs)
 
-    DETACHED_PROCESS = 0x00000008
+    # CREATE_NO_WINDOW runs the console-subsystem python with no visible window
+    # (DETACHED_PROCESS would pop a black console window). It's mutually exclusive
+    # with DETACHED_PROCESS, so we rely on CREATE_BREAKAWAY_FROM_JOB to escape Claude
+    # Code's kill-on-close job and on having no inherited console to be signalled.
+    CREATE_NO_WINDOW = 0x08000000
     CREATE_NEW_PROCESS_GROUP = 0x00000200
     CREATE_BREAKAWAY_FROM_JOB = 0x01000000
-    base_flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    base_flags = CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
     try:
         return subprocess.Popen(
             cmd, creationflags=base_flags | CREATE_BREAKAWAY_FROM_JOB, **kwargs
         )
     except OSError:
-        # Job doesn't allow breakaway (ERROR_ACCESS_DENIED). Detaching the console
-        # and process group is the best we can do; the server still gets its own
-        # group even if it stays in the job.
+        # Job doesn't allow breakaway (ERROR_ACCESS_DENIED). No-window + own group is
+        # the best we can do; the server may stay in the job but won't show a window.
         return subprocess.Popen(cmd, creationflags=base_flags, **kwargs)
 
 

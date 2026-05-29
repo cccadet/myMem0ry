@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.15.3] - 2026-05-29
+
+### Fixed
+
+- **Black console window on Windows.** v0.15.2 spawned the server with
+  `DETACHED_PROCESS`, which pops a visible console window for the console-subsystem
+  Python. Switched to `CREATE_NO_WINDOW` (mutually exclusive with `DETACHED_PROCESS`),
+  so the server runs hidden; survival across Claude Code's shutdown is still ensured by
+  `CREATE_BREAKAWAY_FROM_JOB` plus having no inherited console to be signalled.
+
+### Added
+
+- `.gitattributes` forcing `*.sh` to LF. With `core.autocrlf=true` a Windows checkout
+  rewrote the shell hooks to CRLF, and the stray `\r` was carried into resolved paths
+  (it briefly broke the spool path during development). Hooks now stay LF everywhere.
+
 ## [0.15.2] - 2026-05-29
 
 ### Fixed
@@ -213,7 +229,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.15.2...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.15.3...HEAD
+[0.15.3]: https://github.com/cccadet/myMem0ry/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/cccadet/myMem0ry/compare/v0.15.1...v0.15.2
 [0.14.5]: https://github.com/cccadet/myMem0ry/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/cccadet/myMem0ry/compare/v0.14.3...v0.14.4
