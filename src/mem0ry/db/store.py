@@ -9,6 +9,7 @@ from .store_memories import (  # noqa: F401
     stats,
     end_session,
     search_memories,
+    get_memory_by_id,
     list_projects,
     touch_memory,
     track_reads,

@@ -52,14 +52,33 @@ def resolve_context(cwd: Path) -> str | None:
     return _git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
 
 
+def stable_project_id(cwd: Path) -> str:
+    """Return a project identifier that is NEVER None for a real directory.
+
+    Prefers the git remote URL (stable across clones/machines). Falls back to a
+    path-based id (`path:<abspath>`) so repos without a remote — or plain
+    directories — still get a distinct, non-colliding scope instead of all
+    collapsing onto `None`.
+    """
+    remote = resolve_project_id(cwd)
+    if remote:
+        return remote
+    return f"path:{resolve_project_path(cwd)}"
+
+
 def resolve_full_context(cwd: Path, session_id: str | None = None) -> dict[str, Any]:
     """Resolve all context dimensions from a working directory.
 
     Returns a dict with project_id, project_path, context, session_id.
+
+    `project_id` is the raw git remote (or None outside a repo) — kept for
+    backward compatibility. Use `stable_project_id` (or the `stable_project_id`
+    key below) when you need a non-null scope key for storage/lookup.
     """
     return {
         "project_id": resolve_project_id(cwd),
         "project_path": resolve_project_path(cwd),
         "context": resolve_context(cwd),
         "session_id": session_id,
+        "stable_project_id": stable_project_id(cwd),
     }

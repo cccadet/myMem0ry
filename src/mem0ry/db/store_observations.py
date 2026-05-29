@@ -48,18 +48,6 @@ def create_observation(
     finally:
         conn.close()
 
-    try:
-        record_audit(
-            db_path,
-            action="create_observation",
-            target_type="observation",
-            target_id=obs_id,
-            agent=agent,
-            details=f"kind={kind}",
-        )
-    except Exception:
-        pass
-
     return obs_id
 
 

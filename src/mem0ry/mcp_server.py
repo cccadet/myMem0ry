@@ -52,6 +52,11 @@ def _conversations_dir() -> Path:
     return Path(config.conversations_dir)
 
 
+def _memories_dir() -> Path:
+    config = MemoryConfig()
+    return Path(config.memories_dir)
+
+
 def _db_path() -> Path:
     config = MemoryConfig()
     return Path(config.db_path)
@@ -105,9 +110,15 @@ def _auto_session_id() -> str:
 
 
 def _resolve_cwd(cwd: str | None) -> dict[str, Any]:
-    """Resolve full git context from cwd string. Falls back to os.getcwd()."""
+    """Resolve full git context from cwd string. Falls back to os.getcwd().
+
+    Uses the stable (never-None) project id for scoping so repos without a git
+    remote don't all collapse onto a single `None` bucket.
+    """
     path = Path(cwd) if cwd else Path.cwd()
-    return resolve_full_context(path, session_id=_auto_session_id())
+    resolved = resolve_full_context(path, session_id=_auto_session_id())
+    resolved["project_id"] = resolved["stable_project_id"]
+    return resolved
 
 
 # ─── Tools ────────────────────────────────────────────────────────────────────
@@ -159,6 +170,13 @@ def save_memory(
 
     mem_date = _validate_date(dt) if dt else date.today().isoformat()
 
+    # Export a human-readable .md alongside the DB row. Curated memories live in
+    # their own dir (not mixed with archived conversation dumps) so a general
+    # conversation search never buries them.
+    mem_dir = _memories_dir()
+    file_path = _write_md(mem_dir, mem_date, title, content)
+    rel = str(file_path.relative_to(mem_dir))
+
     mem_id = create_memory(
         db_path=_db_path(),
         content=content,
@@ -172,13 +190,10 @@ def save_memory(
         source=source,
         tags=tags,
         title=title,
+        file_path=rel,
     )
 
-    conv_dir = _conversations_dir()
-    file_path = _write_md(conv_dir, mem_date, title, content)
-
-    rel = file_path.relative_to(conv_dir)
-    return f"Saved: {rel} (id={mem_id}, scope={scope}, type={memory_type})"
+    return f"Saved id={mem_id} (scope={scope}, type={memory_type}). Pin with memory_pin('{mem_id}')."
 
 
 @mcp.tool()
@@ -215,24 +230,84 @@ def get_context(
 def search_memory(
     query: str,
     top_k: int = 5,
-    backend: str = "ripgrep",
     scope: str | None = None,
     cwd: str = "",
     memory_type: str | None = None,
     tags: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Search memories with semantic query expansion.
+    """Search your CURATED memories (facts, decisions, patterns, logs).
 
-    Returns previews (path, title, first lines). Use read_memory to get full content.
+    Scope-aware and metadata-rich: results are filtered to the current project +
+    global by default, and respect the scope/memory_type/tags filters. Each result
+    includes the `id` — pass it to memory_pin / read_memory.
+
+    For free-form search across full archived CONVERSATIONS, use
+    search_conversations instead.
 
     Args:
-        query: Natural language search query.
+        query: Natural language search query (terms are matched against title + content).
         top_k: Maximum number of results. Defaults to 5.
-        backend: Search backend — "ripgrep", "bm25", "hybrid". Defaults to "ripgrep".
         scope: Optional scope filter — "global", "project", "context", "session".
-        cwd: Current working directory (used for context resolution).
+        cwd: Current working directory — scopes results to this project + global.
         memory_type: Optional memory type filter — "fact", "decision", "pattern", "log".
         tags: Optional list of tags to filter by.
+    """
+    from .db.store import search_memories
+
+    db = _db_path()
+    if not db.exists():
+        return []
+
+    resolved = _resolve_cwd(cwd)
+
+    rows = search_memories(
+        db,
+        query=query,
+        scope=scope,
+        project_id=resolved["project_id"],
+        context=resolved["context"],
+        memory_type=memory_type,
+        tags=tags,
+        top_k=top_k,
+    )
+
+    results: list[dict[str, Any]] = []
+    for r in rows:
+        content = r.get("content") or ""
+        preview = content[:_PREVIEW_MAX_CHARS]
+        if len(content) > _PREVIEW_MAX_CHARS:
+            preview += "..."
+        results.append(
+            {
+                "id": r["id"],
+                "title": r.get("title") or "",
+                "scope": r.get("scope"),
+                "memory_type": r.get("memory_type"),
+                "preview": preview,
+                "created_at": r.get("created_at"),
+                "pinned": bool(r.get("pinned")),
+            }
+        )
+
+    return results
+
+
+@mcp.tool()
+def search_conversations(
+    query: str,
+    top_k: int = 5,
+    backend: str = "ripgrep",
+) -> list[dict[str, Any]]:
+    """General full-text/semantic search across archived CONVERSATIONS.
+
+    This is the "broad sweep" over full session transcripts (saved at session end),
+    not the curated-memory store. Returns previews with a `path`; pass it to
+    read_memory to fetch the full transcript.
+
+    Args:
+        query: Natural language search query (expanded with semantically similar terms).
+        top_k: Maximum number of results. Defaults to 5.
+        backend: Search backend — "ripgrep", "bm25", "hybrid". Defaults to "ripgrep".
     """
     from .conversations.spacy_expand import expand_query_spacy
     from .conversations.search import search as rg_search
@@ -242,8 +317,13 @@ def search_memory(
         return []
 
     config = MemoryConfig()
-    expander = _get_expander()
-    effective_query = expand_query_spacy(query, expander, top_k=config.expand_top_k)
+    effective_query = query
+    try:
+        expander = _get_expander()
+        effective_query = expand_query_spacy(query, expander, top_k=config.expand_top_k)
+    except Exception:
+        # spaCy model not installed / failed to load — degrade to raw query.
+        logger.warning("query expansion unavailable; searching with raw query")
 
     if backend == "hybrid":
         from .conversations.embeddings import SpacyEncoder
@@ -271,34 +351,51 @@ def search_memory(
     results: list[dict[str, Any]] = []
     for p in paths:
         rel = str(p.relative_to(conv_dir))
-        title = p.stem
-        preview = _preview_text(p)
-        results.append({"path": rel, "title": title, "preview": preview})
+        results.append({"path": rel, "title": p.stem, "preview": _preview_text(p)})
 
     return results
 
 
-@mcp.tool()
-def read_memory(path: str) -> dict[str, Any]:
-    """Read the full content of a memory file returned by search_memory.
+def _looks_like_path(ref: str) -> bool:
+    """A search_conversations result is a path; a search_memory result is an id."""
+    return ref.endswith(".md") or "/" in ref or "\\" in ref
 
-    search_memory returns previews only; call this with the `path` field from a
-    result to fetch the complete text. Useful when an agent picking up a handoff
-    needs the full record, not just the preview.
+
+@mcp.tool()
+def read_memory(ref: str) -> dict[str, Any]:
+    """Read the full content of a search result.
+
+    Accepts either:
+    - a memory `id` (from search_memory) → returns the stored memory, or
+    - a conversation `path` (from search_conversations) → returns the archived .md.
 
     Args:
-        path: Path relative to the conversations directory (as returned by search_memory).
+        ref: A memory id or a conversation path (relative to the conversations dir).
     """
-    conv_dir = _conversations_dir()
-    if not conv_dir.exists():
-        raise ValueError("No conversations directory yet — nothing to read.")
-    file_path = _resolve_within(conv_dir, *Path(path).parts)
-    if not file_path.is_file():
-        raise ValueError(f"Memory not found: '{path}'")
+    if _looks_like_path(ref):
+        conv_dir = _conversations_dir()
+        if not conv_dir.exists():
+            raise ValueError("No conversations directory yet — nothing to read.")
+        file_path = _resolve_within(conv_dir, *Path(ref).parts)
+        if not file_path.is_file():
+            raise ValueError(f"Conversation not found: '{ref}'")
+        return {
+            "path": ref,
+            "title": file_path.stem,
+            "content": file_path.read_text(encoding="utf-8"),
+        }
+
+    from .db.store import get_memory_by_id
+
+    mem = get_memory_by_id(_db_path(), ref)
+    if not mem:
+        raise ValueError(f"Memory not found: '{ref}'")
     return {
-        "path": path,
-        "title": file_path.stem,
-        "content": file_path.read_text(encoding="utf-8"),
+        "id": mem["id"],
+        "title": mem.get("title") or "",
+        "scope": mem.get("scope"),
+        "memory_type": mem.get("memory_type"),
+        "content": mem.get("content") or "",
     }
 
 
@@ -342,22 +439,23 @@ def memory_handoff_begin(
 def memory_handoff_accept(
     cwd: str = "",
 ) -> dict[str, Any] | None:
-    """Fetch + ack the latest open handoff for this project.
+    """Peek at the latest open handoff for this project (non-destructive).
 
-    Called at session start to pick up where the previous agent left off.
-    Returns the handoff dict with summary, open_questions, next_steps,
-    or None if no pending handoff.
+    The SessionStart hook already fetches and acknowledges the pending handoff and
+    injects it into the first prompt, so you normally don't need this. Call it only
+    to re-read the handoff mid-session — it does NOT consume/ack it, so the record
+    stays available. Returns the handoff dict (summary, open_questions, next_steps)
+    or None if there is no pending handoff.
 
     Args:
         cwd: Current working directory (used to match project).
     """
-    from .db.store import accept_handoff
+    from .db.store import pending_handoff
 
     resolved = _resolve_cwd(cwd)
-    return accept_handoff(
+    return pending_handoff(
         _db_path(),
         project_id=resolved["project_id"],
-        accepted_by="mcp-client",
     )
 
 
@@ -409,7 +507,9 @@ def memory_forget_sweep(execute: bool = False) -> dict[str, Any]:
     """
     from .db.retention import forget_sweep
 
-    result: dict[str, Any] = forget_sweep(_db_path(), dry_run=not execute)
+    result: dict[str, Any] = forget_sweep(
+        _db_path(), dry_run=not execute, memories_dir=_memories_dir()
+    )
     return result
 
 
@@ -434,14 +534,13 @@ def memory_stats() -> dict[str, Any]:
     return _stats(db)
 
 
-def _can_import_version() -> bool:
+def _version() -> str:
     try:
         from importlib.metadata import version
 
-        version("mymem0ry")
-        return True
+        return version("mymem0ry")
     except Exception:
-        return False
+        return "unknown"
 
 
 
@@ -458,7 +557,7 @@ async def health_endpoint(request: Any) -> Any:
 
     resp: dict[str, Any] = {
         "status": "ok",
-        "version": "0.7.0",
+        "version": _version(),
         "uptime_seconds": round(uptime, 1),
         "db_exists": db.exists(),
     }
@@ -521,8 +620,9 @@ async def handoff_accept_endpoint(request: Any) -> Any:
     cwd = request.query_params.get("cwd", "")
     project_id = None
     if cwd:
-        resolved = resolve_full_context(Path(cwd))
-        project_id = resolved.get("project_id")
+        from .utils.git_context import stable_project_id
+
+        project_id = stable_project_id(Path(cwd))
 
     ho = accept_handoff(
         _db_path(),
@@ -536,6 +636,50 @@ async def handoff_accept_endpoint(request: Any) -> Any:
     return JSONResponse(ho)
 
 
+@mcp.custom_route("/context", methods=["GET"])
+async def context_endpoint(request: Any) -> Any:
+    """HTTP endpoint for the SessionStart hook to fetch starting context.
+
+    Lets the hook inject relevant memories into the first prompt for free (no LLM
+    tokens), the same way it injects the pending handoff.
+    """
+    from starlette.responses import JSONResponse
+
+    from .db.store import get_context as _get_ctx
+    from .utils.git_context import resolve_full_context, stable_project_id
+
+    db = _db_path()
+    if not db.exists():
+        return JSONResponse([])
+
+    cwd = request.query_params.get("cwd", "")
+    try:
+        top_k = int(request.query_params.get("top_k", "5"))
+    except ValueError:
+        top_k = 5
+
+    if cwd:
+        resolved = resolve_full_context(Path(cwd))
+        project_id = stable_project_id(Path(cwd))
+        context = resolved.get("context")
+    else:
+        project_id = None
+        context = None
+
+    rows = _get_ctx(db, project_id=project_id, context=context, top_k=top_k)
+    return JSONResponse(
+        [
+            {
+                "scope": r.get("scope"),
+                "memory_type": r.get("memory_type"),
+                "title": r.get("title") or "",
+                "content": (r.get("content") or "")[:300],
+            }
+            for r in rows
+        ]
+    )
+
+
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
 
@@ -546,23 +690,29 @@ def auto_save_instructions() -> str:
     Use this prompt at the start of every conversation.
     """
     return (
-        "myMem0ry Memory Protocol (read-only tools + hook-based writes):\n"
+        "myMem0ry Memory Protocol:\n"
         "\n"
         "## Session Start\n"
-        "1. Call get_context(cwd=<cwd>) to load relevant memories.\n"
+        "The SessionStart hook auto-injects the pending handoff and relevant context\n"
+        "into your first prompt (zero tokens) — read it. Call get_context(cwd=<cwd>)\n"
+        "only if you need more than what was injected.\n"
         "\n"
         "## During Session\n"
-        "2. Save important info with save_memory:\n"
+        "Save what's worth remembering with save_memory (returns an id):\n"
         "   - Decisions → save_memory(scope='project', cwd=<cwd>, memory_type='decision')\n"
         "   - Facts → save_memory(scope='global', memory_type='fact')\n"
         "   - Patterns → save_memory(scope='global', memory_type='pattern')\n"
+        "Pin the important ones with memory_pin(<id>) so they survive retention.\n"
         "\n"
         "## Session End\n"
-        "3. Call memory_handoff_begin(summary='...', cwd=<cwd>) to hand off to next agent.\n"
-        "   Conversation archiving is handled automatically by hooks (zero tokens).\n"
+        "Call memory_handoff_begin(summary='...', cwd=<cwd>) to hand off to the next\n"
+        "agent. Conversation archiving + a fallback handoff are automatic (zero tokens),\n"
+        "but an explicit summary is always better.\n"
         "\n"
         "## Search\n"
-        "4. Use search_memory(query='...', cwd=<cwd>) to find past memories.\n"
+        "   - search_memory(query='...', cwd=<cwd>) → your curated memories (scoped, has ids).\n"
+        "   - search_conversations(query='...') → broad search across archived transcripts.\n"
+        "   - read_memory(<id-or-path>) → full content of any result.\n"
     )
 
 

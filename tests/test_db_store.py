@@ -266,6 +266,38 @@ def test_search_memories_by_context(db: Path) -> None:
     assert len(results) == 2
 
 
+def test_search_memories_by_query_text(db: Path) -> None:
+    create_memory(db, content="how to configure the auth token", scope="global", title="A")
+    create_memory(db, content="database connection pooling tips", scope="global", title="B")
+
+    results = search_memories(db, query="auth token")
+    assert len(results) == 1
+    assert results[0]["title"] == "A"
+
+
+def test_search_memories_excludes_deleted(db: Path) -> None:
+    from mem0ry.db.store import delete_memory
+
+    mem_id = create_memory(db, content="soon gone", scope="global", title="Gone")
+    create_memory(db, content="stays here", scope="global", title="Stay")
+    delete_memory(db, mem_id)
+
+    results = search_memories(db, scope="global")
+    titles = {r["title"] for r in results}
+    assert "Gone" not in titles
+    assert "Stay" in titles
+
+
+def test_get_memory_by_id(db: Path) -> None:
+    from mem0ry.db.store import get_memory_by_id
+
+    mem_id = create_memory(db, content="find me", scope="global", title="Findable")
+    mem = get_memory_by_id(db, mem_id)
+    assert mem is not None
+    assert mem["content"] == "find me"
+    assert get_memory_by_id(db, "nonexistent") is None
+
+
 def test_list_projects(db: Path) -> None:
     create_memory(
         db,
@@ -396,3 +428,68 @@ def test_decay_preserves_non_session_logs(db: Path) -> None:
 
     result = forget_sweep(db, dry_run=True)
     assert result["soft_count"] == 0
+
+
+def test_forget_sweep_purges_md_on_hard_delete(db: Path, tmp_path: Path) -> None:
+    from mem0ry.db.retention import forget_sweep
+
+    memories_dir = tmp_path / "memories"
+    rel = "2026-05-29/deadbeef0001.md"
+    md_file = memories_dir / rel
+    md_file.parent.mkdir(parents=True, exist_ok=True)
+    md_file.write_text("# Old\n> id: deadbeef0001\n\nstale", encoding="utf-8")
+
+    mem_id = create_memory(
+        db, content="stale", scope="global", memory_type="log",
+        title="Old", file_path=rel,
+    )
+
+    # Soft-deleted with an already-expired grace → eligible for hard delete.
+    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    conn = get_connection(db)
+    conn.execute(
+        "UPDATE memories SET deleted_at = ?, grace_until = ? WHERE id = ?",
+        (past, past, mem_id),
+    )
+    conn.commit()
+    conn.close()
+
+    result = forget_sweep(db, dry_run=False, memories_dir=memories_dir)
+
+    assert mem_id in result["hard_deleted"]
+    assert result["files_removed_count"] == 1
+    assert rel in result["files_removed"]
+    assert not md_file.exists()
+
+
+def test_forget_sweep_keeps_md_during_grace(db: Path, tmp_path: Path) -> None:
+    """Soft-deleted but still inside the grace window → the .md must survive."""
+    from mem0ry.db.retention import forget_sweep
+
+    memories_dir = tmp_path / "memories"
+    rel = "2026-05-29/cafe00000002.md"
+    md_file = memories_dir / rel
+    md_file.parent.mkdir(parents=True, exist_ok=True)
+    md_file.write_text("# Keep\n", encoding="utf-8")
+
+    mem_id = create_memory(
+        db, content="keep", scope="global", memory_type="log",
+        title="Keep", file_path=rel,
+    )
+
+    now = datetime.now(timezone.utc)
+    deleted = (now - timedelta(days=1)).isoformat()
+    future_grace = (now + timedelta(days=6)).isoformat()
+    conn = get_connection(db)
+    conn.execute(
+        "UPDATE memories SET deleted_at = ?, grace_until = ? WHERE id = ?",
+        (deleted, future_grace, mem_id),
+    )
+    conn.commit()
+    conn.close()
+
+    result = forget_sweep(db, dry_run=False, memories_dir=memories_dir)
+
+    assert mem_id not in result["hard_deleted"]
+    assert result["files_removed_count"] == 0
+    assert md_file.exists()

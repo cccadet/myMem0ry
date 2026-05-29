@@ -112,19 +112,44 @@ def unpin_memory(db_path: Path, memory_id: str) -> bool:
     return affected > 0
 
 
+def _purge_memory_files(memories_dir: Path, rel_paths: list[str]) -> list[str]:
+    """Unlink exported .md files of hard-deleted memories.
+
+    Containment guard: only removes paths that resolve inside ``memories_dir``.
+    Missing files and OS errors are ignored — the DB row is already gone, so a
+    failed unlink just leaves a harmless orphan rather than breaking the sweep.
+    """
+    removed: list[str] = []
+    base = memories_dir.resolve()
+    for rel in rel_paths:
+        try:
+            target = (memories_dir / rel).resolve()
+            if base != target and base not in target.parents:
+                continue
+            if target.is_file():
+                target.unlink()
+                removed.append(rel)
+        except OSError:
+            continue
+    return removed
+
+
 def forget_sweep(
-    db_path: Path, dry_run: bool = False
+    db_path: Path, dry_run: bool = False, memories_dir: Path | None = None
 ) -> dict[str, Any]:
     conn = get_connection(db_path)
     try:
         init_schema(conn)
 
         hard_delete_ids: list[str] = []
+        hard_delete_files: list[str] = []
         for row in conn.execute(
-            "SELECT id FROM memories WHERE deleted_at IS NOT NULL AND grace_until < ?",
+            "SELECT id, file_path FROM memories WHERE deleted_at IS NOT NULL AND grace_until < ?",
             (_now_iso(),),
         ).fetchall():
             hard_delete_ids.append(row["id"])
+            if row["file_path"]:
+                hard_delete_files.append(row["file_path"])
 
         if not dry_run and hard_delete_ids:
             placeholders = ",".join("?" for _ in hard_delete_ids)
@@ -188,11 +213,19 @@ def forget_sweep(
     finally:
         conn.close()
 
+    # Purge exported .md files only on hard delete (after the 7-day grace) — a
+    # soft-deleted memory is still recoverable, so its .md must survive grace.
+    removed_files: list[str] = []
+    if not dry_run and memories_dir is not None and hard_delete_files:
+        removed_files = _purge_memory_files(Path(memories_dir), hard_delete_files)
+
     return {
         "soft_deleted": to_soft_delete,
         "hard_deleted": hard_delete_ids,
         "soft_count": len(to_soft_delete),
         "hard_count": len(hard_delete_ids),
+        "files_removed": removed_files,
+        "files_removed_count": len(removed_files),
     }
 
 

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+_FILE_RE = re.compile(r"file:\s*([^\s;]+)")
+_ERROR_RE = re.compile(r"error:\s*(.+?)(?:;|$)")
 
 from .connection import get_connection
 from .schema import init_schema
@@ -117,8 +121,6 @@ def accept_handoff(
 
     ho["open_questions"] = json.loads(ho.get("open_questions") or "[]")
     ho["next_steps"] = json.loads(ho.get("next_steps") or "[]")
-    ho["open_questions"] = json.loads(ho.get("open_questions") or "[]")
-    ho["next_steps"] = json.loads(ho.get("next_steps") or "[]")
 
     try:
         record_audit(
@@ -166,7 +168,63 @@ def pending_handoff(
     return ho
 
 
-def auto_handoff_from_session(db_path: Path, session_id: str, agent: str) -> str | None:
+def _build_session_summary(
+    observations: list[dict[str, Any]],
+    user_prompts: list[str] | None,
+) -> str:
+    """Build a high-signal handoff summary.
+
+    Instead of dumping every tool call, we surface what actually helps the next
+    agent: what the user asked for, which files were touched, and any errors hit.
+    `observations` arrives newest-first; we read them chronologically.
+    """
+    chronological = list(reversed(observations))
+
+    files: list[str] = []
+    errors: list[str] = []
+    obs_prompts: list[str] = []
+    for obs in chronological:
+        body = obs.get("body") or ""
+        if obs.get("kind") == "user-prompt" and body.strip():
+            obs_prompts.append(body.strip())
+        for m in _FILE_RE.findall(body):
+            if m not in files:
+                files.append(m)
+        for m in _ERROR_RE.findall(body):
+            err = m.strip()
+            if err and err not in errors:
+                errors.append(err)
+
+    sections: list[str] = []
+
+    # Prompts from the parsed transcript (if any) take precedence; fall back to
+    # user-prompt observations (agents that emit a UserPrompt hook).
+    raw_prompts = [p for p in (user_prompts or []) if p and p.strip()] or obs_prompts
+    prompts = [p.strip() for p in raw_prompts if p and p.strip()]
+    if prompts:
+        sections.append("What the user was working on:")
+        sections.extend(f"- {p[:300]}" for p in prompts[-5:])
+
+    if files:
+        sections.append("\nFiles touched:")
+        sections.extend(f"- {f}" for f in files[:20])
+
+    if errors:
+        sections.append("\nErrors encountered:")
+        sections.extend(f"- {e[:200]}" for e in errors[:10])
+
+    if not sections:
+        return "Session ended (no captured prompts, file edits, or errors)."
+
+    return "\n".join(sections)
+
+
+def auto_handoff_from_session(
+    db_path: Path,
+    session_id: str,
+    agent: str,
+    user_prompts: list[str] | None = None,
+) -> str | None:
     observations = get_session_observations(db_path, session_id)
     if not observations:
         return None
@@ -184,14 +242,7 @@ def auto_handoff_from_session(db_path: Path, session_id: str, agent: str) -> str
     if existing:
         return None
 
-    parts: list[str] = []
-    for obs in observations[:20]:
-        kind = obs.get("kind", "")
-        body = obs.get("body") or obs.get("title") or ""
-        if body:
-            parts.append(f"[{kind}] {body[:200]}")
-
-    summary = "\n".join(parts) if parts else "Session ended."
+    summary = _build_session_summary(observations, user_prompts)
 
     first = observations[0]
     return begin_handoff(

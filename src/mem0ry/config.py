@@ -43,6 +43,12 @@ class MemoryConfig:
         "CONVERSATIONS_DIR",
         str(_DATA_DIR / "conversations"),
     )
+    # Curated memories exported as .md (kept separate from archived conversations
+    # so a general search over conversation dumps doesn't bury hand-saved memories).
+    memories_dir: str = os.environ.get(
+        "MEMORIES_DIR",
+        str(_DATA_DIR / "memories"),
+    )
     search_top_k: int = int(os.environ.get("SEARCH_TOP_K", "3"))
     search_backend: str = os.environ.get("SEARCH_BACKEND", "ripgrep")
     spacy_model: str = os.environ.get("SPACY_MODEL", "en_core_web_lg")

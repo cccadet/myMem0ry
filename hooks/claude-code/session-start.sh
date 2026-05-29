@@ -55,3 +55,23 @@ except Exception:
     pass
 " 2>/dev/null || true
 fi
+
+# Inject relevant context (scoped memories) into the first prompt — zero tokens.
+CONTEXT=$(curl -sf --max-time 1 "${SERVER}/context?cwd=${CWD_ENC}&top_k=5" 2>/dev/null || echo "")
+if [[ -n "$CONTEXT" ]] && [[ "$CONTEXT" != "[]" ]] && [[ "$CONTEXT" != "null" ]]; then
+  echo "$CONTEXT" | python3 -c "
+import sys, json
+try:
+    items = json.load(sys.stdin)
+    if items:
+        print('🧠 myMem0ry: relevant context')
+        for m in items:
+            scope = m.get('scope', '?')
+            title = m.get('title') or ''
+            content = (m.get('content') or '').strip().replace(chr(10), ' ')
+            head = f'[{scope}] {title}'.strip()
+            print(f'  • {head}: {content}' if title else f'  • [{scope}] {content}')
+except Exception:
+    pass
+" 2>/dev/null || true
+fi

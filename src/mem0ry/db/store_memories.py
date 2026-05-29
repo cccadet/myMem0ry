@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,23 @@ _VALID_SOURCES = {"claude-code", "opencode", "codex", "manual", "import", "hook"
 _VALID_MEMORY_TYPES = {"fact", "decision", "pattern", "log"}
 
 _SCOPE_PRIORITY = ["session", "context", "project", "global"]
+
+# Stop words (EN + PT) filtered from free-text queries so a natural-language
+# question doesn't match every row on common glue words.
+_STOP_WORDS = frozenset(
+    "a an the of to in on at for and or but is are was were be been being this "
+    "that these those it its as by with from "
+    "o a os as um uma de do da dos das em no na nos nas e ou que para por com "
+    "como qual quais onde quando".split()
+)
+
+
+def _query_terms(query: str | None) -> list[str]:
+    """Extract meaningful search terms from a free-text query."""
+    if not query:
+        return []
+    words = re.findall(r"[\wáàãâéêíóôõúüçÁÀÃÂÉÊÍÓÔÕÚÜÇ]+", query.lower())
+    return [w for w in words if len(w) > 1 and w not in _STOP_WORDS]
 
 
 def _validate_scope(scope: str) -> str:
@@ -119,6 +137,13 @@ def get_context(
     session_id: str | None = None,
     top_k: int = 5,
 ) -> list[dict[str, Any]]:
+    # Scope priority: the most "local" context comes first (session work, then
+    # the branch, then the project, then global knowledge). Within each scope,
+    # pinned + high-salience + recent rows win. No per-scope cap — we fill the
+    # top_k budget in priority order so a scope with many strong memories isn't
+    # throttled to a single row.
+    _ORDER = "ORDER BY pinned DESC, salience DESC, created_at DESC"
+
     conn = get_connection(db_path)
     try:
         init_schema(conn)
@@ -131,41 +156,45 @@ def get_context(
         if session_id:
             queries.append(
                 (
-                    "SELECT * FROM memories WHERE scope = 'session' AND session_id = ? ORDER BY created_at DESC",
+                    f"SELECT * FROM memories WHERE scope = 'session' AND session_id = ? "
+                    f"AND deleted_at IS NULL {_ORDER}",
                     [session_id],
                 )
             )
 
         if context:
             params = [context]
-            sql = "SELECT * FROM memories WHERE scope = 'context' AND context = ?"
+            sql = (
+                "SELECT * FROM memories WHERE scope = 'context' AND context = ? "
+                "AND deleted_at IS NULL"
+            )
             if project_id:
                 sql += " AND project_id = ?"
                 params.append(project_id)
-            queries.append((sql + " ORDER BY created_at DESC", params))
+            queries.append((f"{sql} {_ORDER}", params))
 
         if project_id:
             queries.append(
                 (
-                    "SELECT * FROM memories WHERE scope = 'project' AND project_id = ? ORDER BY created_at DESC",
+                    f"SELECT * FROM memories WHERE scope = 'project' AND project_id = ? "
+                    f"AND deleted_at IS NULL {_ORDER}",
                     [project_id],
                 )
             )
 
         queries.append(
             (
-                "SELECT * FROM memories WHERE scope = 'global' AND memory_type != 'log' ORDER BY created_at DESC",
+                f"SELECT * FROM memories WHERE scope = 'global' AND memory_type != 'log' "
+                f"AND deleted_at IS NULL {_ORDER}",
                 [],
             )
         )
 
-        active_scopes = len(queries)
-        per_scope = max(1, top_k // active_scopes) if active_scopes > 0 else top_k
-
         for sql, params in queries:
             if len(results) >= top_k:
                 break
-            rows = conn.execute(sql, params if params else ()).fetchmany(per_scope)
+            remaining = top_k - len(results)
+            rows = conn.execute(sql, params if params else ()).fetchmany(remaining)
             for row in rows:
                 d = dict(row)
                 if d["id"] not in seen:
@@ -322,7 +351,7 @@ def search_memories(
     try:
         init_schema(conn)
 
-        conditions: list[str] = []
+        conditions: list[str] = ["deleted_at IS NULL"]
         params: list[Any] = []
 
         if scope:
@@ -346,8 +375,18 @@ def search_memories(
                 conditions.append("tags LIKE ?")
                 params.append(f'%"{tag}"%')
 
-        where = " AND ".join(conditions) if conditions else "1=1"
-        sql = f"SELECT * FROM memories WHERE {where} ORDER BY created_at DESC LIMIT ?"
+        # Free-text: every term must appear in content or title (AND of ORs),
+        # so the result set narrows as the query gets more specific.
+        for term in _query_terms(query):
+            conditions.append("(content LIKE ? OR title LIKE ?)")
+            like = f"%{term}%"
+            params.extend([like, like])
+
+        where = " AND ".join(conditions)
+        sql = (
+            f"SELECT * FROM memories WHERE {where} "
+            "ORDER BY pinned DESC, salience DESC, created_at DESC LIMIT ?"
+        )
         params.append(top_k)
 
         rows = conn.execute(sql, params).fetchall()
@@ -358,6 +397,23 @@ def search_memories(
     track_reads(db_path, [r["id"] for r in results])
 
     return results
+
+
+def get_memory_by_id(db_path: Path, memory_id: str) -> dict[str, Any] | None:
+    """Fetch a single (non-deleted) memory by id, tracking the read."""
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        row = conn.execute(
+            "SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL",
+            (memory_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    track_reads(db_path, [memory_id])
+    return dict(row)
 
 
 def list_projects(db_path: Path) -> list[dict[str, Any]]:

@@ -37,7 +37,7 @@ uv tool install mymem0ry
 mymem0ry doctor       # checks + auto-installs spaCy model
 ```
 
-For Portuguese: set `SPACY_MODEL=pt_core_news_lg` in `.env` before running `mymem0ry doctor`.
+The default spaCy model is Portuguese (`pt_core_news_lg`). For English, set `SPACY_MODEL=en_core_web_lg` in `.env` before running `mymem0ry doctor`.
 
 **Zero config**: after install, just add the MCP server + hooks to your agent config below.
 The HTTP server auto-starts when the MCP server runs — no separate `serve` command needed.
@@ -169,10 +169,11 @@ All via environment variables (or `.env` file in the project root):
 
 | Variable | Default | Description |
 |---|---|---|
-| `CONVERSATIONS_DIR` | `data/conversations` | Where `.md` conversation files are stored |
-| `DB_PATH` | `data/memories.db` | SQLite memories database |
+| `CONVERSATIONS_DIR` | `data/conversations` | Where archived conversation `.md` files are stored |
+| `MEMORIES_DIR` | `data/memories` | Where curated memory `.md` exports are stored (kept separate so general search doesn't bury them) |
+| `DB_PATH` | `data/memories.db` | SQLite memories database (source of truth) |
 | `VECTOR_DB_PATH` | `data/conversations/.vec.db` | sqlite-vec index |
-| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for embeddings and search |
+| `SPACY_MODEL` | `pt_core_news_lg` | spaCy model for embeddings and search (set `en_core_web_lg` for English) |
 | `MEM0RY_HOST` | `127.0.0.1` | Host for HTTP transport |
 | `MEM0RY_PORT` | `49374` | Port for HTTP transport |
 | `MEM0RY_TOKEN` | _(empty)_ | Bearer token for HTTP auth (skip = no auth) |
@@ -259,13 +260,14 @@ Resolved automatically from `cwd` — no manual configuration needed:
 
 | Tool | Description |
 |---|---|
-| `get_context` | Aggregate context from all scopes |
-| `save_memory` | Save a memory with scope, type, and auto-resolved context |
-| `search_memory` | Search with semantic query expansion (returns previews) |
-| `read_memory` | Fetch the full content of a memory by the `path` from a search result |
+| `get_context` | Aggregate context from all scopes, ranked by salience (also auto-injected at session start) |
+| `save_memory` | Save a memory with scope, type, and auto-resolved context (returns its `id`) |
+| `search_memory` | Search your curated memories — scope/type/tags-aware, returns `id`s |
+| `search_conversations` | Broad full-text/semantic search across archived transcripts |
+| `read_memory` | Fetch full content by memory `id` or conversation `path` |
 | `memory_stats` | Database statistics |
 | `memory_handoff_begin` | Create handoff for next agent |
-| `memory_handoff_accept` | Accept pending handoff |
+| `memory_handoff_accept` | Peek at the pending handoff (non-destructive; the hook consumes it) |
 | `memory_pin` | Pin a memory (exempt from decay) |
 | `memory_unpin` | Unpin a memory |
 | `memory_forget_sweep` | Sweep stale memories |

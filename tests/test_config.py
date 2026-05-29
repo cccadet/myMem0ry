@@ -10,7 +10,7 @@ def test_defaults() -> None:
     assert config.expand_top_k == 10
     assert config.search_top_k == 3
     assert config.search_backend == "ripgrep"
-    assert config.spacy_model == "pt_core_news_lg"
+    assert config.spacy_model == "en_core_web_lg"
     assert config.system_prompt is None
 
 

@@ -123,7 +123,8 @@ def test_auto_handoff_from_session(db: Path) -> None:
 
     ho = pending_handoff(db, project_id="p1")
     assert ho is not None
-    assert "session-start" in ho["summary"]
+    # Summary now surfaces the user's actual prompt, not raw event kinds.
+    assert "fix auth" in ho["summary"]
 
 
 def test_auto_handoff_skips_if_exists(db: Path) -> None:

@@ -69,6 +69,19 @@ class TestSanitize:
         assert "/home/johndoe" not in result["body"]
         assert "~/project/main.py" in result["body"]
 
+    def test_strips_windows_home_paths(self) -> None:
+        result = sanitize_payload(
+            {
+                "kind": "post-tool-use",
+                "session_id": "abc",
+                "tool_name": "Edit",
+                "tool_input": {"file_path": r"C:\Users\johndoe\project\main.py"},
+                "body": "tool-use",
+            }
+        )
+        assert "johndoe" not in result["body"]
+        assert "~" in result["body"]
+
     def test_truncates_long_body(self) -> None:
         result = sanitize_payload(
             {
@@ -147,7 +160,8 @@ class TestRouter:
 
         ho = pending_handoff(db, project_id=None)
         assert ho is not None
-        assert "session-start" in ho["summary"] or "user-prompt" in ho["summary"]
+        # Handoff surfaces the user's prompt content, not raw event-kind labels.
+        assert "fix the bug" in ho["summary"]
 
     def test_session_end_with_messages_archives_conversation(
         self, db: Path, tmp_path: Path
@@ -241,6 +255,64 @@ class TestRouter:
 
         results = search_memories(db, scope="session", top_k=10)
         assert any("quick log entry" in r["content"] for r in results)
+
+    def test_post_tool_use_skips_low_signal_reads(self, db: Path) -> None:
+        from mem0ry.db.store import get_session_observations
+
+        rid = handle_hook_event(
+            db,
+            {
+                "kind": "post-tool-use",
+                "session_id": "sf",
+                "cwd": "/tmp",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/x.py"},
+                "tool_response": {},
+                "body": "tool-use",
+            },
+        )
+        assert rid == ""
+        assert get_session_observations(db, "sf") == []
+
+    def test_post_tool_use_records_file_edits(self, db: Path) -> None:
+        from mem0ry.db.store import get_session_observations
+
+        eid = handle_hook_event(
+            db,
+            {
+                "kind": "post-tool-use",
+                "session_id": "se",
+                "cwd": "/tmp",
+                "tool_name": "Edit",
+                "tool_input": {"file_path": "/tmp/x.py"},
+                "tool_response": {},
+                "body": "tool-use",
+            },
+        )
+        assert len(eid) == 12
+        obs = get_session_observations(db, "se")
+        assert len(obs) == 1
+        assert "x.py" in (obs[0]["body"] or "")
+
+    def test_post_tool_use_records_errors(self, db: Path) -> None:
+        from mem0ry.db.store import get_session_observations
+
+        eid = handle_hook_event(
+            db,
+            {
+                "kind": "post-tool-use",
+                "session_id": "serr",
+                "cwd": "/tmp",
+                "tool_name": "Bash",
+                "tool_input": {"command": "ls /nope"},
+                "tool_response": {"error": "No such file or directory"},
+                "body": "tool-use",
+            },
+        )
+        assert len(eid) == 12
+        obs = get_session_observations(db, "serr")
+        assert len(obs) == 1
+        assert "No such file" in (obs[0]["body"] or "")
 
     def test_secrets_stripped_before_storage(self, db: Path) -> None:
         handle_hook_event(

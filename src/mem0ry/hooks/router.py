@@ -13,8 +13,31 @@ from pathlib import Path
 from typing import Any
 
 from ..config import MemoryConfig
-from ..utils.git_context import resolve_full_context
 from .sanitize import _sanitize_message, sanitize_payload
+
+
+# Tools whose use is worth remembering for a handoff: anything that mutates the
+# working tree. Reads/searches/navigation are high-volume and low-signal, so we
+# don't persist an observation for them (only their errors, handled separately).
+_MUTATING_TOOLS = frozenset(
+    {
+        "Edit",
+        "Write",
+        "MultiEdit",
+        "NotebookEdit",
+        "str_replace_editor",
+        "create_file",
+        "apply_patch",
+    }
+)
+
+
+def _noteworthy_tool_use(raw_payload: dict[str, Any]) -> bool:
+    """True if a post-tool-use event is worth persisting (file edit or error)."""
+    resp = raw_payload.get("tool_response")
+    if isinstance(resp, dict) and resp.get("error"):
+        return True
+    return (raw_payload.get("tool_name") or "") in _MUTATING_TOOLS
 
 
 def _messages_from_transcript(transcript_path: str) -> list[dict[str, str]] | None:
@@ -100,14 +123,16 @@ def handle_hook_event(
     payload = sanitize_payload(raw_payload)
     kind = payload["kind"]
 
+    # Skip low-signal tool-use events (reads, searches, navigation). Keeping only
+    # file mutations and errors slashes write volume without losing handoff signal.
+    if kind == "post-tool-use" and not _noteworthy_tool_use(raw_payload):
+        return ""
+
     project_id = payload.get("project_id")
     if not project_id and payload.get("cwd"):
-        resolved = resolve_full_context(Path(payload["cwd"]))
-        project_id = resolved.get("project_id")
-    elif not project_id:
-        resolved = {}
-    else:
-        resolved = {"project_id": project_id}
+        from ..utils.git_context import stable_project_id
+
+        project_id = stable_project_id(Path(payload["cwd"]))
 
     obs_id = create_observation(
         db_path,
@@ -142,7 +167,14 @@ def handle_hook_event(
         messages = payload.get("messages")
         if not messages and payload.get("transcript_path"):
             messages = _messages_from_transcript(payload["transcript_path"])
+
+        user_prompts: list[str] = []
         if messages and isinstance(messages, list):
+            user_prompts = [
+                str(m.get("content", ""))
+                for m in messages
+                if m.get("role") == "user" and m.get("content")
+            ]
             title = payload.get("title") or f"Session {payload['session_id']}"
             summary = payload.get("body")
             try:
@@ -161,7 +193,12 @@ def handle_hook_event(
 
         try:
             agent = payload.get("agent") or "unknown"
-            auto_handoff_from_session(db_path, payload["session_id"], agent)
+            auto_handoff_from_session(
+                db_path,
+                payload["session_id"],
+                agent,
+                user_prompts=user_prompts,
+            )
         except Exception:
             pass
 

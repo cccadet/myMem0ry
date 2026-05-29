@@ -15,6 +15,8 @@ _KEY_PATTERNS = [
     re.compile(r'api[_-]?key["\s:=]+[\w\-]{16,}', re.IGNORECASE),
 ]
 _HOME_PATTERN = re.compile(r"/(?:home|Users)/[^/\s]+")
+# Windows home dirs, both native (C:\Users\name) and forward-slash (C:/Users/name).
+_WIN_HOME_PATTERN = re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/\s]+", re.IGNORECASE)
 _VALID_KINDS = {
     "session-start",
     "user-prompt",
@@ -33,6 +35,7 @@ def _strip_secrets(text: str) -> str:
 
 
 def _strip_home_paths(text: str) -> str:
+    text = _WIN_HOME_PATTERN.sub("~", text)
     return _HOME_PATTERN.sub("~", text)
 
 
@@ -74,7 +77,7 @@ def _summarize_post_tool_use(payload: dict[str, Any]) -> str | None:
         success = tool_response.get("success")
         if success is not None:
             parts.append(f"success: {success}")
-    return _strip_secrets(_truncate("; ".join(parts), _MAX_BODY))
+    return _strip_secrets(_strip_home_paths(_truncate("; ".join(parts), _MAX_BODY)))
 
 
 def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:

@@ -133,11 +133,11 @@ def test_save_memory_creates_file(tmp_path: Path) -> None:
     conn.close()
 
     with (
-        patch.object(mod, "_conversations_dir", return_value=tmp_path),
+        patch.object(mod, "_memories_dir", return_value=tmp_path),
         patch.object(mod, "_db_path", return_value=db_path),
     ):
         result = save_memory("My Note", "Important stuff", dt="2026-04-21")
-    assert "Saved:" in result
+    assert "Saved id=" in result
     assert (tmp_path / "2026-04-21").is_dir()
     files = list((tmp_path / "2026-04-21").glob("*.md"))
     assert len(files) == 1
@@ -158,7 +158,7 @@ def test_save_memory_with_memory_type(tmp_path: Path) -> None:
     conn.close()
 
     with (
-        patch.object(mod, "_conversations_dir", return_value=tmp_path),
+        patch.object(mod, "_memories_dir", return_value=tmp_path),
         patch.object(mod, "_db_path", return_value=db_path),
     ):
         result = save_memory(
@@ -170,7 +170,7 @@ def test_save_memory_with_memory_type(tmp_path: Path) -> None:
 def test_save_memory_invalid_date(tmp_path: Path) -> None:
     import mem0ry.mcp_server as mod
 
-    with patch.object(mod, "_conversations_dir", return_value=tmp_path):
+    with patch.object(mod, "_memories_dir", return_value=tmp_path):
         with pytest.raises(ValueError, match="Invalid date format"):
             save_memory("X", "Y", dt="bad-date")
 
