@@ -28,6 +28,8 @@ def _default_data_dir() -> Path:
 
 _DATA_DIR = _default_data_dir()
 
+_DB_FILENAME = "memories.db"
+
 
 def _resolve_file_path(raw: str, filename: str) -> str:
     p = Path(raw)
@@ -60,8 +62,8 @@ class MemoryConfig:
     embedding_dim: int = int(os.environ.get("EMBEDDING_DIM", "300"))
     rrf_k: int = int(os.environ.get("RRF_K", "60"))
     db_path: str = _resolve_file_path(
-        os.environ.get("DB_PATH", str(_DATA_DIR / "memories.db")),
-        "memories.db",
+        os.environ.get("DB_PATH", str(_DATA_DIR / _DB_FILENAME)),
+        _DB_FILENAME,
     )
     # Durable drop-box for lifecycle events the SessionEnd hook can't reliably POST
     # (it races Claude Code's shutdown). The hook writes a JSON file here; the server
@@ -70,7 +72,7 @@ class MemoryConfig:
     spool_dir: str = os.environ.get(
         "MEM0RY_SPOOL_DIR",
         str(Path(_resolve_file_path(
-            os.environ.get("DB_PATH", str(_DATA_DIR / "memories.db")), "memories.db"
+            os.environ.get("DB_PATH", str(_DATA_DIR / _DB_FILENAME)), _DB_FILENAME
         )).parent / "spool"),
     )
     server_host: str = os.environ.get("MEM0RY_HOST", "127.0.0.1")

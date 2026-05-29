@@ -18,6 +18,7 @@
 set -euo pipefail
 
 SOURCE="${MYMEM0RY_SOURCE:-mymem0ry}"
+_PKG_NAME="mymem0ry"
 
 detect_agent() {
     if command -v claude &>/dev/null && claude mcp list &>/dev/null 2>&1; then
@@ -37,12 +38,12 @@ detect_agent() {
 
 install_claude() {
     echo "Installing mymem0ry for Claude Code..."
-    if [[ "$SOURCE" == "mymem0ry" ]]; then
-        claude mcp add --scope user mymem0ry -- mymem0ry-mcp
+    if [[ "$SOURCE" == "$_PKG_NAME" ]]; then
+        claude mcp add --scope user "$_PKG_NAME" -- mymem0ry-mcp
     else
         local repo_path
         repo_path="$(cd "$(dirname "$0")/.." && pwd)"
-        claude mcp add --scope user mymem0ry -- uv run --directory "$repo_path" mymem0ry-mcp
+        claude mcp add --scope user "$_PKG_NAME" -- uv run --directory "$repo_path" mymem0ry-mcp
     fi
     echo "Done. Run 'claude mcp list' to verify."
 }
@@ -51,7 +52,7 @@ install_opencode() {
     echo "Installing mymem0ry for OpenCode..."
     echo ""
     echo "Add this to your opencode.json:"
-    if [[ "$SOURCE" == "mymem0ry" ]]; then
+    if [[ "$SOURCE" == "$_PKG_NAME" ]]; then
         echo '  "mcpServers": {'
         echo '    "mymem0ry": {'
         echo '      "command": "mymem0ry-mcp"'
@@ -71,19 +72,19 @@ install_opencode() {
 
 install_codex() {
     echo "Installing mymem0ry for Codex CLI..."
-    if [[ "$SOURCE" == "mymem0ry" ]]; then
-        codex mcp add mymem0ry -- mymem0ry-mcp
+    if [[ "$SOURCE" == "$_PKG_NAME" ]]; then
+        codex mcp add "$_PKG_NAME" -- mymem0ry-mcp
     else
         local repo_path
         repo_path="$(cd "$(dirname "$0")/.." && pwd)"
-        codex mcp add mymem0ry -- uv run --directory "$repo_path" mymem0ry-mcp
+        codex mcp add "$_PKG_NAME" -- uv run --directory "$repo_path" mymem0ry-mcp
     fi
     echo "Done. Run 'codex mcp list' to verify."
 }
 
 install_code() {
     echo "Installing mymem0ry for VS Code..."
-    if [[ "$SOURCE" == "mymem0ry" ]]; then
+    if [[ "$SOURCE" == "$_PKG_NAME" ]]; then
         code --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
     else
         local repo_path
@@ -95,7 +96,7 @@ install_code() {
 
 install_cursor() {
     echo "Installing mymem0ry for Cursor..."
-    if [[ "$SOURCE" == "mymem0ry" ]]; then
+    if [[ "$SOURCE" == "$_PKG_NAME" ]]; then
         cursor --add-mcp '{"name":"mymem0ry","command":"mymem0ry-mcp"}'
     else
         local repo_path

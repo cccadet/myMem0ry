@@ -101,6 +101,60 @@ def _write_conversation_md(
     return str(file_path.relative_to(conv_dir))
 
 
+def _handle_log_event(db_path: Path, payload: dict[str, Any], project_id: str | None) -> None:
+    from ..db.store import create_memory
+
+    try:
+        create_memory(
+            db_path,
+            content=payload.get("body") or payload.get("title") or "",
+            scope="session",
+            session_id=payload["session_id"],
+            project_id=project_id,
+            project_path=payload.get("cwd"),
+            memory_type="log",
+            source="hook",
+            title=payload.get("title") or "log",
+        )
+    except Exception:
+        pass
+
+
+def _handle_session_end(db_path: Path, payload: dict[str, Any]) -> None:
+    from ..db.store import auto_handoff_from_session, end_session
+
+    messages = payload.get("messages")
+    if not messages and payload.get("transcript_path"):
+        messages = _messages_from_transcript(payload["transcript_path"])
+
+    user_prompts: list[str] = []
+    if messages and isinstance(messages, list):
+        user_prompts = [
+            str(m.get("content", ""))
+            for m in messages
+            if m.get("role") == "user" and m.get("content")
+        ]
+        title = payload.get("title") or f"Session {payload['session_id']}"
+        summary = payload.get("body")
+        try:
+            _write_conversation_md(title=title, messages=messages, summary=summary)
+        except Exception:
+            pass
+
+    try:
+        end_session(db_path, payload["session_id"], summary=payload.get("body"))
+    except Exception:
+        pass
+
+    try:
+        agent = payload.get("agent") or "unknown"
+        auto_handoff_from_session(
+            db_path, payload["session_id"], agent, user_prompts=user_prompts,
+        )
+    except Exception:
+        pass
+
+
 def handle_hook_event(
     db_path: Path,
     raw_payload: dict[str, Any],
@@ -118,13 +172,11 @@ def handle_hook_event(
 
     Returns the observation id.
     """
-    from ..db.store import auto_handoff_from_session, create_observation, end_session
+    from ..db.store import create_observation
 
     payload = sanitize_payload(raw_payload)
     kind = payload["kind"]
 
-    # Skip low-signal tool-use events (reads, searches, navigation). Keeping only
-    # file mutations and errors slashes write volume without losing handoff signal.
     if kind == "post-tool-use" and not _noteworthy_tool_use(raw_payload):
         return ""
 
@@ -146,60 +198,9 @@ def handle_hook_event(
     )
 
     if kind == "log":
-        from ..db.store import create_memory
-
-        try:
-            create_memory(
-                db_path,
-                content=payload.get("body") or payload.get("title") or "",
-                scope="session",
-                session_id=payload["session_id"],
-                project_id=project_id,
-                project_path=payload.get("cwd"),
-                memory_type="log",
-                source="hook",
-                title=payload.get("title") or "log",
-            )
-        except Exception:
-            pass
+        _handle_log_event(db_path, payload, project_id)
 
     if kind == "session-end":
-        messages = payload.get("messages")
-        if not messages and payload.get("transcript_path"):
-            messages = _messages_from_transcript(payload["transcript_path"])
-
-        user_prompts: list[str] = []
-        if messages and isinstance(messages, list):
-            user_prompts = [
-                str(m.get("content", ""))
-                for m in messages
-                if m.get("role") == "user" and m.get("content")
-            ]
-            title = payload.get("title") or f"Session {payload['session_id']}"
-            summary = payload.get("body")
-            try:
-                _write_conversation_md(
-                    title=title,
-                    messages=messages,
-                    summary=summary,
-                )
-            except Exception:
-                pass
-
-        try:
-            end_session(db_path, payload["session_id"], summary=payload.get("body"))
-        except Exception:
-            pass
-
-        try:
-            agent = payload.get("agent") or "unknown"
-            auto_handoff_from_session(
-                db_path,
-                payload["session_id"],
-                agent,
-                user_prompts=user_prompts,
-            )
-        except Exception:
-            pass
+        _handle_session_end(db_path, payload)
 
     return obs_id

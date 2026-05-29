@@ -61,7 +61,7 @@ def is_server_running() -> bool:
         if not _pid_exists(pid):
             raise ProcessLookupError(pid)
         return True
-    except (ValueError, ProcessLookupError, PermissionError, OSError):
+    except (ValueError, OSError):
         pid_file.unlink(missing_ok=True)
         return False
 
@@ -198,7 +198,7 @@ def stop_server() -> bool:
             _kill_pid(pid)
         pid_file.unlink(missing_ok=True)
         return True
-    except (ValueError, ProcessLookupError, PermissionError, OSError):
+    except (ValueError, OSError):
         pid_file.unlink(missing_ok=True)
         return False
 

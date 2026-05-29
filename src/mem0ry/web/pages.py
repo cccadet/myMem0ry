@@ -30,7 +30,7 @@ def _delete_form(target_id: str, target_type: str, label: str) -> str:
     )
 
 
-def dashboard(request: Request) -> HTMLResponse:
+def dashboard(_request: Request) -> HTMLResponse:
     db = _db_path()
     body_parts: list[str] = []
 
@@ -94,7 +94,7 @@ def dashboard(request: Request) -> HTMLResponse:
     return HTMLResponse(_layout("Dashboard", "\n".join(body_parts)))
 
 
-def projects_page(request: Request) -> HTMLResponse:
+def projects_page(_request: Request) -> HTMLResponse:
     db = _db_path()
     if not db.exists():
         return HTMLResponse(_layout("Projects", _NO_DB, "projects"))
@@ -359,7 +359,7 @@ def _target_link(row: dict[str, Any]) -> str:
     return f'<a href="{href}">{_esc(tid)}</a>'
 
 
-def audit_page(request: Request) -> HTMLResponse:
+def audit_page(_request: Request) -> HTMLResponse:
     db = _db_path()
     if not db.exists():
         return HTMLResponse(_layout(_TITLE_AUDIT, _NO_DB, "audit"))

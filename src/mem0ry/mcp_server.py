@@ -819,7 +819,6 @@ def main():
 
     if transport in ("sse", "streamable-http"):
         from .auth import AuthMiddleware, CORSMiddleware, parse_allowed_hosts
-        from .daemon import ensure_server
         from .web import get_web_routes
 
         allowed = parse_allowed_hosts(config.allowed_hosts)

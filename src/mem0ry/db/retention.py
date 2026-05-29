@@ -134,6 +134,52 @@ def _purge_memory_files(memories_dir: Path, rel_paths: list[str]) -> list[str]:
     return removed
 
 
+def _hard_delete_expired(conn: Any) -> tuple[list[str], list[str]]:
+    ids: list[str] = []
+    files: list[str] = []
+    for row in conn.execute(
+        "SELECT id, file_path FROM memories WHERE deleted_at IS NOT NULL AND grace_until < ?",
+        (_now_iso(),),
+    ).fetchall():
+        ids.append(row["id"])
+        if row["file_path"]:
+            files.append(row["file_path"])
+    return ids, files
+
+
+def _evaluate_candidate(row: Any) -> dict[str, Any] | None:
+    mem = dict(row)
+    tier = tier_from_type(mem["memory_type"])
+    max_days = _TIER_MAX_DAYS.get(tier, 90)
+
+    try:
+        created = datetime.fromisoformat(mem["created_at"])
+        days_old = (datetime.now(timezone.utc) - created).total_seconds() / 86400
+    except (ValueError, TypeError):
+        return None
+
+    if days_old < max_days:
+        return None
+
+    salience = compute_salience(
+        mem["memory_type"],
+        mem["created_at"],
+        mem["access_count"],
+        mem["last_accessed_at"],
+    )
+
+    if salience >= _SALIENCE_THRESHOLD:
+        return None
+
+    return {
+        "id": mem["id"],
+        "memory_type": mem["memory_type"],
+        "tier": tier,
+        "salience": salience,
+        "days_old": round(days_old, 1),
+    }
+
+
 def forget_sweep(
     db_path: Path, dry_run: bool = False, memories_dir: Path | None = None
 ) -> dict[str, Any]:
@@ -141,15 +187,7 @@ def forget_sweep(
     try:
         init_schema(conn)
 
-        hard_delete_ids: list[str] = []
-        hard_delete_files: list[str] = []
-        for row in conn.execute(
-            "SELECT id, file_path FROM memories WHERE deleted_at IS NOT NULL AND grace_until < ?",
-            (_now_iso(),),
-        ).fetchall():
-            hard_delete_ids.append(row["id"])
-            if row["file_path"]:
-                hard_delete_files.append(row["file_path"])
+        hard_delete_ids, hard_delete_files = _hard_delete_expired(conn)
 
         if not dry_run and hard_delete_ids:
             placeholders = ",".join("?" for _ in hard_delete_ids)
@@ -171,42 +209,15 @@ def forget_sweep(
         ).isoformat()
 
         for row in candidates:
-            mem = dict(row)
-            tier = tier_from_type(mem["memory_type"])
-            max_days = _TIER_MAX_DAYS.get(tier, 90)
-
-            try:
-                created = datetime.fromisoformat(mem["created_at"])
-                days_old = (datetime.now(timezone.utc) - created).total_seconds() / 86400
-            except (ValueError, TypeError):
+            result = _evaluate_candidate(row)
+            if result is None:
                 continue
-
-            if days_old < max_days:
-                continue
-
-            salience = compute_salience(
-                mem["memory_type"],
-                mem["created_at"],
-                mem["access_count"],
-                mem["last_accessed_at"],
-            )
-
-            if salience < _SALIENCE_THRESHOLD:
-                to_soft_delete.append(
-                    {
-                        "id": mem["id"],
-                        "memory_type": mem["memory_type"],
-                        "tier": tier,
-                        "salience": salience,
-                        "days_old": round(days_old, 1),
-                    }
+            to_soft_delete.append(result)
+            if not dry_run:
+                conn.execute(
+                    "UPDATE memories SET deleted_at = ?, grace_until = ?, salience = ? WHERE id = ?",
+                    (now, grace, result["salience"], result["id"]),
                 )
-
-                if not dry_run:
-                    conn.execute(
-                        "UPDATE memories SET deleted_at = ?, grace_until = ?, salience = ? WHERE id = ?",
-                        (now, grace, salience, mem["id"]),
-                    )
 
         if not dry_run and to_soft_delete:
             conn.commit()

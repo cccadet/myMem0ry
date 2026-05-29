@@ -16,7 +16,7 @@ _KEY_PATTERNS = [
 ]
 _HOME_PATTERN = re.compile(r"/(?:home|Users)/[^/\s]+")
 # Windows home dirs, both native (C:\Users\name) and forward-slash (C:/Users/name).
-_WIN_HOME_PATTERN = re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/\s]+", re.IGNORECASE)
+_WIN_HOME_PATTERN = re.compile(r"[A-Z]:[\\/]Users[\\/][^\\/\s]+", re.IGNORECASE)
 _VALID_KINDS = {
     "session-start",
     "user-prompt",
@@ -52,6 +52,31 @@ def _sanitize_message(msg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _extract_tool_input_parts(tool_input: dict[str, Any]) -> list[str]:
+    parts: list[str] = []
+    fp = tool_input.get("file_path") or tool_input.get("filePath")
+    if fp:
+        parts.append(f"file: {fp}")
+    cmd = tool_input.get("command")
+    if cmd:
+        parts.append(f"command: {cmd[:200]}")
+    query_val = tool_input.get("query") or tool_input.get("search")
+    if query_val:
+        parts.append(f"query: {str(query_val)[:200]}")
+    return parts
+
+
+def _extract_tool_response_parts(tool_response: dict[str, Any]) -> list[str]:
+    parts: list[str] = []
+    err = tool_response.get("error")
+    if err:
+        parts.append(f"error: {str(err)[:300]}")
+    success = tool_response.get("success")
+    if success is not None:
+        parts.append(f"success: {success}")
+    return parts
+
+
 def _summarize_post_tool_use(payload: dict[str, Any]) -> str | None:
     body = payload.get("body")
     if body is None:
@@ -61,23 +86,38 @@ def _summarize_post_tool_use(payload: dict[str, Any]) -> str | None:
     tool_response = payload.get("tool_response")
     parts: list[str] = [f"tool: {tool_name}"]
     if isinstance(tool_input, dict):
-        fp = tool_input.get("file_path") or tool_input.get("filePath")
-        if fp:
-            parts.append(f"file: {fp}")
-        cmd = tool_input.get("command")
-        if cmd:
-            parts.append(f"command: {cmd[:200]}")
-        query_val = tool_input.get("query") or tool_input.get("search")
-        if query_val:
-            parts.append(f"query: {str(query_val)[:200]}")
+        parts.extend(_extract_tool_input_parts(tool_input))
     if isinstance(tool_response, dict):
-        err = tool_response.get("error")
-        if err:
-            parts.append(f"error: {str(err)[:300]}")
-        success = tool_response.get("success")
-        if success is not None:
-            parts.append(f"success: {success}")
+        parts.extend(_extract_tool_response_parts(tool_response))
     return _strip_secrets(_strip_home_paths(_truncate("; ".join(parts), _MAX_BODY)))
+
+
+_HOOK_EVENT_MAP = {
+    "SessionStart": "session-start",
+    "UserPrompt": "user-prompt",
+    "PostToolUse": "post-tool-use",
+    "PreCompact": "pre-compact",
+    "SessionEnd": "session-end",
+}
+
+
+def _resolve_kind(payload: dict[str, Any]) -> str:
+    kind = str(payload.get("kind", "other"))
+    if kind == "other":
+        hook_event = str(payload.get("hook_event_name", ""))
+        if hook_event:
+            kind = _HOOK_EVENT_MAP.get(hook_event, "other")
+    return kind if kind in _VALID_KINDS else "other"
+
+
+def _resolve_body(kind: str, payload: dict[str, Any]) -> str | None:
+    if kind == "post-tool-use":
+        return _summarize_post_tool_use(payload)
+    body = payload.get("body")
+    if body is not None:
+        body = _strip_secrets(_strip_home_paths(str(body)))
+        body = _truncate(body, _MAX_BODY)
+    return body
 
 
 def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -88,20 +128,7 @@ def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Payload must be a dict, got {type(payload).__name__}")
 
-    kind = str(payload.get("kind", "other"))
-    hook_event = str(payload.get("hook_event_name", ""))
-    if kind == "other" and hook_event:
-        mapping = {
-            "SessionStart": "session-start",
-            "UserPrompt": "user-prompt",
-            "PostToolUse": "post-tool-use",
-            "PreCompact": "pre-compact",
-            "SessionEnd": "session-end",
-        }
-        kind = mapping.get(hook_event, "other")
-
-    if kind not in _VALID_KINDS:
-        kind = "other"
+    kind = _resolve_kind(payload)
 
     session_id = str(payload.get("session_id", ""))[:64] or None
     if not session_id:
@@ -117,13 +144,7 @@ def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
         title = _strip_secrets(_strip_home_paths(str(title)))
         title = _truncate(title, _MAX_TITLE)
 
-    if kind == "post-tool-use":
-        body = _summarize_post_tool_use(payload)
-    else:
-        body = payload.get("body")
-        if body is not None:
-            body = _strip_secrets(_strip_home_paths(str(body)))
-            body = _truncate(body, _MAX_BODY)
+    body = _resolve_body(kind, payload)
 
     messages = payload.get("messages")
     if messages is not None and isinstance(messages, list):

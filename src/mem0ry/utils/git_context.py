@@ -26,7 +26,7 @@ def _git(cwd: Path, *args: str) -> str | None:
         )
         if result.returncode == 0:
             return result.stdout.strip() or None
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+    except OSError:
         pass
     return None
 

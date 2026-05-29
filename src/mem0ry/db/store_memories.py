@@ -505,7 +505,7 @@ def delete_memory(db_path: Path, memory_id: str) -> bool:
 
 
 def decay_memories(
-    db_path: Path, days_threshold: int = 90, dry_run: bool = False
+    db_path: Path, dry_run: bool = False
 ) -> list[str]:
     from .retention import forget_sweep
 

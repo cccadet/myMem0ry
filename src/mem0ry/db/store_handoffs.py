@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 _FILE_RE = re.compile(r"file:\s*([^\s;]+)")
-_ERROR_RE = re.compile(r"error:\s*(.+?)(?:;|$)")
+_ERROR_RE = re.compile(r"error:\s*(.+?)(?=;|$)")
 
 from .connection import get_connection
 from .schema import init_schema
@@ -168,6 +168,26 @@ def pending_handoff(
     return ho
 
 
+def _extract_session_signals(
+    chronological: list[dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    files: list[str] = []
+    errors: list[str] = []
+    prompts: list[str] = []
+    for obs in chronological:
+        body = obs.get("body") or ""
+        if obs.get("kind") == "user-prompt" and body.strip():
+            prompts.append(body.strip())
+        for m in _FILE_RE.findall(body):
+            if m not in files:
+                files.append(m)
+        for m in _ERROR_RE.findall(body):
+            err = m.strip()
+            if err and err not in errors:
+                errors.append(err)
+    return files, errors, prompts
+
+
 def _build_session_summary(
     observations: list[dict[str, Any]],
     user_prompts: list[str] | None,
@@ -179,21 +199,7 @@ def _build_session_summary(
     `observations` arrives newest-first; we read them chronologically.
     """
     chronological = list(reversed(observations))
-
-    files: list[str] = []
-    errors: list[str] = []
-    obs_prompts: list[str] = []
-    for obs in chronological:
-        body = obs.get("body") or ""
-        if obs.get("kind") == "user-prompt" and body.strip():
-            obs_prompts.append(body.strip())
-        for m in _FILE_RE.findall(body):
-            if m not in files:
-                files.append(m)
-        for m in _ERROR_RE.findall(body):
-            err = m.strip()
-            if err and err not in errors:
-                errors.append(err)
+    files, errors, obs_prompts = _extract_session_signals(chronological)
 
     sections: list[str] = []
 

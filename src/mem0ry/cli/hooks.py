@@ -6,6 +6,8 @@ import typer
 
 from ._app import app
 
+_CONFIG_DIR = ".config"
+
 
 def _hooks_dir() -> Path:
     import mem0ry
@@ -98,20 +100,20 @@ def hooks(
 def _detect_agent_dir() -> Path | None:
     home = Path.home()
     claude_cfg = home / ".claude" / "settings.json"
-    opencode_cfg = home / ".config" / "opencode" / "opencode.json"
+    opencode_cfg = home / _CONFIG_DIR / "opencode" / "opencode.json"
     codex_cfg = home / ".codex" / "config.toml"
 
     if claude_cfg.exists():
         return home / ".claude"
     if opencode_cfg.exists():
-        return home / ".config" / "opencode"
+        return home / _CONFIG_DIR / "opencode"
     if codex_cfg.exists():
         return home / ".codex"
     return None
 
 
 def _opencode_hooks_dir() -> Path:
-    for parent in [Path.cwd(), Path.home() / ".config" / "opencode"]:
+    for parent in [Path.cwd(), Path.home() / _CONFIG_DIR / "opencode"]:
         candidate = parent / ".opencode" / "hooks"
         if candidate.is_dir() or not parent.name.startswith("."):
             return candidate

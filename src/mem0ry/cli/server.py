@@ -117,5 +117,5 @@ def observe(
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         typer.echo(f"Error {e.code}: {body}", err=True)
-    except (urllib.error.URLError, OSError) as e:
+    except urllib.error.URLError as e:
         typer.echo(f"Server not reachable: {e}", err=True)

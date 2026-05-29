@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.15.4] - 2026-05-29
+
+### Fixed
+
+- Resolved 31 SonarQube issues (Quality Gate security rating now passes):
+  - **S1854**: Removed unused `ensure_server` import in `mcp_server.py`.
+  - **S6019**: Fixed reluctant quantifier in `_ERROR_RE` regex — changed
+    `(?:;|$)` to `(?=;|$)` (lookahead) so errors at end-of-string are
+    captured correctly.
+  - **S5869**: Simplified duplicate character class `[A-Za-z]` → `[A-Z]`
+    with `re.IGNORECASE` in `_WIN_HOME_PATTERN` (Windows home path stripping
+    unchanged for all drive letter cases and forward/backslash variants).
+  - **S1172**: Removed unused `days_threshold` parameter from `decay_memories`
+    and renamed `request` → `_request` in Starlette page handlers.
+  - **S5713**: Removed redundant exception subclasses already caught by
+    `OSError` (`PermissionError`, `ProcessLookupError`, `FileNotFoundError`,
+    `TimeoutExpired`, `URLError`) in `daemon.py`, `server.py`, and
+    `git_context.py`.
+  - **S1192**: Extracted `_DB_FILENAME` constant in `config.py` and
+    `_CONFIG_DIR` constant in `cli/hooks.py` to eliminate string duplication.
+    Added `_PKG_NAME` constant in `bin/install.sh`.
+  - **S6711**: Replaced legacy `numpy.random.rand` with
+    `numpy.random.default_rng()` in `test_embeddings.py`.
+  - **S3776**: Reduced cognitive complexity in 5 functions by extracting
+    helpers: `_evaluate_candidate` + `_hard_delete_expired` (retention),
+    `_extract_session_signals` (handoffs), `_handle_log_event` +
+    `_handle_session_end` (router), `_resolve_kind` + `_resolve_body` +
+    `_extract_tool_input_parts` + `_extract_tool_response_parts` (sanitize).
+  - **S7679**: Assigned positional parameters to local variables in
+    `session-end.sh` `_jstr` function.
+  - **S131**: Added default case `*) ;;` to `case` statement in
+    `session-end.sh`.
+
+### Added
+
+- 61 regression tests covering all SonarQube fixes (Windows path stripping,
+  kind resolution, error regex, retention sweep, handoff summaries, router
+  pipeline, config constants, sanitize end-to-end).
+
 ## [0.15.3] - 2026-05-29
 
 ### Fixed

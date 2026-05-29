@@ -22,8 +22,10 @@ IFS= read -r -d '' PAYLOAD || true
 # [^"]* passes backslashes through; the values we read (session id, cwd, transcript
 # path) never contain embedded quotes.
 _jstr() {
-  local re="\"$2\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""
-  [[ "$1" =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"
+  local key="$2"
+  local re="\"${key}\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""
+  local json="$1"
+  [[ "$json" =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"
 }
 
 SESSION_ID="$(_jstr "$PAYLOAD" session_id || true)"
@@ -49,7 +51,8 @@ fi
 if [[ -z "$SPOOL" && -n "${DB_PATH:-}" ]]; then
   _d="${DB_PATH%/}"; _d="${_d%\\}"
   case "$_d" in
-    *.db) _d="${_d%[\\/]*}" ;;   # DB_PATH was a file → use its directory
+    *.db) _d="${_d%[\\/]*}" ;;
+    *) ;;
   esac
   SPOOL="${_d}/spool"
 fi
