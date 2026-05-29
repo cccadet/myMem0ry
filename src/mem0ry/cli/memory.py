@@ -8,7 +8,7 @@ from ..config import MemoryConfig
 from ._app import _HELP_SESSION, _HELP_WORKDIR, app
 
 
-@app.command()
+@app.command(help="Print relevant memories for the current working context")
 def context(
     cwd: str = typer.Option(
         "", "--cwd", help="Working directory to resolve context from"
@@ -46,7 +46,7 @@ def context(
         typer.echo(line)
 
 
-@app.command()
+@app.command(help="Save a memory (reads content from stdin if omitted)")
 def save(
     title: str = typer.Argument(..., help="Memory title"),
     content: str = typer.Argument("", help="Memory content (reads stdin if empty)"),
@@ -90,7 +90,7 @@ def save(
     typer.echo(mem_id)
 
 
-@app.command()
+@app.command(help="Append a conversation log message (reads stdin if omitted)")
 def log(
     content: str = typer.Argument("", help="Log message (reads stdin if empty)"),
     cwd: str = typer.Option("", "--cwd", help=_HELP_WORKDIR),

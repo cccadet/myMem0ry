@@ -63,6 +63,16 @@ class MemoryConfig:
         os.environ.get("DB_PATH", str(_DATA_DIR / "memories.db")),
         "memories.db",
     )
+    # Durable drop-box for lifecycle events the SessionEnd hook can't reliably POST
+    # (it races Claude Code's shutdown). The hook writes a JSON file here; the server
+    # drains it on startup and periodically. Defaults next to the DB so the hook can
+    # derive the same path, but the server also advertises it via the runtime file.
+    spool_dir: str = os.environ.get(
+        "MEM0RY_SPOOL_DIR",
+        str(Path(_resolve_file_path(
+            os.environ.get("DB_PATH", str(_DATA_DIR / "memories.db")), "memories.db"
+        )).parent / "spool"),
+    )
     server_host: str = os.environ.get("MEM0RY_HOST", "127.0.0.1")
     server_port: int = int(os.environ.get("MEM0RY_PORT", "49374"))
     server_pid_file: str = os.environ.get(

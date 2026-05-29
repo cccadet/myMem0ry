@@ -9,7 +9,7 @@ from ..config import MemoryConfig
 from ._app import _HELP_SESSION, _HELP_WORKDIR, app
 
 
-@app.command()
+@app.command(help="Start the MCP / HTTP memory server")
 def serve(
     host: str = typer.Option("", "--host", help="Bind address"),
     port: int = typer.Option(0, "--port", "-p", help="Bind port"),
@@ -63,7 +63,7 @@ def serve(
     mcp_main()
 
 
-@app.command()
+@app.command(help="Send an observation event to the server (hook entrypoint)")
 def observe(
     kind: str = typer.Argument(
         ...,

@@ -10,7 +10,7 @@ from ..config import MemoryConfig
 from ._app import app
 
 
-@app.command()
+@app.command(help="Print the installed myMem0ry version")
 def version() -> None:
     try:
         typer.echo(f"mymem0ry {pkg_version('mymem0ry')}")
@@ -18,7 +18,7 @@ def version() -> None:
         typer.echo("mymem0ry (unknown version)")
 
 
-@app.command()
+@app.command(help="Show database statistics (memory counts, sizes)")
 def stats() -> None:
     from ..db.store import stats as db_stats
 
@@ -127,7 +127,7 @@ def _check_index(label: str, path: Path, ok: Any, warn: Any, hint: str) -> None:
         warn(f"indice {hint} nao encontrado (corra mymem0ry index --backend {hint})")
 
 
-@app.command()
+@app.command(help="Diagnose configuration, environment and server health")
 def doctor() -> None:
     config = MemoryConfig()
     errors = 0
@@ -175,7 +175,7 @@ def doctor() -> None:
         typer.echo("Resultado: tudo OK")
 
 
-@app.command()
+@app.command(help="List known projects in the database")
 def projects() -> None:
     from ..db.store import list_projects
 

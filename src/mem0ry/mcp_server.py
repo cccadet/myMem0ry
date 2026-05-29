@@ -720,6 +720,89 @@ def auto_save_instructions() -> str:
     )
 
 
+_SPOOL_POLL_SECONDS = 3.0
+
+
+def _runtime_file() -> Path:
+    """Fixed, env-independent location where the server advertises its spool dir so
+    hooks can find it without re-deriving paths from env."""
+    return Path.home() / ".mymem0ry" / "runtime"
+
+
+def _write_runtime_file() -> None:
+    # Plain text (line 1 = spool dir, line 2 = url) so the bash hook can read the
+    # raw path with `read` — no JSON un-escaping of Windows backslashes needed.
+    try:
+        cfg = MemoryConfig()
+        rt = _runtime_file()
+        rt.parent.mkdir(parents=True, exist_ok=True)
+        rt.write_text(
+            f"{Path(cfg.spool_dir)}\nhttp://{cfg.server_host}:{cfg.server_port}\n",
+            encoding="utf-8",
+            newline="\n",  # no CRLF — the bash hook reads line 1 raw
+        )
+    except Exception:
+        pass
+
+
+def _drain_spool_once() -> int:
+    """Process and delete every spooled lifecycle event. Returns the count handled.
+
+    The SessionEnd hook can't reliably POST (it races Claude Code's shutdown), so it
+    drops the event as a JSON file in the spool dir. The server drains it here on
+    startup and on a timer, making capture independent of the shutdown race.
+    """
+    import json
+
+    cfg = MemoryConfig()
+    spool = Path(cfg.spool_dir)
+    if not spool.is_dir():
+        return 0
+    from .hooks.router import handle_hook_event
+
+    db = _db_path()
+    handled = 0
+    for f in sorted(spool.glob("*.json")):
+        try:
+            payload = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            # Corrupt or half-written drop — discard so it can't wedge the queue.
+            f.unlink(missing_ok=True)
+            continue
+        try:
+            if isinstance(payload, dict) and payload.get("session_id"):
+                handle_hook_event(db, payload)
+                handled += 1
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        finally:
+            f.unlink(missing_ok=True)
+    return handled
+
+
+def _start_spool_drainer() -> None:
+    import threading
+    import time
+
+    cfg = MemoryConfig()
+    try:
+        Path(cfg.spool_dir).mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+    def _loop() -> None:
+        while True:
+            try:
+                _drain_spool_once()
+            except Exception:
+                pass
+            time.sleep(_SPOOL_POLL_SECONDS)
+
+    threading.Thread(target=_loop, daemon=True).start()
+
+
 def main():
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
 
@@ -756,6 +839,11 @@ def main():
                 auth_token=config.auth_token,
                 allowed_hosts=allowed,
             )
+
+        # Advertise the spool dir for hooks and start draining queued lifecycle
+        # events (e.g. SessionEnd drops the previous session raced past shutdown).
+        _write_runtime_file()
+        _start_spool_drainer()
 
         import uvicorn
 

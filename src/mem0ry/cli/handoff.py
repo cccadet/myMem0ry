@@ -69,7 +69,7 @@ def _handoff_status() -> None:
         typer.echo("Server not running.")
 
 
-@app.command()
+@app.command(help="Manage cross-session handoffs (begin, accept, status)")
 def handoff(
     action: str = typer.Argument(..., help="Action: begin, accept, status"),
     cwd: str = typer.Option("", "--cwd", help=_HELP_WORKDIR),

@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-05-29
+
+### Fixed
+
+- **SessionEnd "Hook cancelled" on Windows (3 root causes).** "Hook cancelled" is not
+  a timeout — Claude Code kills the hook's process tree at shutdown without waiting.
+  Three compounding Windows bugs meant session-end events were silently lost:
+  - **Server died with Claude Code.** `daemon.py` spawned the HTTP server with only
+    `CREATE_NEW_PROCESS_GROUP`, which does not escape Claude Code's kill-on-close Job
+    Object — so the "detached" server was killed the instant the editor closed. It now
+    spawns with `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB`,
+    falling back without breakaway when the job forbids it.
+  - **`is_server_running()` reported dead servers as alive.** `_pid_exists` used
+    `OpenProcess`, whose handle is valid even for a terminated or recycled PID, so
+    `ensure_server` never restarted a dead server. It now checks
+    `GetExitCodeProcess == STILL_ACTIVE`, and `ensure_server` treats the `/health`
+    endpoint as the liveness authority (immune to stale/recycled PIDs).
+  - **The hook raced shutdown.** A foreground `curl` (~0.8s) was cancelled before
+    completing; a backgrounded `curl` exits fast but the orphan dies before sending.
+    The hook now performs no network at all.
+
+### Added
+
+- **Durable spool for lifecycle events.** The SessionEnd hook parses with native bash
+  regex (zero subprocess; `read -r -d ''` instead of `cat`) and writes the event to
+  `spool/<session>.json` in ~0.4s — fast enough to finish before any kill, and durable
+  if it doesn't. The server drains `spool/*.json` on startup and every 3s via
+  `handle_hook_event`, so capture is independent of the shutdown race and of the server
+  being alive at session-end. The server advertises the spool dir in a runtime file
+  (`~/.mymem0ry/runtime`) so the hook resolves the path without re-deriving it.
+- `mymem0ry --help` now shows a one-line description for every command.
+
 ## [0.14.9] - 2026-05-29
 
 ### Fixed
@@ -181,7 +213,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.14.5...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.15.2...HEAD
+[0.15.2]: https://github.com/cccadet/myMem0ry/compare/v0.15.1...v0.15.2
 [0.14.5]: https://github.com/cccadet/myMem0ry/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/cccadet/myMem0ry/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/cccadet/myMem0ry/compare/v0.14.2...v0.14.3
