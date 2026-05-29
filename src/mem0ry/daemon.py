@@ -23,15 +23,28 @@ def get_server_url() -> str:
 
 
 def _pid_exists(pid: int) -> bool:
+    if pid <= 0:
+        return False
     if sys.platform == "win32":
         import ctypes
+        from ctypes import wintypes
+
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
         PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
         handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if not handle:
             return False
-        kernel32.CloseHandle(handle)
-        return True
+        # OpenProcess succeeds even for a terminated process whose kernel object
+        # still lingers (or a recycled PID), so the handle alone is not proof of
+        # life — GetExitCodeProcess must report STILL_ACTIVE.
+        try:
+            exit_code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
         return True
@@ -76,15 +89,23 @@ def ensure_server() -> str:
     Blocks until health check passes or timeout.
     """
     url = get_server_url()
-    if is_server_running():
-        return url
-
-    # Server may be running but without a valid PID file (stale or missing).
-    # Avoid spawning a ghost process that fails on port conflict.
+    # Health is the source of truth. A stale-but-alive PID file or a recycled PID
+    # both make is_server_running() unreliable, so we ask the port directly: if it
+    # answers, a server is up and we must NOT spawn a duplicate.
     if _wait_for_health(url, timeout=1.0):
         return url
 
     pid_file = get_pid_file()
+    # Nothing is answering — clear any stale PID (terminate it if it somehow lingers)
+    # so the liveness check can't keep reporting a dead server as alive.
+    try:
+        if pid_file.exists():
+            old_pid = int(pid_file.read_text().strip())
+            if _pid_exists(old_pid):
+                _terminate_pid(old_pid)
+    except (ValueError, OSError):
+        pass
+    pid_file.unlink(missing_ok=True)
     pid_file.parent.mkdir(parents=True, exist_ok=True)
 
     cfg = MemoryConfig()
@@ -100,26 +121,47 @@ def ensure_server() -> str:
         "MCP_PORT": str(cfg.server_port),
     }
 
-    popen_kwargs: dict[str, Any] = {}
-    if sys.platform == "win32":
-        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
-    else:
-        popen_kwargs["start_new_session"] = True
-
-    proc = subprocess.Popen(
-        cmd,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        **popen_kwargs,
-    )
-
+    proc = _spawn_detached(cmd, env)
     pid_file.write_text(str(proc.pid))
 
-    if not _wait_for_health(url, timeout=8.0):
-        return url
-
+    _wait_for_health(url, timeout=8.0)
     return url
+
+
+def _spawn_detached(cmd: list[str], env: dict[str, str]) -> subprocess.Popen[bytes]:
+    """Launch the server fully detached so it outlives the caller.
+
+    On Windows a hook-spawned child is added to Claude Code's Job Object, which is
+    configured to kill its processes when the job closes — so the server died the
+    moment Claude Code exited. DETACHED_PROCESS + CREATE_BREAKAWAY_FROM_JOB escapes
+    that job; if the job forbids breakaway (raises OSError) we retry without it.
+    """
+    kwargs: dict[str, Any] = {
+        "env": env,
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if sys.platform != "win32":
+        kwargs["start_new_session"] = True
+        return subprocess.Popen(cmd, **kwargs)
+
+    # CREATE_NO_WINDOW runs the console-subsystem python with no visible window
+    # (DETACHED_PROCESS would pop a black console window). It's mutually exclusive
+    # with DETACHED_PROCESS, so we rely on CREATE_BREAKAWAY_FROM_JOB to escape Claude
+    # Code's kill-on-close job and on having no inherited console to be signalled.
+    CREATE_NO_WINDOW = 0x08000000
+    CREATE_NEW_PROCESS_GROUP = 0x00000200
+    CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+    base_flags = CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+    try:
+        return subprocess.Popen(
+            cmd, creationflags=base_flags | CREATE_BREAKAWAY_FROM_JOB, **kwargs
+        )
+    except OSError:
+        # Job doesn't allow breakaway (ERROR_ACCESS_DENIED). No-window + own group is
+        # the best we can do; the server may stay in the job but won't show a window.
+        return subprocess.Popen(cmd, creationflags=base_flags, **kwargs)
 
 
 def _terminate_pid(pid: int) -> None:

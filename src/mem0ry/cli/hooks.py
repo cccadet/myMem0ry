@@ -22,7 +22,7 @@ def _hooks_dir() -> Path:
     raise typer.Exit(code=1)
 
 
-@app.command()
+@app.command(help="Show or install agent hooks (Claude Code, Codex, etc.)")
 def hooks(
     path: bool = typer.Option(False, "--path", "-p", help="Print path to hooks directory"),
     install: bool = typer.Option(False, "--install", "-i", help="Install hooks for the current agent"),

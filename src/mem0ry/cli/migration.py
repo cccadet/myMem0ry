@@ -8,7 +8,7 @@ from ..config import MemoryConfig
 from ._app import app
 
 
-@app.command()
+@app.command(help="Migrate / reingest conversations into the database schema")
 def migrate(
     conversations: Path = Path(""),
     reprocess: bool = typer.Option(

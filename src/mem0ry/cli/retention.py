@@ -9,7 +9,7 @@ from ..config import MemoryConfig
 from ._app import app
 
 
-@app.command()
+@app.command(help="Run the retention forget-sweep (alias of forget-sweep)")
 def decay(
     days: int = typer.Option(90, "--days", "-d", help="Legacy — ignored, kept for compat"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without deleting"),
@@ -42,7 +42,7 @@ def decay(
             typer.echo(f"  ... and {len(soft_deleted) - 20} more")
 
 
-@app.command()
+@app.command(help="Pin a memory so it is never forgotten")
 def pin(memory_id: str = typer.Argument(..., help="Memory ID to pin")) -> None:
     from ..db.retention import pin_memory
 
@@ -56,7 +56,7 @@ def pin(memory_id: str = typer.Argument(..., help="Memory ID to pin")) -> None:
         raise typer.Exit(code=1)
 
 
-@app.command()
+@app.command(help="Unpin a previously pinned memory")
 def unpin(memory_id: str = typer.Argument(..., help="Memory ID to unpin")) -> None:
     from ..db.retention import unpin_memory
 
@@ -70,7 +70,7 @@ def unpin(memory_id: str = typer.Argument(..., help="Memory ID to unpin")) -> No
         raise typer.Exit(code=1)
 
 
-@app.command(name="forget-sweep")
+@app.command(name="forget-sweep", help="Soft-delete low-salience memories and purge expired ones")
 def forget_sweep_cmd(
     dry_run: bool = typer.Option(
         True, "--execute/--dry-run", help="Execute sweep (default is dry-run preview)"

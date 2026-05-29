@@ -9,7 +9,7 @@ from ..config import MemoryConfig
 from ._app import app
 
 
-@app.command()
+@app.command(help="Back up the database and conversations to a tarball")
 def backup(
     to: Path = typer.Option(
         Path(""), "--to", "-t", help="Output tarball path (default: data/mem0ry-backup-DATE.tar.gz)"
@@ -42,7 +42,7 @@ def backup(
     typer.echo(f"Backup saved to {dest} ({size_kb:.1f} KB)")
 
 
-@app.command()
+@app.command(help="Restore the database and conversations from a tarball")
 def restore(
     fr: Path = typer.Option(
         Path(""), "--from", "-f", help="Tarball to restore from"

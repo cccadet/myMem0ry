@@ -50,7 +50,7 @@ def _get_expander(config: MemoryConfig) -> SpacyConceptSearch:
     return SpacyConceptSearch(model_name=config.spacy_model)
 
 
-@app.command()
+@app.command(help="Build a training dataset from an OpenAI conversation export")
 def dataset(
     source: Path = Path("data/openai/export"),
     output: Path = Path("data/processed"),
@@ -75,7 +75,7 @@ def dataset(
     typer.echo(json.dumps(result["stats"], indent=2))
 
 
-@app.command()
+@app.command(help="Split raw conversation exports into per-conversation .md files")
 def split(
     source: Path = Path(""),
     output: Path = Path("data/conversations"),
@@ -112,7 +112,7 @@ def split(
     typer.echo(f"\nTotal: {total_written} files written, {total_skipped} skipped")
 
 
-@app.command()
+@app.command(help="Search conversations (ripgrep, bm25, fts5 or hybrid backend)")
 def search(
     query: str = typer.Argument(..., help="Search query"),
     backend: str = typer.Option(
@@ -189,7 +189,7 @@ def search(
         typer.echo(f"  {p.relative_to(conv_dir)}")
 
 
-@app.command()
+@app.command(help="Compare search backends side by side for a query")
 def benchmark(
     question: str = typer.Argument(..., help="Query to benchmark"),
     top_k: int = typer.Option(3, "--top-k", "-k", help="Number of results per backend"),
@@ -223,7 +223,7 @@ def benchmark(
     typer.echo(format_table(results))
 
 
-@app.command()
+@app.command(help="Show semantically similar tokens for a query (spaCy)")
 def expand(
     query: str = typer.Argument(..., help="Query to expand"),
     top_k: int = typer.Option(10, "--top-k", "-k", help="Number of similar tokens"),
@@ -246,7 +246,7 @@ def expand(
         typer.echo(f"{token:<30} {score:>{score_width}.4f}")
 
 
-@app.command()
+@app.command(help="Build search indexes (bm25, fts5, vector)")
 def index(
     backend: str = typer.Option(
         "", "--backend", "-b", help="Backend to index: bm25, fts5, vector (empty = all)"
