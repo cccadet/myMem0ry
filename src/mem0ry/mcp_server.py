@@ -278,8 +278,32 @@ def search_memory(
     return results
 
 
+@mcp.tool()
+def read_memory(path: str) -> dict[str, Any]:
+    """Read the full content of a memory file returned by search_memory.
 
-# ─── HTTP Endpoints ───────────────────────────────────────────────────────────
+    search_memory returns previews only; call this with the `path` field from a
+    result to fetch the complete text. Useful when an agent picking up a handoff
+    needs the full record, not just the preview.
+
+    Args:
+        path: Path relative to the conversations directory (as returned by search_memory).
+    """
+    conv_dir = _conversations_dir()
+    if not conv_dir.exists():
+        raise ValueError("No conversations directory yet — nothing to read.")
+    file_path = _resolve_within(conv_dir, *Path(path).parts)
+    if not file_path.is_file():
+        raise ValueError(f"Memory not found: '{path}'")
+    return {
+        "path": path,
+        "title": file_path.stem,
+        "content": file_path.read_text(encoding="utf-8"),
+    }
+
+
+
+@mcp.tool()
 def memory_handoff_begin(
     summary: str,
     open_questions: list[str] | None = None,

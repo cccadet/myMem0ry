@@ -14,7 +14,31 @@ from typing import Any
 
 from ..config import MemoryConfig
 from ..utils.git_context import resolve_full_context
-from .sanitize import sanitize_payload
+from .sanitize import _sanitize_message, sanitize_payload
+
+
+def _messages_from_transcript(transcript_path: str) -> list[dict[str, str]] | None:
+    """Extract sanitized [{role, content}] from a Claude Code transcript JSONL.
+
+    Lets session-end archive the full conversation with zero LLM tokens when the
+    agent passes `transcript_path` instead of inlining `messages`. Returns None
+    if the file is missing or unparseable, so archiving is simply skipped.
+    """
+    path = Path(transcript_path)
+    if not path.is_file():
+        return None
+    try:
+        from ..parsers.claude import ClaudeCodeParser
+
+        convs = ClaudeCodeParser().parse(path)
+    except Exception:
+        return None
+    if not convs:
+        return None
+    return [
+        _sanitize_message({"role": m.role, "content": m.content})
+        for m in convs[0].messages
+    ]
 
 
 def _write_conversation_md(
@@ -66,8 +90,8 @@ def handle_hook_event(
       - session-end: observation + conversation archive + auto-handoff
       - log: quick log (creates a session-scoped memory)
 
-    On session-end, if `messages` is present in the payload, writes the
-    full conversation to a .md file (hook-based, zero LLM tokens).
+    On session-end, archives the conversation (hook-based, zero LLM tokens) from
+    `messages` if present, otherwise from a `transcript_path` the server parses.
 
     Returns the observation id.
     """
@@ -116,6 +140,8 @@ def handle_hook_event(
 
     if kind == "session-end":
         messages = payload.get("messages")
+        if not messages and payload.get("transcript_path"):
+            messages = _messages_from_transcript(payload["transcript_path"])
         if messages and isinstance(messages, list):
             title = payload.get("title") or f"Session {payload['session_id']}"
             summary = payload.get("body")

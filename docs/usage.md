@@ -1,5 +1,37 @@
 # Usage Guide
 
+## Switching harness mid-task
+
+The core use case: stop in one agent, continue in another in the same directory.
+It works because every agent resolves the same scopes from `cwd` (git remote =
+project, git branch = context), and a **handoff** carries the "where we left off".
+
+End-to-end flow:
+
+1. **Set up every agent once** — add the `mymem0ry-mcp` MCP server and the
+   lifecycle hooks (see [install.md](install.md)). The MCP server auto-starts the
+   shared HTTP server; all agents talk to the same SQLite DB.
+2. **Work in agent A** (e.g. Claude Code). Save decisions with `save_memory`
+   (`scope=project`/`context`). At the end, the `session-end` hook creates a
+   handoff automatically from the session's observations — or call
+   `memory_handoff_begin(summary=..., open_questions=[...], next_steps=[...])`
+   for a curated one.
+3. **Open agent B** (e.g. Codex, OpenCode) in the same directory. Its
+   `session-start` hook fetches the pending handoff and prepends it to the first
+   prompt; the agent can also call `memory_handoff_accept` or `get_context`.
+4. Continue. `search_memory` + `read_memory` retrieve full past records.
+
+Notes:
+
+- **Same directory matters** — scopes resolve from the git remote and branch, so
+  agent B must run in the same repo/branch to see project/context memories.
+- **Stable session id** — the shipped Claude Code hooks read the real
+  `session_id` from the hook payload. If you wire hooks manually for another
+  agent, pass a session id that is consistent across that agent's
+  start/tool/end events (or set `MYMEM0RY_SESSION_ID`), otherwise the auto
+  handoff has no observations to summarize.
+- A handoff is accepted once (single latest, per project) and expires after 7 days.
+
 ## How memory works
 
 myMem0ry uses a 4-level scope hierarchy, resolved automatically from the current working directory:

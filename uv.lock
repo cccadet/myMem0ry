@@ -1003,7 +1003,7 @@ wheels = [
 
 [[package]]
 name = "mymem0ry"
-version = "0.14.3"
+version = "0.14.6"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },

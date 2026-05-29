@@ -70,6 +70,21 @@ def test_parse_jsonl_with_content_blocks(tmp_path: Path) -> None:
     assert "Part two" in convs[0].messages[1].content
 
 
+def test_parse_jsonl_accepts_user_type(tmp_path: Path) -> None:
+    # Claude Code live transcripts use type "user" (not "human").
+    lines = [
+        json.dumps({"type": "user", "message": {"content": "live prompt"}}),
+        json.dumps({"type": "assistant", "message": {"content": "reply"}}),
+    ]
+    path = tmp_path / "live.jsonl"
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+    convs = ClaudeCodeParser().parse(path)
+    assert len(convs) == 1
+    assert convs[0].messages[0].role == "user"
+    assert convs[0].messages[0].content == "live prompt"
+
+
 def test_parse_jsonl_skips_empty_lines(tmp_path: Path) -> None:
     path = tmp_path / "empty.jsonl"
     path.write_text("\n\n  \n", encoding="utf-8")

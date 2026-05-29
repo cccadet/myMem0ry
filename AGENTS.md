@@ -66,7 +66,7 @@ src/mem0ry/
 ├── config.py                 # MemoryConfig dataclass — loads .env via dotenv
 ├── auth.py                   # AuthMiddleware + CORSMiddleware — bearer token, host allowlist, CORS
 ├── web.py                    # Read-only Web UI — dark mode, dashboard, projects, search, audit
-├── mcp_server.py             # FastMCP server — 8 read-only tools, /hook endpoint, /handoff endpoints, web UI routes
+├── mcp_server.py             # FastMCP server — 10 tools, /hook endpoint, /handoff endpoints, web UI routes
 ├── daemon.py                 # Auto-daemon: ensure_server(), is_server_running(), stop_server()
 ├── cli/main.py               # Typer app — all CLI commands (incl. backup, restore)
 ├── db/
@@ -110,11 +110,12 @@ src/mem0ry/
 - **`get_context()`** aggregates session → context → project → global (4-level cascata), returning up to `top_k` results distributed across scopes.
 - **Project resolution**: `resolve_project_id()` uses `git remote get-url origin` (raw URL). Falls back to None if not a git repo. See `utils/git_context.py`.
 - **Context resolution**: `resolve_context()` uses `git rev-parse --abbrev-ref HEAD`. Generic — can be branch, worktree, feature, etc.
-- **Hook architecture**: Hooks `curl POST /hook` to the HTTP server (fire-and-forget, 200ms timeout). Sanitization in `hooks/sanitize.py`. Router handles all writes: logging (`kind=log`), conversation archiving (`session-end` with `messages`), auto-handoff on session end.
+- **Hook architecture**: Hooks `curl POST /hook` to the HTTP server (fire-and-forget). Sanitization in `hooks/sanitize.py`. Router handles all writes: logging (`kind=log`), conversation archiving (`session-end` with `messages` **or** a `transcript_path` the server parses), auto-handoff on session end.
+- **Hook `session_id`**: Claude Code hook scripts read the real `session_id` (and `cwd`, `transcript_path`) from the stdin JSON payload — they must NOT fabricate one. Auto-handoff (`auto_handoff_from_session`) gathers a session's observations by `session_id`; a per-invocation timestamp id would group nothing and produce no handoff.
 - **Hook-based writes (zero LLM tokens)**: Conversation archiving, message logging, session end → all handled by `/hook` endpoint. The LLM never serializes conversations.
 - **Auto-daemon**: `daemon.py` manages PID file + health check. `ensure_server()` starts server if not running.
 - **MCP server** uses module-level global state (`_session_id`, `_expander`) with lazy init — not thread-safe.
-- **MCP tools** (8 read-only tools): get_context, save_memory, search_memory, memory_stats, memory_handoff_begin, memory_handoff_accept, memory_pin, memory_unpin, memory_forget_sweep.
+- **MCP tools** (10, reads + selective writes): get_context, save_memory, search_memory, read_memory, memory_stats, memory_handoff_begin, memory_handoff_accept, memory_pin, memory_unpin, memory_forget_sweep. Each must carry `@mcp.tool()` — a dropped decorator silently unregisters the tool (this bit `memory_handoff_begin`). `test_mcp_server.py` guards registration.
 - **Token philosophy**: Tools are for reads + selective writes (save_memory for facts/decisions). Bulk writes (conversation archiving, logging) are hook-only to avoid burning LLM tokens.
 - **HTTP endpoints**: `GET /health`, `POST /hook`, `GET /handoff/accept`.
 - **Web UI**: `web.py` — read-only dark mode viewer mounted on MCP server. Routes: `/` (dashboard), `/projects`, `/project/{id}`, `/memory/{id}`, `/search`, `/audit`, `/api/memories`.

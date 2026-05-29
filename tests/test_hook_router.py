@@ -179,6 +179,52 @@ class TestRouter:
         obs = get_session_observations(db, "s-archive")
         assert len(obs) >= 1
 
+    def test_session_end_archives_from_transcript(
+        self, db: Path, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            "\n".join(
+                [
+                    _json.dumps({"type": "user", "message": {"content": "do the thing"}}),
+                    _json.dumps(
+                        {"type": "assistant", "message": {"content": "done the thing"}}
+                    ),
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        conv_dir = tmp_path / "conv"
+        conv_dir.mkdir()
+
+        # MemoryConfig bakes CONVERSATIONS_DIR into the dataclass field default at
+        # import time, so setenv here is too late — stub the config the router
+        # constructs instead.
+        class _Cfg:
+            conversations_dir = str(conv_dir)
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("mem0ry.hooks.router.MemoryConfig", _Cfg)
+            handle_hook_event(
+                db,
+                {
+                    "kind": "session-end",
+                    "session_id": "s-transcript",
+                    "cwd": str(tmp_path),
+                    "agent": "claude-code",
+                    "transcript_path": str(transcript),
+                },
+            )
+
+        archived = list(conv_dir.rglob("*.md"))
+        assert len(archived) == 1
+        text = archived[0].read_text(encoding="utf-8")
+        assert "do the thing" in text
+        assert "done the thing" in text
+
     def test_log_kind_creates_session_memory(self, db: Path) -> None:
         handle_hook_event(
             db,

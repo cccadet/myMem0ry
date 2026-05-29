@@ -156,6 +156,7 @@ Hook payload fields:
 | `session_id` | yes | Unique session identifier (max 64 chars) |
 | `agent` | no | `opencode`, `claude-code`, `codex`, `manual`, `hook` |
 | `cwd` | no | Working directory for context resolution |
+| `transcript_path` | no | Path to a Claude Code transcript JSONL — on `session-end` the server parses it and archives the conversation (zero LLM tokens) |
 | `title` | no | Short label (max 500 chars) |
 | `body` | no | Content (max 10,000 chars) |
 | `messages` | no | `[{"role": "user"|"assistant", "content": "..."}]` — archived as .md |
@@ -260,7 +261,8 @@ Resolved automatically from `cwd` — no manual configuration needed:
 |---|---|
 | `get_context` | Aggregate context from all scopes |
 | `save_memory` | Save a memory with scope, type, and auto-resolved context |
-| `search_memory` | Search with semantic query expansion |
+| `search_memory` | Search with semantic query expansion (returns previews) |
+| `read_memory` | Fetch the full content of a memory by the `path` from a search result |
 | `memory_stats` | Database statistics |
 | `memory_handoff_begin` | Create handoff for next agent |
 | `memory_handoff_accept` | Accept pending handoff |

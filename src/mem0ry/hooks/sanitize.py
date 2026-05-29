@@ -107,6 +107,7 @@ def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
     agent = str(payload.get("agent", ""))[:64] or None
     cwd = str(payload.get("cwd", ""))[:512] or None
     project_id = str(payload.get("project_id", ""))[:256] or None
+    transcript_path = str(payload.get("transcript_path", ""))[:1024] or None
 
     title = payload.get("title")
     if title is not None:
@@ -131,6 +132,7 @@ def sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "agent": agent,
         "cwd": cwd,
         "project_id": project_id,
+        "transcript_path": transcript_path,
         "title": title,
         "body": body,
         "messages": messages,

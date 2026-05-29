@@ -32,7 +32,8 @@ class ClaudeCodeParser(BaseParser):
             return None
 
         msg_type = entry.get("type", "")
-        if msg_type not in ("human", "assistant"):
+        # Claude Code live transcripts use "user"; older exports use "human".
+        if msg_type not in ("human", "user", "assistant"):
             return None
 
         content = self._extract_text(entry)
@@ -40,7 +41,7 @@ class ClaudeCodeParser(BaseParser):
             return None
 
         return ParsedMessage(
-            role="user" if msg_type == "human" else "assistant",
+            role="user" if msg_type in ("human", "user") else "assistant",
             content=content.strip(),
             created_at=str(entry.get("timestamp") or entry.get("time") or ""),
             message_id=entry.get("uuid"),

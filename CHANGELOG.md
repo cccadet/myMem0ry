@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.6] - 2026-05-28
+
+### Fixed
+
+- `memory_handoff_begin` was missing its `@mcp.tool()` decorator, so it was never
+  registered as an MCP tool — agents could not create handoffs. This is the core of the
+  cross-agent workflow.
+- Claude Code hook scripts fabricated a per-invocation `session_id` (`date | md5sum`),
+  so observations never grouped under one session and the auto-handoff on session end
+  found nothing to summarize. Hooks now read the real `session_id`, `cwd`, and
+  `transcript_path` from the stdin payload.
+
+### Added
+
+- `read_memory` MCP tool: fetch the full content of a memory by the `path` returned by
+  `search_memory` (which only returns previews). Includes path-traversal protection.
+- `session-end` now archives the full conversation with zero LLM tokens when the hook
+  forwards `transcript_path` — the server parses the transcript instead of relying on
+  inlined `messages`. `ClaudeCodeParser` now accepts live-transcript `type: "user"`
+  entries (previously only `"human"`).
+- `docs/usage.md`: "Switching harness mid-task" end-to-end guide.
+
 ## [0.14.5] - 2026-05-28
 
 ### Fixed
