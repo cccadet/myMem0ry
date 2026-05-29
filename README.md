@@ -95,12 +95,26 @@ Add to `~/.config/opencode/opencode.json` (global) or `./opencode.json` (project
     "mymem0ry": {
       "type": "local",
       "command": ["mymem0ry-mcp"],
+      "timeout": 30000,
       "enabled": true
     }
-  },
-  "hooks": {
-    "session-start": "curl -s -m 2 -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' -d '{\"kind\":\"session-start\",\"session_id\":\"'$OPENCODE_SESSION_ID'\",\"agent\":\"opencode\",\"cwd\":\"'$PWD'\"}' > /dev/null 2>&1",
-    "session-end": "curl -s -m 2 -X POST http://127.0.0.1:49374/hook -H 'Content-Type: application/json' -d '{\"kind\":\"session-end\",\"session_id\":\"'$OPENCODE_SESSION_ID'\",\"agent\":\"opencode\",\"cwd\":\"'$PWD'\"}' > /dev/null 2>&1"
+  }
+}
+```
+
+> **Note:** `timeout: 30000` (30s) is recommended because loading the spaCy model on first run can exceed the default 5s timeout.
+
+If `mymem0ry-mcp` is not on PATH (e.g. installed via `uv sync` in a project), use the full path:
+
+```json
+{
+  "mcp": {
+    "mymem0ry": {
+      "type": "local",
+      "command": ["uv", "run", "--directory", "/path/to/myMem0ry", "mymem0ry-mcp"],
+      "timeout": 30000,
+      "enabled": true
+    }
   }
 }
 ```
@@ -143,7 +157,7 @@ The server auto-starts when the MCP server runs — no manual `serve` step neede
 
 | Agent | Hooks | How |
 |---|---|---|
-| **OpenCode** | Native | `hooks` in `opencode.json` with `$OPENCODE_SESSION_ID` |
+| **OpenCode** | MCP only | No hook support — context via MCP tools (`get_context`, `save_memory`) |
 | **Claude Code** | Native | `hooks` in `~/.claude/settings.json` — scripts receive full payload via stdin |
 | **Codex CLI** | Hook scripts | `codex hook add session-end ./hook-session-end.sh` |
 | **Generic** | Manual | `curl -X POST http://127.0.0.1:49374/hook ...` |
