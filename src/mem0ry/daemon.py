@@ -79,6 +79,11 @@ def ensure_server() -> str:
     if is_server_running():
         return url
 
+    # Server may be running but without a valid PID file (stale or missing).
+    # Avoid spawning a ghost process that fails on port conflict.
+    if _wait_for_health(url, timeout=1.0):
+        return url
+
     pid_file = get_pid_file()
     pid_file.parent.mkdir(parents=True, exist_ok=True)
 

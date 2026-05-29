@@ -398,9 +398,7 @@ def touch_memory(db_path: Path, memory_id: str) -> bool:
     return affected > 0
 
 
-def track_reads(db_path: Path, memory_ids: list[str]) -> None:
-    if not memory_ids:
-        return
+def _track_reads_sync(db_path: Path, memory_ids: list[str]) -> None:
     conn = get_connection(db_path)
     try:
         init_schema(conn)
@@ -411,8 +409,17 @@ def track_reads(db_path: Path, memory_ids: list[str]) -> None:
                 (now, mid),
             )
         conn.commit()
+    except Exception:
+        pass
     finally:
         conn.close()
+
+
+def track_reads(db_path: Path, memory_ids: list[str]) -> None:
+    if not memory_ids:
+        return
+    import threading
+    threading.Thread(target=_track_reads_sync, args=(db_path, memory_ids), daemon=True).start()
 
 
 def delete_memory(db_path: Path, memory_id: str) -> bool:

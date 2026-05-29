@@ -14,7 +14,6 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .config import MemoryConfig
-from .conversations.spacy_expand import SpacyConceptSearch
 from .utils.git_context import resolve_full_context
 
 logger = logging.getLogger(__name__)
@@ -88,9 +87,10 @@ def _preview_text(path: Path) -> str:
     return preview
 
 
-def _get_expander() -> SpacyConceptSearch:
+def _get_expander():
     global _expander
     if _expander is None:
+        from .conversations.spacy_expand import SpacyConceptSearch
         config = MemoryConfig()
         _expander = SpacyConceptSearch(model_name=config.spacy_model)
     return _expander
@@ -567,21 +567,24 @@ def auto_save_instructions() -> str:
 
 
 def main():
-    from .auth import AuthMiddleware, CORSMiddleware, parse_allowed_hosts
-    from .daemon import ensure_server
-    from .web import get_web_routes
-
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
-    host = os.environ.get("MCP_HOST", "127.0.0.1")
-    port = int(os.environ.get("MCP_PORT", "49374"))
-
-    config = MemoryConfig()
 
     if transport == "stdio":
-        ensure_server()
+        from .daemon import ensure_server
+        import threading
+        threading.Thread(target=ensure_server, daemon=True).start()
         mcp.run(transport="stdio")
         return
-    elif transport in ("sse", "streamable-http"):
+
+    host = os.environ.get("MCP_HOST", "127.0.0.1")
+    port = int(os.environ.get("MCP_PORT", "49374"))
+    config = MemoryConfig()
+
+    if transport in ("sse", "streamable-http"):
+        from .auth import AuthMiddleware, CORSMiddleware, parse_allowed_hosts
+        from .daemon import ensure_server
+        from .web import get_web_routes
+
         allowed = parse_allowed_hosts(config.allowed_hosts)
 
         app = mcp.sse_app() if transport == "sse" else mcp.streamable_http_app()

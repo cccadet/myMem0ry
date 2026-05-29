@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
+
+# On Windows, suppress the console window when spawning git. Without this,
+# spawning a subprocess from inside the MCP stdio server (whose own stdio are
+# pipes) can deadlock, because the child inherits the server's pipe handles.
+_CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
 def _git(cwd: Path, *args: str) -> str | None:
@@ -12,9 +18,11 @@ def _git(cwd: Path, *args: str) -> str | None:
         result = subprocess.run(
             ["git", *args],
             cwd=str(cwd),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=2,
+            creationflags=_CREATE_NO_WINDOW,
         )
         if result.returncode == 0:
             return result.stdout.strip() or None

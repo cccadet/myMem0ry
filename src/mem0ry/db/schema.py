@@ -194,7 +194,16 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
-    """Create all tables and indexes if they don't exist."""
+    """Create all tables and indexes if they don't exist.
+
+    Uses PRAGMA user_version as a fast read-only gate — skips all DDL when the
+    schema is already at the current version, avoiding write-lock contention in
+    multi-process setups.
+    """
+    v = conn.execute("PRAGMA user_version").fetchone()[0]
+    if v >= _SCHEMA_VERSION:
+        return
+
     for sql in (
         _CREATE_MEMORIES,
         _CREATE_OBSERVATIONS,
@@ -227,4 +236,5 @@ def init_schema(conn: sqlite3.Connection) -> None:
         "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
         ("version", str(_SCHEMA_VERSION)),
     )
+    conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
     conn.commit()

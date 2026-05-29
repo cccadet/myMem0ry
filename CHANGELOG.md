@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.9] - 2026-05-29
+
+### Fixed
+
+- **MCP tool timeouts on Windows (root cause).** Tools that resolve git context
+  (`get_context`, `search_memory`, `save_memory`, etc.) deadlocked indefinitely when
+  the server runs over stdio. The `git` subprocess inherited the server's stdio pipe
+  handles, so it never returned. `_git` now spawns with `stdin=DEVNULL` and
+  `CREATE_NO_WINDOW`, eliminating handle inheritance. `get_context` went from an
+  infinite hang (>25s timeout) to ~0.35s.
+
+### Changed
+
+- `init_schema` now gates on `PRAGMA user_version` and skips all DDL when the schema
+  is already current, removing write-lock contention from every tool call.
+- `track_reads` runs on a daemon thread so read-path tools (`get_context`,
+  `search_memory`) no longer block on access-count writes.
+- `ensure_server` health-checks before spawning, so a running server with a stale or
+  missing PID file no longer spawns a ghost process that fails on a port conflict.
+- MCP server startup deferred spaCy and auth imports and runs `ensure_server` in a
+  background thread, cutting stdio cold-start from ~5.7s to ~3.6s.
+
 ## [0.14.7] - 2026-05-29
 
 ### Added
