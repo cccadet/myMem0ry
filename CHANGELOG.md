@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.15.5] - 2026-05-29
+
+### Fixed
+
+- Fixed Changelog URL in `pyproject.toml` — changed `blob/main/` to
+  `blob/master/` to match the repository's default branch.
+
 ## [0.15.4] - 2026-05-29
 
 ### Fixed
