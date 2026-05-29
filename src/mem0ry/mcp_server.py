@@ -406,6 +406,7 @@ def memory_handoff_begin(
     open_questions: list[str] | None = None,
     next_steps: list[str] | None = None,
     cwd: str = "",
+    from_agent: str = "mcp-client",
 ) -> str:
     """Open a handoff for the next agent. Call at session end.
 
@@ -417,6 +418,9 @@ def memory_handoff_begin(
         open_questions: List of open questions for the next agent.
         next_steps: List of concrete next steps.
         cwd: Current working directory (used to match project).
+        from_agent: Which harness/CLI is creating the handoff (e.g. "claude-code",
+            "codex", "opencode"). Self-identify so the next agent knows the origin —
+            this is what makes cross-harness handoff traceable. Defaults to "mcp-client".
     """
     from .db.store import begin_handoff
 
@@ -424,7 +428,7 @@ def memory_handoff_begin(
     ho_id = begin_handoff(
         _db_path(),
         session_id=resolved["session_id"],
-        from_agent="mcp-client",
+        from_agent=from_agent,
         summary=summary,
         project_id=resolved["project_id"],
         project_path=resolved["project_path"],
