@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.7] - 2026-05-29
+
+### Added
+
+- Web UI: **Handoffs page** (`/handoffs`) — lists all handoffs with status filter tabs
+  (All / Open / Accepted / Expired), showing ID, status badge, from-agent, project,
+  summary preview and created date.
+- Web UI: **Handoff detail page** (`/handoff/{id}`) — shows full summary, open questions,
+  next steps, acceptance metadata and all fields. Links resolve correctly from the audit log.
+- Web UI: "Handoffs" nav link added between Projects and Search.
+- Dashboard: "open handoffs" stat is now a clickable link to `/handoffs?status=open`.
+- `mymem0ry hooks --config` now includes the `SessionEnd` hook in the generated
+  `settings.json` snippet so new installs wire it up automatically.
+
+### Fixed
+
+- `SessionEnd` hook was never registered in the Claude Code `settings.json` config output,
+  so `session-end.sh` (which already existed in the package) was never fired — session-end
+  observations, conversation archiving and auto-handoff creation were all silently skipped.
+
 ## [0.14.6] - 2026-05-28
 
 ### Fixed

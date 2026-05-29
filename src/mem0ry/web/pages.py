@@ -73,7 +73,7 @@ def dashboard(request: Request) -> HTMLResponse:
     stats_html = f"""<div class="stats">
   <div class="stat"><div class="num">{total}</div><div class="lbl">memories</div></div>
   <div class="stat"><div class="num">{len(projects)}</div><div class="lbl">projects</div></div>
-  <div class="stat"><div class="num">{handoffs_open}</div><div class="lbl">open handoffs</div></div>
+  <div class="stat"><div class="num"><a href="/handoffs?status=open" style="color:inherit">{handoffs_open}</a></div><div class="lbl">open handoffs</div></div>
   <div class="stat"><div class="num">v{schema_ver}</div><div class="lbl">schema</div></div>
 </div>"""
 
@@ -443,3 +443,111 @@ def delete_observation_page(request: Request) -> Any:
     oid = request.path_params["observation_id"]
     delete_observation(_db_path(), oid)
     return RedirectResponse(url="/", status_code=303)
+
+
+def handoffs_page(request: Request) -> HTMLResponse:
+    db = _db_path()
+    if not db.exists():
+        return HTMLResponse(_layout("Handoffs", _NO_DB, "handoffs"))
+
+    status_filter = request.query_params.get("status", "")
+
+    conn = get_connection(db)
+    init_schema(conn)
+
+    if status_filter:
+        rows = conn.execute(
+            "SELECT * FROM handoffs WHERE status=? ORDER BY created_at DESC LIMIT 100",
+            (status_filter,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM handoffs ORDER BY created_at DESC LIMIT 100"
+        ).fetchall()
+
+    counts = {
+        r["status"]: r["cnt"]
+        for r in conn.execute(
+            "SELECT status, count(*) as cnt FROM handoffs GROUP BY status"
+        ).fetchall()
+    }
+    conn.close()
+
+    status_tabs = ""
+    for s, label in [("", "All"), ("open", "Open"), ("accepted", "Accepted"), ("expired", "Expired")]:
+        active = "active" if status_filter == s else ""
+        cnt = counts.get(s, "") if s else sum(counts.values())
+        status_tabs += f'<a href="/handoffs{"?status="+s if s else ""}" class="{active}">{label} ({cnt})</a> '
+
+    _STATUS_COLOR = {"open": "green", "accepted": "project", "expired": "log"}
+
+    rows_html = "".join(
+        f"""<tr>
+  <td><a href="/handoff/{_esc(dict(r)['id'])}">{_esc(dict(r)['id'])}</a></td>
+  <td>{_tag(_STATUS_COLOR.get(dict(r)['status'], 'log'), dict(r)['status'])}</td>
+  <td class="meta">{_esc(dict(r).get('from_agent'))}</td>
+  <td class="meta">{_esc(dict(r).get('project_id'))}</td>
+  <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{_esc((dict(r).get('summary') or '')[:120])}</td>
+  <td class="meta">{(dict(r).get('created_at') or '')[:16]}</td>
+</tr>"""
+        for r in rows
+    )
+
+    body = f"""<h2>Handoffs</h2>
+<div style="margin-bottom:1rem">{status_tabs}</div>
+<table>
+<tr><th>ID</th><th>Status</th><th>From</th><th>Project</th><th>Summary</th><th>Created</th></tr>
+{rows_html if rows_html else '<tr><td colspan="6" class="meta">No handoffs found.</td></tr>'}
+</table>"""
+
+    return HTMLResponse(_layout("Handoffs", body, "handoffs"))
+
+
+def handoff_detail(request: Request) -> HTMLResponse:
+    hid = request.path_params["handoff_id"]
+    db = _db_path()
+
+    if not db.exists():
+        return HTMLResponse(_layout("Handoff", _NO_DB))
+
+    conn = get_connection(db)
+    init_schema(conn)
+    row = conn.execute("SELECT * FROM handoffs WHERE id=?", (hid,)).fetchone()
+    conn.close()
+
+    if not row:
+        return HTMLResponse(_layout("Handoff", f'<div class="card"><p>Handoff {hid} not found.</p></div>'))
+
+    ho = dict(row)
+    oq: list[str] = json.loads(ho.get("open_questions") or "[]")
+    ns: list[str] = json.loads(ho.get("next_steps") or "[]")
+
+    _STATUS_COLOR = {"open": "green", "accepted": "project", "expired": "log"}
+    status_tag = _tag(_STATUS_COLOR.get(ho["status"], "log"), ho["status"])
+
+    oq_html = "".join(f"<li>{_esc(q)}</li>" for q in oq) if oq else "<li class='meta'>none</li>"
+    ns_html = "".join(f"<li>{_esc(s)}</li>" for s in ns) if ns else "<li class='meta'>none</li>"
+
+    body = f"""<div class="card">
+  <h2>Handoff {_esc(hid)}</h2>
+  <div>{status_tag}</div>
+  <div class="meta" style="margin-top:.5rem">
+    From: {_esc(ho.get('from_agent'))} &middot;
+    Created: {(ho.get('created_at') or '')[:19]} &middot;
+    Expires: {(ho.get('expires_at') or '')[:10]}
+  </div>
+  <div class="meta">
+    Project: {_esc(ho.get('project_id'))} &middot;
+    Path: {_esc(ho.get('project_path'))} &middot;
+    Session: {_esc(ho.get('session_id'))}
+  </div>
+  {f'<div class="meta">Accepted by: {_esc(ho.get("accepted_by"))} @ {(ho.get("accepted_at") or "")[:19]}</div>' if ho.get("accepted_by") else ""}
+</div>
+<h3>Summary</h3>
+<pre>{_esc(ho.get('summary') or '')}</pre>
+<h3>Open Questions</h3>
+<ul style="padding-left:1.5rem">{oq_html}</ul>
+<h3>Next Steps</h3>
+<ul style="padding-left:1.5rem">{ns_html}</ul>"""
+
+    return HTMLResponse(_layout(f"Handoff: {hid}", body))

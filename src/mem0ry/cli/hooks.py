@@ -38,6 +38,7 @@ def hooks(
 
     if config:
         start_sh = hooks_dir / "claude-code" / "session-start.sh"
+        end_sh = hooks_dir / "claude-code" / "session-end.sh"
         hook_sh = hooks_dir / "claude-code" / "mymem0ry-hook.sh"
         typer.echo("Add this to your ~/.claude/settings.json:\n")
         typer.echo("```json")
@@ -45,6 +46,9 @@ def hooks(
         typer.echo('  "hooks": {')
         typer.echo('    "SessionStart": [{')
         typer.echo(f'      "hooks": [{{"type": "command", "command": "{start_sh}"}}]')
+        typer.echo('    }],')
+        typer.echo('    "SessionEnd": [{')
+        typer.echo(f'      "hooks": [{{"type": "command", "command": "{end_sh}"}}]')
         typer.echo('    }],')
         typer.echo('    "PostToolUse": [{')
         typer.echo('      "matcher": "",')

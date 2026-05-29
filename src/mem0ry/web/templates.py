@@ -74,6 +74,7 @@ def _layout(title: str, body: str, nav_active: str = "dashboard") -> str:
     nav_items = [
         ("dashboard", "/", "Dashboard"),
         ("projects", "/projects", "Projects"),
+        ("handoffs", "/handoffs", "Handoffs"),
         ("search", "/search", "Search"),
         ("audit", "/audit", _TITLE_AUDIT),
     ]
