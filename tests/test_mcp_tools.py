@@ -32,6 +32,7 @@ def test_core_tools_registered() -> None:
         "read_memory",
         "memory_handoff_begin",
         "memory_handoff_accept",
+        "evolve_fact",
     ):
         assert expected in names, f"missing tool: {expected}"
 

@@ -51,6 +51,7 @@ nav a.active{background:var(--surface);color:var(--accent)}
 .tag-decision{background:#2a1a1a;color:var(--red)}
 .tag-pattern{background:#1a2a1a;color:var(--green)}
 .tag-log{background:#1a1a2a;color:var(--text2)}
+.tag-superseded{background:#3a1a1a;color:var(--red)}
 pre{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1rem;
   overflow-x:auto;white-space:pre-wrap;word-wrap:break-word;font-size:.85rem}
 input[type=text]{background:var(--surface);border:1px solid var(--border);border-radius:6px;
@@ -107,13 +108,17 @@ def _memory_card(m: dict[str, Any]) -> str:
     scope = m.get("scope", "global")
     mtype = m.get("memory_type", "log")
     pinned = " pinned" if m.get("pinned") else ""
+    superseded_by = m.get("superseded_by")
     created = (m.get("created_at") or "")[:10]
     content = _esc(m["content"][:200])
     mid = m["id"]
+    superseded_badge = ""
+    if superseded_by:
+        superseded_badge = f' <a href="/memory/{_esc(superseded_by)}">{_tag("superseded", f"superseded by {superseded_by}")}</a>'
     return f"""<div class="card{pinned}">
   <div><strong><a href="/memory/{mid}">{title}</a></strong>
   {_tag(scope, scope)} {_tag(mtype, mtype)}
-  {(' <span class="meta pinned">pinned</span>' if m.get('pinned') else '')}
+  {(' <span class="meta pinned">pinned</span>' if m.get('pinned') else '')}{superseded_badge}
   </div>
   <div class="meta">{created} &middot; {m.get('source','')} &middot; accessed {m.get('access_count',0)}x</div>
   <div style="margin-top:.3rem">{content}{'...' if len(m.get('content',''))>200 else ''}</div>

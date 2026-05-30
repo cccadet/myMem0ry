@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-_SCHEMA_VERSION = 6
+_SCHEMA_VERSION = 7
 
 _CREATE_MEMORIES = """
 CREATE TABLE IF NOT EXISTS memories (
@@ -163,6 +163,11 @@ CREATE INDEX IF NOT EXISTS idx_audit_created
 ON audit_log(created_at)
 """
 
+_INDEX_SUPERSEDED = """
+CREATE INDEX IF NOT EXISTS idx_memories_superseded
+ON memories(superseded_by)
+"""
+
 
 _EXTRA_COLUMNS: list[tuple[str, str]] = [
     ("project_id", "TEXT"),
@@ -181,6 +186,7 @@ _EXTRA_COLUMNS: list[tuple[str, str]] = [
     ("pinned", "INTEGER NOT NULL DEFAULT 0"),
     ("deleted_at", "TEXT"),
     ("grace_until", "TEXT"),
+    ("superseded_by", "TEXT"),
 ]
 
 
@@ -230,6 +236,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
         _INDEX_AUDIT_ACTION,
         _INDEX_AUDIT_TARGET,
         _INDEX_AUDIT_CREATED,
+        _INDEX_SUPERSEDED,
     ):
         conn.execute(sql)
     conn.execute(

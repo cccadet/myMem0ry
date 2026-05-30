@@ -143,6 +143,7 @@ def get_context(
     # top_k budget in priority order so a scope with many strong memories isn't
     # throttled to a single row.
     _ORDER = "ORDER BY pinned DESC, salience DESC, created_at DESC"
+    _NOT_SUPERSEDED = "(superseded_by IS NULL OR superseded_by = '')"
 
     conn = get_connection(db_path)
     try:
@@ -157,7 +158,7 @@ def get_context(
             queries.append(
                 (
                     f"SELECT * FROM memories WHERE scope = 'session' AND session_id = ? "
-                    f"AND deleted_at IS NULL {_ORDER}",
+                    f"AND deleted_at IS NULL AND {_NOT_SUPERSEDED} {_ORDER}",
                     [session_id],
                 )
             )
@@ -166,7 +167,7 @@ def get_context(
             params = [context]
             sql = (
                 "SELECT * FROM memories WHERE scope = 'context' AND context = ? "
-                "AND deleted_at IS NULL"
+                f"AND deleted_at IS NULL AND {_NOT_SUPERSEDED}"
             )
             if project_id:
                 sql += " AND project_id = ?"
@@ -177,7 +178,7 @@ def get_context(
             queries.append(
                 (
                     f"SELECT * FROM memories WHERE scope = 'project' AND project_id = ? "
-                    f"AND deleted_at IS NULL {_ORDER}",
+                    f"AND deleted_at IS NULL AND {_NOT_SUPERSEDED} {_ORDER}",
                     [project_id],
                 )
             )
@@ -185,7 +186,7 @@ def get_context(
         queries.append(
             (
                 f"SELECT * FROM memories WHERE scope = 'global' AND memory_type != 'log' "
-                f"AND deleted_at IS NULL {_ORDER}",
+                f"AND deleted_at IS NULL AND {_NOT_SUPERSEDED} {_ORDER}",
                 [],
             )
         )
@@ -351,7 +352,7 @@ def search_memories(
     try:
         init_schema(conn)
 
-        conditions: list[str] = ["deleted_at IS NULL"]
+        conditions: list[str] = ["deleted_at IS NULL", "(superseded_by IS NULL OR superseded_by = '')"]
         params: list[Any] = []
 
         if scope:
@@ -512,3 +513,96 @@ def decay_memories(
     result: dict[str, Any] = forget_sweep(db_path, dry_run=dry_run)
     soft = result.get("soft_deleted", [])
     return [str(m["id"]) for m in soft]
+
+
+def evolve_memories(
+    db_path: Path,
+    old_ids: list[str],
+    evolved_content: str,
+    rationale: str,
+    scope: str | None = None,
+    project_id: str | None = None,
+    project_path: str | None = None,
+    context: str | None = None,
+    tags: list[str] | None = None,
+    title: str | None = None,
+    source: str = "manual",
+) -> dict[str, Any]:
+    """Soft-delete old facts and create a new evolved fact.
+
+    The agent LLM provides the evolved content and rationale. This function
+    handles the DB plumbing: marking old rows as superseded, creating the new
+    row, and recording the audit trail.
+
+    Returns dict with new_id, superseded_count, old_ids.
+    """
+    if not old_ids:
+        raise ValueError("old_ids must not be empty")
+
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+
+        placeholders = ",".join("?" for _ in old_ids)
+        old_rows = conn.execute(
+            f"SELECT id, scope, project_id, project_path, context, tags, title "
+            f"FROM memories WHERE id IN ({placeholders}) "
+            f"AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '')",
+            old_ids,
+        ).fetchall()
+
+        found_ids = {r["id"] for r in old_rows}
+        missing = set(old_ids) - found_ids
+        if missing:
+            raise ValueError(
+                f"old_ids not found or already superseded/deleted: {', '.join(sorted(missing))}"
+            )
+
+        first = dict(old_rows[0])
+
+        final_scope = _validate_scope(scope or first["scope"])
+        final_title = title or first.get("title") or "Evolved fact"
+        final_tags = tags if tags is not None else json.loads(first.get("tags") or "[]")
+        final_project_id = project_id or first.get("project_id")
+        final_project_path = project_path or first.get("project_path")
+        final_context = context or first.get("context")
+
+        new_id = create_memory(
+            db_path,
+            content=evolved_content,
+            scope=final_scope,
+            project_id=final_project_id,
+            project_path=final_project_path,
+            context=final_context,
+            memory_type="fact",
+            source=source,
+            tags=final_tags,
+            title=final_title,
+        )
+
+        now = _now_iso()
+        conn.execute(
+            f"UPDATE memories SET superseded_by = ?, deleted_at = ? "
+            f"WHERE id IN ({placeholders})",
+            [new_id, now] + old_ids,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    try:
+        record_audit(
+            db_path,
+            action="evolve",
+            target_type="memory",
+            target_id=new_id,
+            details=json.dumps({"from": old_ids, "rationale": rationale}),
+        )
+    except Exception:
+        pass
+
+    return {
+        "new_id": new_id,
+        "superseded_count": len(old_ids),
+        "old_ids": old_ids,
+    }

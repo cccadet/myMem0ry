@@ -41,23 +41,27 @@ def dashboard(_request: Request) -> HTMLResponse:
     conn = get_connection(db)
     init_schema(conn)
 
-    total = conn.execute("SELECT count(*) FROM memories WHERE deleted_at IS NULL").fetchone()[0]
+    total = conn.execute("SELECT count(*) FROM memories WHERE deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '')").fetchone()[0]
     projects = conn.execute(
         "SELECT project_id, count(*) as cnt FROM memories "
-        "WHERE project_id IS NOT NULL AND deleted_at IS NULL "
+        "WHERE project_id IS NOT NULL AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') "
         "GROUP BY project_id ORDER BY cnt DESC LIMIT 10"
     ).fetchall()
 
     by_scope = conn.execute(
-        "SELECT scope, count(*) as cnt FROM memories WHERE deleted_at IS NULL GROUP BY scope"
+        "SELECT scope, count(*) as cnt FROM memories WHERE deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') GROUP BY scope"
     ).fetchall()
     by_type = conn.execute(
-        "SELECT memory_type, count(*) as cnt FROM memories WHERE deleted_at IS NULL GROUP BY memory_type"
+        "SELECT memory_type, count(*) as cnt FROM memories WHERE deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') GROUP BY memory_type"
     ).fetchall()
 
     recent = conn.execute(
-        "SELECT * FROM memories WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10"
+        "SELECT * FROM memories WHERE deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') ORDER BY created_at DESC LIMIT 10"
     ).fetchall()
+
+    evolutions = conn.execute(
+        "SELECT count(*) FROM memories WHERE superseded_by IS NOT NULL AND superseded_by != ''"
+    ).fetchone()[0]
 
     handoffs_open = conn.execute(
         "SELECT count(*) FROM handoffs WHERE status = 'open'"
@@ -74,6 +78,7 @@ def dashboard(_request: Request) -> HTMLResponse:
   <div class="stat"><div class="num">{total}</div><div class="lbl">memories</div></div>
   <div class="stat"><div class="num">{len(projects)}</div><div class="lbl">projects</div></div>
   <div class="stat"><div class="num"><a href="/handoffs?status=open" style="color:inherit">{handoffs_open}</a></div><div class="lbl">open handoffs</div></div>
+  <div class="stat"><div class="num">{evolutions}</div><div class="lbl">evolved facts</div></div>
   <div class="stat"><div class="num">v{schema_ver}</div><div class="lbl">schema</div></div>
 </div>"""
 
@@ -105,7 +110,7 @@ def projects_page(_request: Request) -> HTMLResponse:
     mem_projects: dict[str, dict[str, Any]] = {}
     for row in conn.execute(
         "SELECT project_id, project_path, count(*) as cnt FROM memories "
-        "WHERE project_id IS NOT NULL AND deleted_at IS NULL "
+        "WHERE project_id IS NOT NULL AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') "
         "GROUP BY project_id"
     ).fetchall():
         r = dict(row)
@@ -133,7 +138,7 @@ def projects_page(_request: Request) -> HTMLResponse:
             }
 
     global_cnt = conn.execute(
-        "SELECT count(*) FROM memories WHERE scope='global' AND deleted_at IS NULL"
+        "SELECT count(*) FROM memories WHERE scope='global' AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '')"
     ).fetchone()[0]
     conn.close()
 
@@ -174,16 +179,16 @@ def project_detail(request: Request) -> HTMLResponse:
 
     if pid == "global":
         rows = conn.execute(
-            "SELECT * FROM memories WHERE scope='global' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100"
+            "SELECT * FROM memories WHERE scope='global' AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') ORDER BY created_at DESC LIMIT 100"
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT * FROM memories WHERE project_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100",
+            "SELECT * FROM memories WHERE project_id=? AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') ORDER BY created_at DESC LIMIT 100",
             (pid,),
         ).fetchall()
 
     by_scope = conn.execute(
-        "SELECT scope, count(*) as cnt FROM memories WHERE project_id=? AND deleted_at IS NULL GROUP BY scope",
+        "SELECT scope, count(*) as cnt FROM memories WHERE project_id=? AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') GROUP BY scope",
         (pid,),
     ).fetchall() if pid != "global" else []
 
@@ -214,22 +219,38 @@ def memory_detail(request: Request) -> HTMLResponse:
     init_schema(conn)
 
     row = conn.execute("SELECT * FROM memories WHERE id=?", (mid,)).fetchone()
-    conn.close()
 
     if not row:
+        conn.close()
         return HTMLResponse(_layout("Memory", f'<div class="card"><p>Memory {mid} not found.</p></div>'))
 
     m = dict(row)
+
+    incoming = conn.execute(
+        "SELECT id, title FROM memories WHERE superseded_by = ? LIMIT 10",
+        (mid,),
+    ).fetchall()
+    conn.close()
 
     tags: list[str] = json.loads(m.get("tags") or "[]")
     tags_html = " ".join(_tag("log", t) for t in tags)
 
     content = _esc(m["content"])
 
+    superseded_info = ""
+    if m.get("superseded_by"):
+        superseded_info = f'<div style="margin-top:.3rem">{_tag("superseded", "superseded by")} <a href="/memory/{_esc(m["superseded_by"])}">{_esc(m["superseded_by"])}</a></div>'
+
+    superseded_rows = ""
+    if incoming:
+        links = ", ".join(f'<a href="/memory/{_esc(r["id"])}">{_esc(r["title"] or r["id"])}</a>' for r in incoming)
+        superseded_rows = f'<div style="margin-top:.3rem"><strong>Supersedes:</strong> {links}</div>'
+
     body = f"""<div class="card">
   <h2>{_esc(m.get('title') or m['id'])}</h2>
   <div>{_tag(m['scope'], m['scope'])} {_tag(m.get('memory_type','log'), m.get('memory_type','log'))}
   {(' <span class="meta pinned">pinned</span>' if m.get('pinned') else '')}</div>
+  {superseded_info}{superseded_rows}
   <div class="meta">
     Created: {(m.get('created_at') or '')[:19]} &middot;
     Updated: {(m.get('updated_at') or 'never')[:19]} &middot;
@@ -296,7 +317,7 @@ def search_page(request: Request) -> HTMLResponse:
             conn = get_connection(db)
             init_schema(conn)
 
-            conditions: list[str] = ["deleted_at IS NULL"]
+            conditions: list[str] = ["deleted_at IS NULL", "(superseded_by IS NULL OR superseded_by = '')"]
             params: list[Any] = []
 
             if scope:
@@ -406,7 +427,7 @@ def api_memories(request: Request) -> JSONResponse:
     mtype = request.query_params.get("type", "")
     limit = min(int(request.query_params.get("limit", "50")), 200)
 
-    conditions: list[str] = ["deleted_at IS NULL"]
+    conditions: list[str] = ["deleted_at IS NULL", "(superseded_by IS NULL OR superseded_by = '')"]
     params: list[Any] = []
 
     if scope:

@@ -65,16 +65,16 @@ mymem0ry-mcp                          # Starts FastMCP server (stdio or HTTP)
 src/mem0ry/
 ├── config.py                 # MemoryConfig dataclass — loads .env via dotenv
 ├── auth.py                   # AuthMiddleware + CORSMiddleware — bearer token, host allowlist, CORS
-├── web.py                    # Read-only Web UI — dark mode, dashboard, projects, search, audit
-├── mcp_server.py             # FastMCP server — 10 tools, /hook endpoint, /handoff endpoints, web UI routes
+├── web/                      # Read-only Web UI — dark mode, dashboard, projects, search, audit
+├── mcp_server.py             # FastMCP server — 11 tools, /hook endpoint, /handoff endpoints, web UI routes
 ├── daemon.py                 # Auto-daemon: ensure_server(), is_server_running(), stop_server()
 ├── cli/main.py               # Typer app — all CLI commands (incl. backup, restore)
 ├── db/
 │   ├── connection.py         # SQLite + sqlite-vec extension
-│   ├── schema.py             # init_schema() — v6: memories + observations + handoffs + audit_log
+│   ├── schema.py             # init_schema() — v7: memories + observations + handoffs + audit_log
 │   ├── store.py              # CRUD: memories, observations, handoffs, audit, decay
 │   ├── retention.py          # Salience scoring, pin/unpin, forget-sweep
-│   └── migrate.py            # migrate_v1_to_v2() through migrate_v5_to_v6()
+│   └── migrate.py            # migrate_v1_to_v2() through migrate_v6_to_v7()
 ├── hooks/
 │   ├── sanitize.py           # sanitize_payload() — strip PII, API keys, truncate
 │   └── router.py             # handle_hook_event() — sanitize → resolve context → store
@@ -101,7 +101,7 @@ src/mem0ry/
 
 ### Key facts
 
-- **Schema version**: v6. `db/schema.py` sets `_SCHEMA_VERSION = 6`. Tables: `memories`, `observations`, `handoffs`, `audit_log`, `schema_meta`.
+- **Schema version**: v7. `db/schema.py` sets `_SCHEMA_VERSION = 7`. Tables: `memories`, `observations`, `handoffs`, `audit_log`, `schema_meta`. Column `superseded_by` on memories tracks fact evolution chain.
 - **Memory scopes**: `global` / `project` / `context` / `session` — validated by `_VALID_SCOPES` in `db/store.py`.
 - **Memory types**: `fact` / `decision` / `pattern` / `log` — validated by `_VALID_MEMORY_TYPES` in `db/store.py`. Used for decay differentiation.
 - **Source values**: `claude-code` / `opencode` / `codex` / `manual` / `import` / `hook` — validated by `_VALID_SOURCES` in `db/store.py`.
@@ -115,13 +115,14 @@ src/mem0ry/
 - **Hook-based writes (zero LLM tokens)**: Conversation archiving, message logging, session end → all handled by `/hook` endpoint. The LLM never serializes conversations.
 - **Auto-daemon**: `daemon.py` manages PID file + health check. `ensure_server()` starts server if not running.
 - **MCP server** uses module-level global state (`_session_id`, `_expander`) with lazy init — not thread-safe.
-- **MCP tools** (10, reads + selective writes): get_context, save_memory, search_memory, read_memory, memory_stats, memory_handoff_begin, memory_handoff_accept, memory_pin, memory_unpin, memory_forget_sweep. Each must carry `@mcp.tool()` — a dropped decorator silently unregisters the tool (this bit `memory_handoff_begin`). `test_mcp_server.py` guards registration.
+- **MCP tools** (11, reads + selective writes): get_context, save_memory, search_memory, read_memory, memory_stats, memory_handoff_begin, memory_handoff_accept, memory_pin, memory_unpin, memory_forget_sweep, evolve_fact. Each must carry `@mcp.tool()` — a dropped decorator silently unregisters the tool (this bit `memory_handoff_begin`). `test_mcp_server.py` guards registration.
 - **Token philosophy**: Tools are for reads + selective writes (save_memory for facts/decisions). Bulk writes (conversation archiving, logging) are hook-only to avoid burning LLM tokens.
 - **HTTP endpoints**: `GET /health`, `POST /hook`, `GET /handoff/accept`.
-- **Web UI**: `web.py` — read-only dark mode viewer mounted on MCP server. Routes: `/` (dashboard), `/projects`, `/project/{id}`, `/memory/{id}`, `/search`, `/audit`, `/api/memories`.
+- **Web UI**: `web/` — read-only dark mode viewer mounted on MCP server. Routes: `/` (dashboard), `/projects`, `/project/{id}`, `/memory/{id}`, `/search`, `/audit`, `/api/memories`.
 - **Auth**: `auth.py` — Bearer token (`MEM0RY_TOKEN`), Host allowlisting (`MEM0RY_ALLOWED_HOSTS`), CORS (`MEM0RY_CORS_ORIGINS`). Applied as Starlette middleware on HTTP transport.
-- **Audit log**: `audit_log` table records mutations (create, delete, handoff). Auto-recorded in `store.py`.
+- **Audit log**: `audit_log` table records mutations (create, delete, handoff, evolve). Auto-recorded in `store.py`.
 - **Retention**: `db/retention.py` — salience-based decay. Tiers: working(log,90d), procedural(pattern,365d), semantic(fact/decision,indefinite+auto-pin).
+- **Fact evolution**: `evolve_fact` MCP tool lets the agent LLM consolidate contradictory facts. Old facts get `superseded_by` set + soft-delete; a new evolved fact is created. `get_context()` and `search_memories()` exclude superseded memories. The agent decides when to evolve (Camada 1 — instruction-based, no heuristics).
 - `sanitize_title()` in `utils/filenames.py` is the single source for filename sanitization, shared between `writer.py` and `mcp_server.py`.
 - `config.py` loads `.env` from the project root on import (`load_dotenv` at module level).
 - `data/` is gitignored. DB files (`data/memories.db`, `data/conversations/.vec.db`) are created at runtime.

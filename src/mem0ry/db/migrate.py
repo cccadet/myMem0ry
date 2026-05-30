@@ -231,3 +231,29 @@ def migrate_v5_to_v6(db_path: Path) -> dict:
     conn.close()
 
     return {"old_version": old_version, "new_version": 6}
+
+
+def migrate_v6_to_v7(db_path: Path) -> dict:
+    """Upgrade v6 schema to v7: add superseded_by column for fact evolution."""
+    conn = get_connection(db_path)
+
+    version_row = conn.execute(_VERSION_SQL).fetchone()
+    old_version = int(version_row["value"]) if version_row else 6
+
+    existing = {
+        row[1] for row in conn.execute("PRAGMA table_info(memories)").fetchall()
+    }
+    if "superseded_by" not in existing:
+        conn.execute("ALTER TABLE memories ADD COLUMN superseded_by TEXT")
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_memories_superseded ON memories(superseded_by)"
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
+        ("version", "7"),
+    )
+    conn.commit()
+    conn.close()
+
+    return {"old_version": old_version, "new_version": 7}

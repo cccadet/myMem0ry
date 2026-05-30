@@ -493,3 +493,23 @@ def test_forget_sweep_keeps_md_during_grace(db: Path, tmp_path: Path) -> None:
     assert mem_id not in result["hard_deleted"]
     assert result["files_removed_count"] == 0
     assert md_file.exists()
+
+
+def test_get_context_excludes_superseded(db: Path) -> None:
+    from mem0ry.db.store import evolve_memories
+
+    old = create_memory(db, content="superseded fact", scope="global", memory_type="fact", title="Old")
+    evolve_memories(db, old_ids=[old], evolved_content="new fact", rationale="test")
+
+    ctx = get_context(db, top_k=10)
+    assert all(r["id"] != old for r in ctx)
+
+
+def test_search_excludes_superseded(db: Path) -> None:
+    from mem0ry.db.store import evolve_memories
+
+    old = create_memory(db, content="superseded searchable", scope="global", memory_type="fact", title="OldSearch")
+    evolve_memories(db, old_ids=[old], evolved_content="new fact", rationale="test")
+
+    results = search_memories(db, query="superseded")
+    assert all(r["id"] != old for r in results)

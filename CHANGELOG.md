@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-05-29
+
+### Added
+
+- **Fact evolution** — new `evolve_fact` MCP tool that lets the agent LLM
+  consolidate contradictory or outdated facts without heuristics. When a user
+  corrects previous information (e.g. "I migrated from Spark to Iceberg"), the
+  agent calls `evolve_fact(old_ids=[...], evolved_content="...", rationale="...")`
+  which soft-deletes old facts and creates a consolidated evolved fact.
+- Schema v7: `superseded_by` column on the `memories` table tracks the evolution
+  chain. Old facts are soft-deleted and hidden from `get_context()` and
+  `search_memories()` but remain in the DB for audit.
+- `migrate_v6_to_v7()` — adds `superseded_by` column and index.
+- Web UI: "evolved facts" counter on dashboard, superseded badge on memory cards,
+  "Supersedes" / "Superseded by" links on memory detail page.
+- `auto_save_instructions` prompt now includes "Fact Evolution" section.
+- 13 new tests in `test_evolution.py` + 2 regression tests in `test_db_store.py`.
+
+### Changed
+
+- `get_context()` and `search_memories()` now exclude superseded memories
+  (`superseded_by IS NOT NULL`).
+- AGENTS.md updated: schema v7, 11 MCP tools, fact evolution docs.
+
 ## [0.15.5] - 2026-05-29
 
 ### Fixed

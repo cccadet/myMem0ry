@@ -39,7 +39,7 @@ def test_init_schema_version(tmp_path: Path) -> None:
     init_schema(conn)
 
     row = conn.execute("SELECT value FROM schema_meta WHERE key='version'").fetchone()
-    assert row["value"] == "6"
+    assert row["value"] == "7"
     conn.close()
 
 
@@ -71,6 +71,7 @@ def test_memories_columns(tmp_path: Path) -> None:
         "pinned",
         "deleted_at",
         "grace_until",
+        "superseded_by",
     ]
     for col in expected:
         assert col in names, f"Missing column: {col}"

@@ -518,6 +518,67 @@ def memory_forget_sweep(execute: bool = False) -> dict[str, Any]:
 
 
 @mcp.tool()
+def evolve_fact(
+    old_ids: list[str],
+    evolved_content: str,
+    rationale: str,
+    title: str | None = None,
+    tags: list[str] | None = None,
+    cwd: str = "",
+) -> str:
+    """Evolve one or more facts into a consolidated fact.
+
+    Use this when a fact contradicts, refines, or replaces an existing fact.
+    The old facts are soft-deleted; a new evolved fact is created.
+
+    WHEN TO USE:
+    - A user corrects previous information ("I no longer use X, I use Y now")
+    - A fact needs to be updated with newer information
+    - Multiple related facts should be consolidated into one
+
+    HOW TO USE:
+    1. search_memory() to find the old fact(s)
+    2. Call evolve_fact with old_ids and the new consolidated content
+    3. The old facts become invisible to get_context/search_memory
+
+    Example:
+      Old fact: "User uses Spark" (id: mem_abc)
+      evolve_fact(old_ids=["mem_abc"],
+                  evolved_content="Processing engine: Iceberg (migrated from Spark, 2026-05)",
+                  rationale="User stated migration from Spark to Iceberg",
+                  title="Processing engine")
+
+    Args:
+        old_ids: IDs of the facts to supersede.
+        evolved_content: The new consolidated fact content.
+        rationale: Why this evolution happened (for audit trail).
+        title: Title for the evolved fact (optional, derived from old facts if omitted).
+        tags: Tags for the evolved fact (optional, merged from old facts if omitted).
+        cwd: Current working directory for project resolution.
+    """
+    from .db.store import evolve_memories
+
+    resolved = _resolve_cwd(cwd)
+
+    result = evolve_memories(
+        _db_path(),
+        old_ids=old_ids,
+        evolved_content=evolved_content,
+        rationale=rationale,
+        title=title,
+        tags=tags,
+        project_id=resolved["project_id"],
+        project_path=resolved["project_path"],
+        context=resolved["context"],
+    )
+
+    return (
+        f"Evolved fact {result['new_id']} supersedes "
+        f"{result['superseded_count']} old fact(s): {', '.join(result['old_ids'])}"
+    )
+
+
+@mcp.tool()
 def memory_stats() -> dict[str, Any]:
     """Get overview statistics of the memories database.
 
@@ -707,6 +768,12 @@ def auto_save_instructions() -> str:
         "   - Facts → save_memory(scope='global', memory_type='fact')\n"
         "   - Patterns → save_memory(scope='global', memory_type='pattern')\n"
         "Pin the important ones with memory_pin(<id>) so they survive retention.\n"
+        "\n"
+        "## Fact Evolution\n"
+        "When a user corrects or updates previous information:\n"
+        "   1. search_memory() to find the old fact(s) that are now outdated\n"
+        "   2. evolve_fact(old_ids=[...], evolved_content='...', rationale='...')\n"
+        "This keeps the memory base clean — old facts are hidden from context/search.\n"
         "\n"
         "## Session End\n"
         "Call memory_handoff_begin(summary='...', cwd=<cwd>) to hand off to the next\n"

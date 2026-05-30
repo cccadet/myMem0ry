@@ -15,6 +15,7 @@ from .store_memories import (  # noqa: F401
     track_reads,
     decay_memories,
     delete_memory,
+    evolve_memories,
     _VALID_SCOPES,
     _VALID_SOURCES,
     _VALID_MEMORY_TYPES,
