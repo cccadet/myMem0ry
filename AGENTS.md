@@ -40,6 +40,12 @@ mymem0ry benchmark "query"            # Compare search backends
 mymem0ry expand "token"               # Semantically related tokens
 mymem0ry dataset                      # ChatML JSONL (legacy)
 
+# Share (export/import)
+mymem0ry export --output file.json    # Export memories+handoffs to JSON
+mymem0ry export --project-id X -o out.json  # Export specific project
+mymem0ry import file.json             # Import from JSON (skips duplicates)
+mymem0ry import file.json --project-id Y    # Import remapping to project Y
+
 # Server & handoffs
 mymem0ry serve                         # Start HTTP server (MCP + hooks + handoffs)
 mymem0ry serve --detach                # Start in background (daemon mode)
@@ -72,7 +78,9 @@ src/mem0ry/
 ├── db/
 │   ├── connection.py         # SQLite + sqlite-vec extension
 │   ├── schema.py             # init_schema() — v7: memories + observations + handoffs + audit_log
-│   ├── store.py              # CRUD: memories, observations, handoffs, audit, decay
+│   ├── store.py              # Re-exports from store_memories, store_observations, store_handoffs, store_audit
+│   ├── store_memories.py     # CRUD: memories + batch delete, export, import
+│   ├── store_handoffs.py     # CRUD: handoffs + export, import
 │   ├── retention.py          # Salience scoring, pin/unpin, forget-sweep
 │   └── migrate.py            # migrate_v1_to_v2() through migrate_v6_to_v7()
 ├── hooks/
@@ -118,9 +126,9 @@ src/mem0ry/
 - **MCP tools** (11, reads + selective writes): get_context, save_memory, search_memory, read_memory, memory_stats, memory_handoff_begin, memory_handoff_accept, memory_pin, memory_unpin, memory_forget_sweep, evolve_fact. Each must carry `@mcp.tool()` — a dropped decorator silently unregisters the tool (this bit `memory_handoff_begin`). `test_mcp_server.py` guards registration.
 - **Token philosophy**: Tools are for reads + selective writes (save_memory for facts/decisions). Bulk writes (conversation archiving, logging) are hook-only to avoid burning LLM tokens.
 - **HTTP endpoints**: `GET /health`, `POST /hook`, `GET /handoff/accept`.
-- **Web UI**: `web/` — read-only dark mode viewer mounted on MCP server. Routes: `/` (dashboard), `/projects`, `/project/{id}`, `/memory/{id}`, `/search`, `/audit`, `/api/memories`.
+- **Web UI**: `web/` — dark mode viewer mounted on MCP server. Routes: `/` (dashboard), `/projects`, `/project/{id}`, `/memory/{id}`, `/search`, `/audit`, `/api/memories`, `/import`, `/memories/batch-delete`, `/memories/export`, `/memories/import`. Checkboxes + batch action bar for delete/export. Per-project "Export Project" button.
 - **Auth**: `auth.py` — Bearer token (`MEM0RY_TOKEN`), Host allowlisting (`MEM0RY_ALLOWED_HOSTS`), CORS (`MEM0RY_CORS_ORIGINS`). Applied as Starlette middleware on HTTP transport.
-- **Audit log**: `audit_log` table records mutations (create, delete, handoff, evolve). Auto-recorded in `store.py`.
+- **Audit log**: `audit_log` table records mutations (create, delete, import, handoff, evolve). Auto-recorded in `store.py`.
 - **Retention**: `db/retention.py` — salience-based decay. Tiers: working(log,90d), procedural(pattern,365d), semantic(fact/decision,indefinite+auto-pin).
 - **Fact evolution**: `evolve_fact` MCP tool lets the agent LLM consolidate contradictory facts. Old facts get `superseded_by` set + soft-delete; a new evolved fact is created. `get_context()` and `search_memories()` exclude superseded memories. The agent decides when to evolve (Camada 1 — instruction-based, no heuristics).
 - `sanitize_title()` in `utils/filenames.py` is the single source for filename sanitization, shared between `writer.py` and `mcp_server.py`.

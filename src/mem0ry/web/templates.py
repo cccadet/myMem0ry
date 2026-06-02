@@ -15,6 +15,9 @@ def _db_path() -> Path:
     return Path(MemoryConfig().db_path)
 
 
+_PINNED_STYLE = ".pinned::before{content:\"\\1F4CC\";margin-right:.3rem}"
+
+
 def _css() -> str:
     return """
 *{margin:0;padding:0;box-sizing:border-box}
@@ -25,7 +28,7 @@ def _css() -> str:
   --purple:#bc8cff;
 }
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-  background:var(--bg);color:var(--text);line-height:1.6;padding:1rem 2rem;max-width:1200px;margin:0 auto}
+  background:var(--bg);color:var(--text);line-height:1.6;padding:1rem 2rem;padding-bottom:5rem;max-width:1200px;margin:0 auto}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
 h1{font-size:1.5rem;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
@@ -63,12 +66,63 @@ input[type=text]:focus{outline:none;border-color:var(--accent)}
 .btn-danger{background:var(--red);color:#fff;border:none;padding:.4rem 1rem;border-radius:6px;
   cursor:pointer;font-size:.9rem}
 .btn-danger:hover{opacity:.85}
+.btn-export{background:var(--green);color:#fff;border:none;padding:.4rem 1rem;border-radius:6px;
+  cursor:pointer;font-size:.9rem}
+.btn-export:hover{opacity:.85}
 table{width:100%;border-collapse:collapse;margin:.5rem 0}
 th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--border)}
 th{color:var(--text2);font-weight:600;font-size:.85rem}
 .meta{color:var(--text2);font-size:.85rem}
-.pinned::before{content:"\\1F4CC";margin-right:.3rem}
+""" + _PINNED_STYLE + """
+.batch-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);
+  border-top:1px solid var(--border);padding:.6rem 2rem;display:none;align-items:center;
+  gap:1rem;z-index:100;justify-content:center}
+.batch-bar.visible{display:flex}
+.batch-bar .count{color:var(--accent);font-weight:700}
+.mem-checkbox{margin-right:.4rem;accent-color:var(--accent)}
 """
+
+
+_BATCH_BAR = """<div id="batch-bar" class="batch-bar">
+  <span class="count" id="batch-count">0</span> selected
+  <form method="post" action="/memories/batch-delete" style="display:inline" id="batch-delete-form">
+    <button type="submit" class="btn btn-danger" onclick="return confirm('Delete selected memories?')">Delete</button>
+  </form>
+  <form method="post" action="/memories/export" style="display:inline" id="batch-export-form">
+    <button type="submit" class="btn btn-export">Export</button>
+  </form>
+  <button type="button" class="btn" onclick="toggleSelectAll()">Select All</button>
+</div>
+<script>
+function updateBar(){
+  var c=document.querySelectorAll('.mem-checkbox:checked').length;
+  var bar=document.getElementById('batch-bar');
+  var cnt=document.getElementById('batch-count');
+  cnt.textContent=c;
+  bar.className='batch-bar'+(c>0?' visible':'');
+  document.querySelectorAll('.batch-hidden-id').forEach(function(i){i.remove()});
+  var df=document.getElementById('batch-delete-form');
+  var ef=document.getElementById('batch-export-form');
+  document.querySelectorAll('.mem-checkbox:checked').forEach(function(cb){
+    [df,ef].forEach(function(f){
+      var inp=document.createElement('input');
+      inp.type='hidden';inp.name='ids';inp.value=cb.value;
+      inp.className='batch-hidden-id';
+      f.appendChild(inp);
+    });
+  });
+}
+function toggleSelectAll(){
+  var all=document.querySelectorAll('.mem-checkbox');
+  var checked=document.querySelectorAll('.mem-checkbox:checked');
+  var state=checked.length<all.length;
+  all.forEach(function(cb){cb.checked=state});
+  updateBar();
+}
+document.addEventListener('change',function(e){
+  if(e.target.classList.contains('mem-checkbox'))updateBar();
+});
+</script>"""
 
 
 def _layout(title: str, body: str, nav_active: str = "dashboard") -> str:
@@ -77,6 +131,7 @@ def _layout(title: str, body: str, nav_active: str = "dashboard") -> str:
         ("projects", "/projects", "Projects"),
         ("handoffs", "/handoffs", "Handoffs"),
         ("search", "/search", "Search"),
+        ("import-page", "/import", "Import"),
         ("audit", "/audit", _TITLE_AUDIT),
     ]
     nav = "".join(
@@ -92,6 +147,7 @@ def _layout(title: str, body: str, nav_active: str = "dashboard") -> str:
 <h1><a href="/">myMem0ry</a></h1>
 <nav>{nav}</nav>
 {body}
+{_BATCH_BAR}
 </body></html>"""
 
 
@@ -116,7 +172,8 @@ def _memory_card(m: dict[str, Any]) -> str:
     if superseded_by:
         superseded_badge = f' <a href="/memory/{_esc(superseded_by)}">{_tag("superseded", f"superseded by {superseded_by}")}</a>'
     return f"""<div class="card{pinned}">
-  <div><strong><a href="/memory/{mid}">{title}</a></strong>
+  <div><input type="checkbox" class="mem-checkbox" value="{mid}" aria-label="Select memory {mid}">
+  <strong><a href="/memory/{mid}">{title}</a></strong>
   {_tag(scope, scope)} {_tag(mtype, mtype)}
   {(' <span class="meta pinned">pinned</span>' if m.get('pinned') else '')}{superseded_badge}
   </div>

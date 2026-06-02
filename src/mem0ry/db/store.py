@@ -15,6 +15,9 @@ from .store_memories import (  # noqa: F401
     track_reads,
     decay_memories,
     delete_memory,
+    delete_memories_batch,
+    export_memories,
+    import_memories,
     evolve_memories,
     _VALID_SCOPES,
     _VALID_SOURCES,
@@ -32,6 +35,8 @@ from .store_handoffs import (  # noqa: F401
     accept_handoff,
     pending_handoff,
     auto_handoff_from_session,
+    export_handoffs,
+    import_handoffs,
     _HANDOFF_EXPIRE_DAYS,
 )
 from .store_audit import (  # noqa: F401

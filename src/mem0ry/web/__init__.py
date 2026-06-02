@@ -17,6 +17,10 @@ from .pages import (
     delete_observation_page,
     handoffs_page,
     handoff_detail,
+    batch_delete_memories,
+    export_memories_page,
+    import_page,
+    import_memories_page,
 )
 from .templates import _db_path  # noqa: F401
 
@@ -35,4 +39,8 @@ def get_web_routes() -> list[Route]:
         Route("/search", search_page),
         Route("/audit", audit_page),
         Route("/api/memories", api_memories),
+        Route("/memories/batch-delete", batch_delete_memories, methods=["POST"]),
+        Route("/memories/export", export_memories_page, methods=["POST"]),
+        Route("/import", import_page),
+        Route("/memories/import", import_memories_page, methods=["POST"]),
     ]

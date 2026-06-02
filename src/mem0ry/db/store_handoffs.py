@@ -271,3 +271,92 @@ def _expire_old_handoffs(conn: sqlite3.Connection) -> None:
         (now,),
     )
     conn.commit()
+
+
+def export_handoffs(
+    db_path: Path,
+    *,
+    project_id: str | None = None,
+    handoff_ids: list[str] | None = None,
+    status: str | None = None,
+) -> list[dict[str, Any]]:
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        conditions: list[str] = ["1=1"]
+        params: list[Any] = []
+        if project_id:
+            conditions.append("project_id = ?")
+            params.append(project_id)
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        if handoff_ids:
+            placeholders = ",".join("?" for _ in handoff_ids)
+            conditions.append(f"id IN ({placeholders})")
+            params.extend(handoff_ids)
+        where = " AND ".join(conditions)
+        rows = conn.execute(
+            f"SELECT * FROM handoffs WHERE {where} ORDER BY created_at DESC",
+            params,
+        ).fetchall()
+    finally:
+        conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["open_questions"] = json.loads(d.get("open_questions") or "[]")
+        d["next_steps"] = json.loads(d.get("next_steps") or "[]")
+        result.append(d)
+    return result
+
+
+def import_handoffs(
+    db_path: Path,
+    handoffs: list[dict[str, Any]],
+    *,
+    project_id_override: str | None = None,
+) -> dict[str, int]:
+    imported = 0
+    skipped = 0
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        for ho in handoffs:
+            ho_id = uuid.uuid4().hex[:12]
+            now = _now_iso()
+            pid = project_id_override or ho.get("project_id")
+            try:
+                conn.execute(
+                    "INSERT INTO handoffs(id, session_id, from_agent, project_id, project_path, "
+                    "context, status, summary, open_questions, next_steps, created_at, expires_at) "
+                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        ho_id,
+                        ho.get("session_id", ""),
+                        ho.get("from_agent", "import"),
+                        pid,
+                        ho.get("project_path"),
+                        ho.get("context"),
+                        "imported",
+                        ho.get("summary", ""),
+                        json.dumps(ho.get("open_questions") or []),
+                        json.dumps(ho.get("next_steps") or []),
+                        now,
+                        None,
+                    ),
+                )
+            except Exception:
+                skipped += 1
+                continue
+            audit_id = uuid.uuid4().hex[:12]
+            conn.execute(
+                "INSERT INTO audit_log(id, action, target_type, target_id, agent, details, created_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                (audit_id, "import", "handoff", ho_id, None, f"original_id={ho.get('id')}", now),
+            )
+            imported += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return {"imported": imported, "skipped": skipped}

@@ -13,6 +13,7 @@ import mem0ry.cli.server  # noqa: F401
 import mem0ry.cli.handoff  # noqa: F401
 import mem0ry.cli.hooks  # noqa: F401
 import mem0ry.cli.backup  # noqa: F401
+import mem0ry.cli.share  # noqa: F401
 
 from mem0ry.cli.conversation import _get_expander, _build_vector_index  # noqa: F401
 from ..conversations.search_bm25 import build_bm25_index  # noqa: F401

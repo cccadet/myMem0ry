@@ -505,6 +505,170 @@ def delete_memory(db_path: Path, memory_id: str) -> bool:
     return affected > 0
 
 
+def delete_memories_batch(db_path: Path, memory_ids: list[str]) -> int:
+    if not memory_ids:
+        return 0
+    from datetime import datetime, timedelta, timezone
+
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        now = _now_iso()
+        grace = (
+            datetime.now(timezone.utc) + timedelta(days=7)
+        ).isoformat()
+        placeholders = ",".join("?" for _ in memory_ids)
+        cursor = conn.execute(
+            f"UPDATE memories SET deleted_at = ?, grace_until = ? "
+            f"WHERE id IN ({placeholders}) AND deleted_at IS NULL",
+            [now, grace] + memory_ids,
+        )
+        affected = cursor.rowcount
+        for mid in memory_ids:
+            audit_id = uuid.uuid4().hex[:12]
+            conn.execute(
+                "INSERT INTO audit_log(id, action, target_type, target_id, agent, details, created_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                (audit_id, "delete", "memory", mid, None, "batch", now),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return affected
+
+
+_EXPORT_MEMORIES_COLUMNS = [
+    "id", "title", "content", "scope", "project_id", "project_path",
+    "context", "session_id", "memory_type", "source", "tags",
+    "created_at", "pinned", "salience",
+]
+
+
+def export_memories(
+    db_path: Path,
+    *,
+    scope: str | None = None,
+    project_id: str | None = None,
+    memory_ids: list[str] | None = None,
+    memory_type: str | None = None,
+) -> dict[str, Any]:
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        conditions: list[str] = [
+            "deleted_at IS NULL",
+            "(superseded_by IS NULL OR superseded_by = '')",
+        ]
+        params: list[Any] = []
+        if scope:
+            conditions.append("scope = ?")
+            params.append(scope)
+        if project_id:
+            conditions.append("project_id = ?")
+            params.append(project_id)
+        if memory_type:
+            conditions.append("memory_type = ?")
+            params.append(memory_type)
+        if memory_ids:
+            placeholders = ",".join("?" for _ in memory_ids)
+            conditions.append(f"id IN ({placeholders})")
+            params.extend(memory_ids)
+        where = " AND ".join(conditions)
+        cols = ", ".join(_EXPORT_MEMORIES_COLUMNS)
+        rows = conn.execute(
+            f"SELECT {cols} FROM memories WHERE {where} "
+            "ORDER BY pinned DESC, salience DESC, created_at DESC",
+            params,
+        ).fetchall()
+    finally:
+        conn.close()
+    from ._helpers import _now_iso as _now
+
+    return {
+        "version": 1,
+        "exported_at": _now(),
+        "exported_by": "manual",
+        "source_project_id": project_id,
+        "memories": [dict(r) for r in rows],
+    }
+
+
+def import_memories(
+    db_path: Path,
+    data: dict[str, Any],
+    *,
+    project_id_override: str | None = None,
+) -> dict[str, int]:
+    version = data.get("version")
+    if version != 1:
+        raise ValueError(
+            f"Unsupported export version '{version}'. Expected 1."
+        )
+    memories = data.get("memories") or []
+    imported = 0
+    skipped = 0
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        for mem in memories:
+            orig_id = mem.get("id", "")
+            if orig_id:
+                row = conn.execute(
+                    "SELECT id FROM memories WHERE id = ?", (orig_id,)
+                ).fetchone()
+                if row:
+                    skipped += 1
+                    continue
+
+            new_id = orig_id or uuid.uuid4().hex[:12]
+            pid = project_id_override or mem.get("project_id")
+            now = _now_iso()
+            raw_tags = mem.get("tags") or "[]"
+            tags_json = json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
+
+            from .retention import compute_salience
+
+            mtype = mem.get("memory_type", "log")
+            salience = compute_salience(mtype, now, 0, None)
+            pinned = 1 if mtype in ("fact", "decision") else 0
+
+            conn.execute(
+                "INSERT INTO memories(id, content, scope, project_id, project_path, context, "
+                "session_id, memory_type, source, tags, title, created_at, file_path, "
+                "access_count, last_accessed_at, salience, pinned) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+                (
+                    new_id,
+                    mem["content"],
+                    mem.get("scope", "global"),
+                    pid,
+                    mem.get("project_path"),
+                    mem.get("context"),
+                    mem.get("session_id"),
+                    mtype,
+                    "import",
+                    json.dumps(tags_json),
+                    mem.get("title"),
+                    now,
+                    mem.get("file_path"),
+                    now,
+                    salience,
+                    pinned,
+                ),
+            )
+            audit_id = uuid.uuid4().hex[:12]
+            conn.execute(
+                "INSERT INTO audit_log(id, action, target_type, target_id, agent, details, created_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                (audit_id, "import", "memory", new_id, None, f"original_id={orig_id}", now),
+            )
+            imported += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return {"imported": imported, "skipped": skipped}
+
+
 def decay_memories(
     db_path: Path, dry_run: bool = False
 ) -> list[str]:

@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from ..db.connection import get_connection
 from ..db.schema import init_schema
@@ -200,8 +200,11 @@ def project_detail(request: Request) -> HTMLResponse:
 
     cards_html = "".join(_memory_card(dict(r)) for r in rows)
 
+    export_btn = f'<form method="post" action="/memories/export" style="margin-bottom:1rem;display:inline"><input type="hidden" name="project_id" value="{html.escape(pid)}"><button type="submit" class="btn btn-export">Export Project</button></form>'
+
     body = f"""<h2>{_esc(pid)}</h2>
 <div>{scope_html}</div>
+{export_btn}
 <h2>Memories ({len(rows)})</h2>
 {cards_html if cards_html else '<div class="card meta">No memories found.</div>'}"""
 
@@ -572,3 +575,103 @@ def handoff_detail(request: Request) -> HTMLResponse:
 <ul style="padding-left:1.5rem">{ns_html}</ul>"""
 
     return HTMLResponse(_layout(f"Handoff: {hid}", body))
+
+
+async def batch_delete_memories(request: Request) -> Any:
+    from ..db.store import delete_memories_batch
+
+    form = await request.form()
+    ids = [str(v) for v in form.getlist("ids")]
+    if ids:
+        delete_memories_batch(_db_path(), ids)
+    return RedirectResponse(url="/", status_code=303)
+
+
+async def export_memories_page(request: Request) -> Response:
+    from ..db.store import export_memories, export_handoffs
+
+    form = await request.form()
+    ids = [str(v) for v in form.getlist("ids")]
+    scope_val = form.get("scope", "")
+    project_id_val = form.get("project_id", "")
+
+    scope_str = str(scope_val) if scope_val else ""
+    project_id_str = str(project_id_val) if project_id_val else ""
+
+    filters: dict[str, Any] = {}
+    if ids:
+        filters["memory_ids"] = ids
+    if scope_str:
+        filters["scope"] = scope_str
+    if project_id_str:
+        filters["project_id"] = project_id_str
+
+    data = export_memories(_db_path(), **filters)
+
+    pid = project_id_str or None
+    handoffs = export_handoffs(_db_path(), project_id=pid)
+    if handoffs:
+        data["handoffs"] = handoffs
+
+    json_str = json.dumps(data, indent=2, ensure_ascii=False)
+    filename = "mem0ry-export.json"
+    return Response(
+        content=json_str,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def import_page(request: Request) -> HTMLResponse:
+    msg = request.query_params.get("msg", "")
+    msg_html = f'<div class="card" style="border-color:var(--green)"><p>{html.escape(msg)}</p></div>' if msg else ""
+
+    body = f"""<h2>Import Memories</h2>
+{msg_html}
+<form method="post" action="/memories/import" enctype="multipart/form-data" style="margin:1rem 0">
+  <div style="margin-bottom:.5rem">
+    <label for="file" style="color:var(--text2)">Select export file (.json):</label><br>
+    <input type="file" name="file" accept=".json" required style="margin-top:.3rem;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.5rem;border-radius:6px">
+  </div>
+  <div style="margin-bottom:.5rem">
+    <label style="color:var(--text2)">Override project ID (optional):</label><br>
+    <input type="text" name="project_id_override" placeholder="e.g. https://github.com/org/repo" style="margin-top:.3rem">
+  </div>
+  <button type="submit" class="btn">Import</button>
+</form>
+<div class="card">
+  <p class="meta">Import a previously exported JSON file. Duplicate memories (same ID) will be skipped.</p>
+</div>"""
+
+    return HTMLResponse(_layout("Import", body, "import-page"))
+
+
+async def import_memories_page(request: Request) -> Any:
+    from ..db.store import import_memories, import_handoffs
+
+    form = await request.form()
+    upload = form.get("file")
+    pid_raw = form.get("project_id_override", "")
+    project_id_override: str | None = str(pid_raw) if pid_raw else None
+
+    if not upload or not hasattr(upload, "read"):
+        return RedirectResponse(url="/import?msg=No+file+provided", status_code=303)
+
+    content_bytes = await upload.read()
+    try:
+        data = json.loads(content_bytes)
+    except json.JSONDecodeError as e:
+        return RedirectResponse(url=f"/import?msg={html.escape('Invalid JSON: ' + str(e))}", status_code=303)
+
+    mem_result = import_memories(_db_path(), data, project_id_override=project_id_override)
+    ho_result = {"imported": 0, "skipped": 0}
+    if data.get("handoffs"):
+        ho_result = import_handoffs(
+            _db_path(), data["handoffs"], project_id_override=project_id_override
+        )
+
+    msg = (
+        f"Imported: {mem_result['imported']} memories, {ho_result['imported']} handoffs. "
+        f"Skipped (duplicates): {mem_result['skipped']} memories, {ho_result['skipped']} handoffs."
+    )
+    return RedirectResponse(url=f"/import?msg={html.escape(msg)}", status_code=303)

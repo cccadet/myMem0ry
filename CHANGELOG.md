@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-06-01
+
+### Added
+
+- **Batch delete** — select multiple memories via checkboxes in the Web UI
+  and delete them all at once with confirmation. New `delete_memories_batch()`
+  in `db/store_memories.py` performs soft-delete in a single transaction.
+- **Export** — export selected memories (and handoffs) to a portable JSON file
+  directly from the Web UI or CLI. New `export_memories()` and
+  `export_handoffs()` functions with filter support (scope, project_id,
+  memory_ids, memory_type). Download as `mem0ry-export.json`.
+  - Web: "Export Project" button on project detail page, "Export" in batch
+    action bar.
+  - CLI: `mymem0ry export --output file.json [--project-id X] [--scope global]`
+- **Import** — import memories and handoffs from a previously exported JSON
+  file into any myMem0ry instance. Duplicates (same ID) are automatically
+  skipped. Optional `project_id_override` remaps all imported items to a
+  different project.
+  - Web: new `/import` page with file upload and project ID override.
+  - CLI: `mymem0ry import file.json [--project-id Y]`
+- **Batch action bar** — fixed bottom bar appears when memories are selected
+  with "Delete", "Export", and "Select All" buttons.
+- **Checkbox per memory card** — every memory card in dashboard, project
+  detail, and search results now has a checkbox for batch operations.
+- **Import nav link** — "Import" added to the Web UI navigation bar.
+- 20 new tests in `tests/test_export_import.py` covering batch delete,
+  export with filters, import with duplicate skip, project override,
+  and full roundtrip (memories + handoffs).
+
+### Changed
+
+- `store.py` now re-exports `delete_memories_batch`, `export_memories`,
+  `import_memories`, `export_handoffs`, and `import_handoffs`.
+- Web UI: body padding adjusted to `padding-bottom: 5rem` to accommodate
+  the fixed batch action bar.
+
 ## [0.17.0] - 2026-06-01
 
 ### Added
