@@ -15,6 +15,8 @@ _VALID_SCOPES = {"global", "project", "context", "session"}
 _VALID_SOURCES = {"claude-code", "opencode", "codex", "manual", "import", "hook"}
 _VALID_MEMORY_TYPES = {"fact", "decision", "pattern", "log"}
 
+_NOT_SUPERSEDED = "(superseded_by IS NULL OR superseded_by = '')"
+
 _SCOPE_PRIORITY = ["session", "context", "project", "global"]
 
 # Stop words (EN + PT) filtered from free-text queries so a natural-language
@@ -143,7 +145,6 @@ def get_context(
     # top_k budget in priority order so a scope with many strong memories isn't
     # throttled to a single row.
     _ORDER = "ORDER BY pinned DESC, salience DESC, created_at DESC"
-    _NOT_SUPERSEDED = "(superseded_by IS NULL OR superseded_by = '')"
 
     conn = get_connection(db_path)
     try:
@@ -352,7 +353,7 @@ def search_memories(
     try:
         init_schema(conn)
 
-        conditions: list[str] = ["deleted_at IS NULL", "(superseded_by IS NULL OR superseded_by = '')"]
+        conditions: list[str] = ["deleted_at IS NULL", _NOT_SUPERSEDED]
         params: list[Any] = []
 
         if scope:
@@ -557,7 +558,7 @@ def export_memories(
         init_schema(conn)
         conditions: list[str] = [
             "deleted_at IS NULL",
-            "(superseded_by IS NULL OR superseded_by = '')",
+            _NOT_SUPERSEDED,
         ]
         params: list[Any] = []
         if scope:
@@ -711,7 +712,7 @@ def evolve_memories(
         old_rows = conn.execute(
             f"SELECT id, scope, project_id, project_path, context, tags, title "
             f"FROM memories WHERE id IN ({placeholders}) "
-            f"AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '')",
+            f"AND deleted_at IS NULL AND {_NOT_SUPERSEDED}",
             old_ids,
         ).fetchall()
 
