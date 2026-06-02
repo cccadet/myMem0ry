@@ -11,6 +11,7 @@ from .connection import get_connection
 from .schema import init_schema
 
 _VERSION_SQL = "SELECT value FROM schema_meta WHERE key='version'"
+_SET_VERSION_SQL = "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)"
 
 
 _HEADER_RE = re.compile(
@@ -203,7 +204,7 @@ def migrate_v4_to_v5(db_path: Path) -> dict:
 
     conn = get_connection(db_path)
     conn.execute(
-        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
+        _SET_VERSION_SQL,
         ("version", "5"),
     )
     conn.commit()
@@ -224,7 +225,7 @@ def migrate_v5_to_v6(db_path: Path) -> dict:
     old_version = int(version_row["value"]) if version_row else 5
 
     conn.execute(
-        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
+        _SET_VERSION_SQL,
         ("version", "6"),
     )
     conn.commit()
@@ -250,7 +251,7 @@ def migrate_v6_to_v7(db_path: Path) -> dict:
         "CREATE INDEX IF NOT EXISTS idx_memories_superseded ON memories(superseded_by)"
     )
     conn.execute(
-        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
+        _SET_VERSION_SQL,
         ("version", "7"),
     )
     conn.commit()

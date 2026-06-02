@@ -72,7 +72,7 @@ class TestWinHomePatternRegression:
         assert "charlie" not in (result["body"] or "")
         assert "~" in (result["body"] or "")
 
-    def test_windows_uppercase_USERS_dir(self) -> None:
+    def test_windows_uppercase_users_dir(self) -> None:
         result = sanitize_payload({
             "kind": "user-prompt",
             "session_id": "s1",
@@ -152,7 +152,7 @@ class TestExtractToolInputPartsRegression:
         parts = _extract_tool_input_parts({"file_path": "/home/user/app.py"})
         assert any("app.py" in p for p in parts)
 
-    def test_filePath_variant(self) -> None:
+    def test_file_path_variant(self) -> None:
         parts = _extract_tool_input_parts({"filePath": "/home/user/app.py"})
         assert any("app.py" in p for p in parts)
 
@@ -320,7 +320,6 @@ class TestErrorRegexRegression:
         ho_id = auto_handoff_from_session(db, "se3", "test-agent")
         assert ho_id is not None
 
-        from mem0ry.db.store import begin_handoff
         conn = get_connection(db)
         row = conn.execute(
             "SELECT summary FROM handoffs WHERE id = ?", (ho_id,)

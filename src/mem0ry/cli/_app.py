@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import typer
 
 app = typer.Typer(help="myMem0ry — personal memory search system")
@@ -7,9 +9,10 @@ app = typer.Typer(help="myMem0ry — personal memory search system")
 
 @app.callback(invoke_without_command=True)
 def _root() -> None:
-    from mem0ry.utils.update_check import check_for_update
+    if not os.environ.get("MEM0RY_NO_UPDATE_CHECK"):
+        from mem0ry.utils.update_check import check_for_update
 
-    check_for_update()
+        check_for_update()
 
 
 _HELP_WORKDIR = "Working directory"

@@ -8,16 +8,21 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-_FILE_RE = re.compile(r"file:\s*([^\s;]+)")
-_ERROR_RE = re.compile(r"error:\s*(.+?)(?=;|$)")
-
 from .connection import get_connection
 from .schema import init_schema
 from ._helpers import _now_iso
 from .store_audit import record_audit
 from .store_observations import get_session_observations
 
+_FILE_RE = re.compile(r"file:\s*([^\s;]+)")
+_ERROR_RE = re.compile(r"error:\s*(.+)(?=;|$)")
+
 _HANDOFF_EXPIRE_DAYS = 7
+
+
+def _collect_unique(lst: list[str], item: str) -> None:
+    if item and item not in lst:
+        lst.append(item)
 
 
 def begin_handoff(
@@ -179,12 +184,9 @@ def _extract_session_signals(
         if obs.get("kind") == "user-prompt" and body.strip():
             prompts.append(body.strip())
         for m in _FILE_RE.findall(body):
-            if m not in files:
-                files.append(m)
+            _collect_unique(files, m)
         for m in _ERROR_RE.findall(body):
-            err = m.strip()
-            if err and err not in errors:
-                errors.append(err)
+            _collect_unique(errors, m.strip())
     return files, errors, prompts
 
 

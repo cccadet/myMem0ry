@@ -14,7 +14,7 @@ from mem0ry.conversations.embeddings import SpacyEncoder
 def mock_nlp():
     fake_nlp = MagicMock()
     fake_doc = MagicMock()
-    fake_doc.vector = np.random.default_rng().random(300, dtype=np.float32)
+    fake_doc.vector = np.random.default_rng(42).random(300, dtype=np.float32)
     fake_nlp.return_value = fake_doc
     fake_nlp.pipe.return_value = iter([fake_doc, fake_doc])
     fake_nlp.vocab.vectors.shape = (500000, 300)

@@ -68,7 +68,6 @@ def is_server_running() -> bool:
 
 def _wait_for_health(url: str, timeout: float = 5.0) -> bool:
     import urllib.request
-    import urllib.error
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -77,7 +76,7 @@ def _wait_for_health(url: str, timeout: float = 5.0) -> bool:
             with urllib.request.urlopen(req, timeout=1.0) as resp:
                 if resp.status == 200:
                     return True
-        except (urllib.error.URLError, OSError):
+        except OSError:
             pass
         time.sleep(0.1)
     return False
@@ -216,7 +215,6 @@ def server_status() -> dict[str, Any]:
             pass
 
     import urllib.request
-    import urllib.error
 
     health: dict[str, Any] | None = None
     if running:
@@ -226,7 +224,7 @@ def server_status() -> dict[str, Any]:
                 import json
 
                 health = json.loads(resp.read())
-        except (urllib.error.URLError, OSError):
+        except OSError:
             pass
 
     return {
