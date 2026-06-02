@@ -749,7 +749,7 @@ async def context_endpoint(request: Any) -> Any:
 
 
 @mcp.prompt()
-def auto_save_instructions() -> str:
+def mymem0ry_memory_instructions() -> str:
     """System instructions for scoped memory management.
 
     Use this prompt at the start of every conversation.

@@ -14,7 +14,7 @@ from mem0ry.mcp_server import (
     _preview_text,
     _conversations_dir,
     save_memory,
-    auto_save_instructions,
+    mymem0ry_memory_instructions,
     _resolve_cwd,
     get_context,
     memory_stats,
@@ -175,8 +175,8 @@ def test_save_memory_invalid_date(tmp_path: Path) -> None:
             save_memory("X", "Y", dt="bad-date")
 
 
-def test_auto_save_instructions_returns_string() -> None:
-    result = auto_save_instructions()
+def test_mymem0ry_memory_instructions_returns_string() -> None:
+    result = mymem0ry_memory_instructions()
     assert "save_memory" in result
     assert "get_context" in result
     assert "hook" in result.lower()

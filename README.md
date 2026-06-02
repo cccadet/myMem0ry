@@ -29,12 +29,21 @@ Persistent memory that any AI agent can read and write. Quit Claude Code mid-tas
 - **Backup/restore** — tarball CLI commands
 - **Multi-agent** — Claude Code, OpenCode, Codex, Cursor, Gemini CLI, VS Code, Docker
 
+## Prerequisites
+
+| Tool | Why | Install |
+|---|---|---|
+| **uv** | Package manager (installs myMem0ry + dependencies) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| **ripgrep** (`rg`) | Default search backend for `mymem0ry search` | `sudo apt install ripgrep` / `brew install ripgrep` / `winget install BurntSushi.ripgrep.MSVC` |
+| **git** | Project & context resolution (branch, remote URL) | Usually pre-installed |
+
+> `mymem0ry doctor` checks all prerequisites and auto-downloads the spaCy language model if missing.
+
 ## Install
 
 ```bash
-pip install uv        # or: curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install mymem0ry
-mymem0ry doctor       # checks + auto-installs spaCy model
+mymem0ry doctor
 ```
 
 The default spaCy model is Portuguese (`pt_core_news_lg`). For English, set `SPACY_MODEL=en_core_web_lg` in `.env` before running `mymem0ry doctor`.
