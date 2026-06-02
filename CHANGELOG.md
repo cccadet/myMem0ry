@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-01
+
+### Added
+
+- **Update check** — on every CLI invocation, myMem0ry queries PyPI (cached 24h)
+  and prints a yellow warning when a newer version is available:
+  `myMem0ry 0.17.1 is available (you have 0.17.0). Run: uv tool upgrade myMem0ry`.
+  Disable with `MEM0RY_NO_UPDATE_CHECK=1`.
+- **Prerequisites section** in README — documents `uv`, `ripgrep`, and `git`
+  with install commands for Linux, macOS, and Windows.
+
+### Changed
+
+- Renamed `auto_save_instructions()` → `mymem0ry_memory_instructions()` for
+  clarity and consistency with the project name.
+
+### Fixed
+
+- Resolved 9 SonarQube issues:
+  - **S1192**: Extracted duplicated SQL literal into `_SET_VERSION_SQL` constant
+    in `db/migrate.py`.
+  - **S3776**: Reduced cognitive complexity of `_extract_session_signals()` by
+    extracting `_collect_unique()` helper in `db/store_handoffs.py`.
+  - **S5713**: Removed redundant `urllib.error.URLError` from exception handlers
+    (subclass of `OSError`) in `daemon.py`.
+  - **S6019**: Fixed reluctant quantifier `+?` → `+` in `_ERROR_RE` regex.
+  - **S6709**: Added seed `42` to `np.random.default_rng()` in `test_embeddings.py`.
+  - **S100**: Renamed `test_windows_uppercase_USERS_dir` → `test_windows_uppercase_users_dir`
+    and `test_filePath_variant` → `test_file_path_variant`.
+  - **F401**: Removed unused `begin_handoff` import in `test_sonarqube_regression.py`.
+- Added `tests/conftest.py` to suppress update check during tests.
+
 ## [0.16.0] - 2026-05-29
 
 ### Added
