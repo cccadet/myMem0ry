@@ -63,7 +63,10 @@ def check_for_update() -> None:
             _write_cache(latest)
     if latest is None:
         return
-    if latest == installed:
+    def _parse(v: str) -> tuple[int, ...]:
+        return tuple(int(x) for x in v.split(".")[:3])
+
+    if _parse(latest) <= _parse(installed):
         return
     typer = __import__("typer")
     typer.echo(
