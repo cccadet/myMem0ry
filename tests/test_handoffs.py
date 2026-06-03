@@ -14,6 +14,7 @@ from mem0ry.db.store import (
     create_observation,
     pending_handoff,
 )
+from mem0ry.db.store_handoffs import _build_session_summary, _clean_prompts
 
 
 @pytest.fixture()
@@ -138,3 +139,39 @@ def test_auto_handoff_skips_if_exists(db: Path) -> None:
 def test_auto_handoff_empty_session(db: Path) -> None:
     result = auto_handoff_from_session(db, "nonexistent", "claude-code")
     assert result is None
+
+
+def test_clean_prompts_drops_command_wrappers() -> None:
+    prompts = [
+        "<local-command-caveat>Caveat: ...</local-command-caveat>\n"
+        "<command-name>/clear</command-name>",
+        "fix the auth bug",
+    ]
+    assert _clean_prompts(prompts) == ["fix the auth bug"]
+
+
+def test_clean_prompts_collapses_pasted_blob() -> None:
+    blob = "<!DOCTYPE html>\n" + ("x" * 1000)
+    cleaned = _clean_prompts([blob])
+    assert len(cleaned) == 1
+    assert cleaned[0].startswith("<!DOCTYPE html>")
+    assert "[pasted content," in cleaned[0]
+    assert "xxxx" not in cleaned[0]
+
+
+def test_clean_prompts_keeps_normal_prompts() -> None:
+    assert _clean_prompts(["", "  ", "redesign the dashboard"]) == [
+        "redesign the dashboard"
+    ]
+
+
+def test_build_summary_excludes_clear_boilerplate() -> None:
+    prompts = [
+        "<local-command-caveat>Caveat</local-command-caveat>\n"
+        "<command-name>/clear</command-name>",
+        "redesign the dashboard visual",
+    ]
+    summary = _build_session_summary([], prompts)
+    assert "redesign the dashboard visual" in summary
+    assert "command-name" not in summary
+    assert "/clear" not in summary

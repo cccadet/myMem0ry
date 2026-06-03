@@ -19,6 +19,44 @@ _ERROR_RE = re.compile(r"error:\s*(.+)(?=;|$)")
 
 _HANDOFF_EXPIRE_DAYS = 7
 
+# Slash-command / local-command wrappers that Claude Code writes into the
+# transcript as `user` messages. They are harness boilerplate, not user intent,
+# so they must not leak into the handoff summary.
+_COMMAND_WRAPPER_RE = re.compile(
+    r"</?(?:local-command-caveat|local-command-stdout|local-command-stderr|"
+    r"command-name|command-message|command-args)>",
+    re.IGNORECASE,
+)
+# Prompts longer than this are almost always pasted blobs (code, HTML, logs).
+# We keep a short, labelled marker instead of dumping the head of the blob.
+_PASTE_THRESHOLD = 600
+
+
+def _clean_prompts(prompts: list[str] | None) -> list[str]:
+    """Strip harness noise from raw user prompts before summarizing.
+
+    Two kinds of noise pollute the auto-handoff summary: slash-command wrapper
+    messages (e.g. the `/clear` boilerplate) and large pasted blobs. The first
+    is dropped entirely; the second is replaced by a compact `[pasted content,
+    ~N chars]` marker so the summary records that a paste happened without
+    reproducing it.
+    """
+    cleaned: list[str] = []
+    for raw in prompts or []:
+        text = (raw or "").strip()
+        if not text:
+            continue
+        if _COMMAND_WRAPPER_RE.search(text):
+            continue
+        if len(text) > _PASTE_THRESHOLD:
+            first_line = text.splitlines()[0].strip()
+            head = first_line[:80] if first_line else ""
+            marker = f"[pasted content, ~{len(text)} chars]"
+            cleaned.append(f"{head} {marker}".strip() if head else marker)
+            continue
+        cleaned.append(text)
+    return cleaned
+
 
 def _collect_unique(lst: list[str], item: str) -> None:
     if item and item not in lst:
@@ -206,9 +244,10 @@ def _build_session_summary(
     sections: list[str] = []
 
     # Prompts from the parsed transcript (if any) take precedence; fall back to
-    # user-prompt observations (agents that emit a UserPrompt hook).
-    raw_prompts = [p for p in (user_prompts or []) if p and p.strip()] or obs_prompts
-    prompts = [p.strip() for p in raw_prompts if p and p.strip()]
+    # user-prompt observations (agents that emit a UserPrompt hook). Both paths
+    # are cleaned of harness boilerplate and pasted blobs before summarizing.
+    raw_prompts = _clean_prompts(user_prompts) or _clean_prompts(obs_prompts)
+    prompts = raw_prompts
     if prompts:
         sections.append("What the user was working on:")
         sections.extend(f"- {p[:300]}" for p in prompts[-5:])
