@@ -252,7 +252,7 @@ def projects_page(request: Request) -> HTMLResponse:
   <td><a href="/project/{html.escape(p['project_id'])}">{_esc(p['project_id'])}</a></td>
   <td class="meta">{_esc(p.get('project_path'))}</td>
   <td>{p['mem_cnt']}</td>
-  <td>{p['obs_cnt']}</td>
+  <td><a href="/project/{html.escape(p['project_id'])}/observations">{p['obs_cnt']}</a></td>
 </tr>"""
         for p in sorted_projects
     )
@@ -293,6 +293,12 @@ def project_detail(request: Request) -> HTMLResponse:
         (pid,),
     ).fetchall() if pid != "global" else []
 
+    obs_count = 0
+    if pid != "global":
+        obs_count = conn.execute(
+            "SELECT count(*) FROM observations WHERE project_id=?", (pid,)
+        ).fetchone()[0]
+
     conn.close()
 
     scope_html = " ".join(
@@ -303,13 +309,62 @@ def project_detail(request: Request) -> HTMLResponse:
 
     export_btn = f'<form method="post" action="/memories/export" style="margin-bottom:1rem;display:inline"><input type="hidden" name="project_id" value="{html.escape(pid)}"><button type="submit" class="btn btn-export">{t("proj.export", lang)}</button></form>'
 
+    obs_link = ""
+    if pid != "global" and obs_count > 0:
+        obs_link = f'<a href="/project/{html.escape(pid)}/observations" class="btn" style="text-decoration:none;margin-bottom:1rem;display:inline-block">{t("obs.project_obs", lang)} ({obs_count})</a>'
+
     body = f"""<h2>{_esc(pid)}</h2>
 <div>{scope_html}</div>
-{export_btn}
+{export_btn} {obs_link}
 <h2>{t("proj.memories_n", lang, n=len(rows))}</h2>
 {cards_html if cards_html else f'<div class="card meta">{t("proj.no_memories", lang)}</div>'}"""
 
     return HTMLResponse(_layout(f"Project: {pid}", body, "projects", lang, theme))
+
+
+def project_observations(request: Request) -> HTMLResponse:
+    lang = get_lang(request)
+    theme = get_theme(request)
+    pid = request.path_params["project_id"]
+    db = _db_path()
+
+    if not db.exists():
+        return HTMLResponse(_layout(t("obs.project_obs", lang), _no_db(lang), "projects", lang, theme))
+
+    conn = get_connection(db)
+    init_schema(conn)
+
+    obs_rows = conn.execute(
+        "SELECT * FROM observations WHERE project_id=? ORDER BY created_at DESC LIMIT 200",
+        (pid,),
+    ).fetchall()
+    conn.close()
+
+    if not obs_rows:
+        body = f"""<h2>{_esc(pid)} — {t("obs.project_obs", lang)}</h2>
+<p><a href="/project/{html.escape(pid)}">← {t("common.back", lang)}</a></p>
+<div class="card meta">{t("obs.none_for_project", lang)}</div>"""
+        return HTMLResponse(_layout(f"{t('obs.project_obs', lang)}: {pid}", body, "projects", lang, theme))
+
+    rows_html = "".join(
+        f"""<tr>
+  <td><a href="/observation/{_esc(dict(r)['id'])}">{_esc(dict(r)['id'][:12])}…</a></td>
+  <td>{_esc(dict(r).get('title') or '—')}</td>
+  <td>{_tag(dict(r).get('kind', 'other') or 'other', dict(r).get('kind', 'other') or 'other')}</td>
+  <td class="meta">{_esc(dict(r).get('agent') or '—')}</td>
+  <td class="meta">{(dict(r).get('created_at') or '')[:19]}</td>
+</tr>"""
+        for r in obs_rows
+    )
+
+    body = f"""<h2>{_esc(pid)} — {t("obs.project_obs", lang)} ({len(obs_rows)})</h2>
+<p><a href="/project/{html.escape(pid)}">← {t("common.back", lang)}</a></p>
+<table>
+<tr><th>{t("obs.col_id", lang)}</th><th>{t("obs.col_title", lang)}</th><th>{t("obs.col_kind", lang)}</th><th>{t("obs.col_agent", lang)}</th><th>{t("obs.col_created", lang)}</th></tr>
+{rows_html}
+</table>"""
+
+    return HTMLResponse(_layout(f"{t('obs.project_obs', lang)}: {pid}", body, "projects", lang, theme))
 
 
 def memory_detail(request: Request) -> HTMLResponse:

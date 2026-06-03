@@ -47,6 +47,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "common.theme": "Tema",
         "common.theme_dark": "Escuro",
         "common.theme_light": "Claro",
+        "common.back": "← Voltar",
         # card / memory
         "mem.superseded_by": "substituída por",
         "mem.supersedes": "Substitui:",
@@ -150,6 +151,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "obs.empty": "vazio",
         "obs.not_found": "Observação {id} não encontrada.",
         "obs.confirm_delete": "Excluir esta observação?",
+        "obs.project_obs": "Observações",
+        "obs.none_for_project": "Nenhuma observação neste projeto.",
+        "obs.col_id": "ID",
+        "obs.col_title": "Título",
+        "obs.col_kind": "Tipo",
+        "obs.col_agent": "Agente",
+        "obs.col_created": "Criada",
         # audit
         "audit.title": "Registro de auditoria",
         "audit.entries": "{n} registros",
@@ -214,6 +222,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "common.theme": "Theme",
         "common.theme_dark": "Dark",
         "common.theme_light": "Light",
+        "common.back": "← Back",
         # card / memory
         "mem.superseded_by": "superseded by",
         "mem.supersedes": "Supersedes:",
@@ -317,6 +326,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "obs.empty": "empty",
         "obs.not_found": "Observation {id} not found.",
         "obs.confirm_delete": "Delete this observation?",
+        "obs.project_obs": "Observations",
+        "obs.none_for_project": "No observations in this project.",
+        "obs.col_id": "ID",
+        "obs.col_title": "Title",
+        "obs.col_kind": "Kind",
+        "obs.col_agent": "Agent",
+        "obs.col_created": "Created",
         # audit
         "audit.title": "Audit Log",
         "audit.entries": "{n} entries",
