@@ -19,6 +19,12 @@ _VALID_MEMORY_TYPES = {"fact", "decision", "pattern", "log"}
 
 _NOT_SUPERSEDED = "(superseded_by IS NULL OR superseded_by = '')"
 
+_NOT_SUPERSEDED_M = "(m.superseded_by IS NULL OR m.superseded_by = '')"
+
+_NOT_DELETED_M = "m.deleted_at IS NULL"
+
+_JOIN_AND = " AND "
+
 _SCOPE_PRIORITY = ["session", "context", "project", "global"]
 
 # Whitelisted ORDER BY clauses for search/listing. Keys are the only values a
@@ -415,7 +421,7 @@ def _build_filter_conditions(
     date_from: str | None,
     date_to: str | None,
 ) -> tuple[list[str], list[Any]]:
-    conditions: list[str] = ["m.deleted_at IS NULL", "(m.superseded_by IS NULL OR m.superseded_by = '')"]
+    conditions: list[str] = [_NOT_DELETED_M, _NOT_SUPERSEDED_M]
     params: list[Any] = []
 
     if scope:
@@ -516,7 +522,7 @@ def _search_fts(
     offset: int,
 ) -> list[Any]:
     fts_query = " OR ".join(f'"{t}"' for t in terms)
-    where = " AND ".join(conditions)
+    where = _JOIN_AND.join(conditions)
     sql = (
         "SELECT m.* FROM memories m "
         "JOIN memories_fts fts ON m.rowid = fts.rowid "
@@ -543,7 +549,7 @@ def _search_like(
         like_conditions.append("(m.content LIKE ? OR m.title LIKE ?)")
         like = f"%{term}%"
         like_params.extend([like, like])
-    where = " AND ".join(like_conditions)
+    where = _JOIN_AND.join(like_conditions)
     order = _ORDER_BY_M.get(order_by or "", _DEFAULT_ORDER_M)
     sql = (
         f"SELECT m.* FROM memories m WHERE {where} "
@@ -561,7 +567,7 @@ def _search_filtered(
     top_k: int,
     offset: int,
 ) -> list[Any]:
-    where = " AND ".join(conditions)
+    where = _JOIN_AND.join(conditions)
     order = _ORDER_BY_M.get(order_by or "", _DEFAULT_ORDER_M)
     sql = (
         f"SELECT m.* FROM memories m WHERE {where} "
@@ -846,7 +852,7 @@ def export_memories(
             placeholders = ",".join("?" for _ in memory_ids)
             conditions.append(f"id IN ({placeholders})")
             params.extend(memory_ids)
-        where = " AND ".join(conditions)
+        where = _JOIN_AND.join(conditions)
         cols = ", ".join(_EXPORT_MEMORIES_COLUMNS)
         rows = conn.execute(
             f"SELECT {cols} FROM memories WHERE {where} "
