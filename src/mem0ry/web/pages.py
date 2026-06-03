@@ -784,7 +784,7 @@ def handoffs_page(request: Request) -> HTMLResponse:
         cnt = counts.get(s, "") if s else sum(counts.values())
         status_tabs += f'<a href="/handoffs{"?status="+s if s else ""}" class="{active}">{label} ({cnt})</a> '
 
-    _STATUS_COLOR = {"open": "green", "accepted": "project", "expired": "log"}
+    _STATUS_COLOR = {"open": "muted", "accepted": "project", "expired": "log"}
 
     rows_html = "".join(
         f"""<tr>
@@ -829,7 +829,7 @@ def handoff_detail(request: Request) -> HTMLResponse:
     oq: list[str] = json.loads(ho.get("open_questions") or "[]")
     ns: list[str] = json.loads(ho.get("next_steps") or "[]")
 
-    _STATUS_COLOR = {"open": "green", "accepted": "project", "expired": "log"}
+    _STATUS_COLOR = {"open": "muted", "accepted": "project", "expired": "log"}
     status_tag = _tag(_STATUS_COLOR.get(ho["status"], "log"), ho["status"])
 
     oq_html = "".join(f"<li>{_esc(qi)}</li>" for qi in oq) if oq else f"<li class='meta'>{t('ho.none_item', lang)}</li>"

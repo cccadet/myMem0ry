@@ -202,6 +202,7 @@ nav a.active::after{content:"";position:absolute;left:.7rem;right:.7rem;bottom:-
 .tag-pattern{background:var(--green-soft);color:var(--green);border-color:color-mix(in srgb,var(--green) 32%,transparent)}
 .tag-log{background:var(--surface);color:var(--text-2);border-color:var(--border)}
 .tag-green{background:var(--green-soft);color:var(--green);border-color:color-mix(in srgb,var(--green) 32%,transparent)}
+.tag-muted{background:var(--surface);color:var(--text-3);border-color:var(--border)}
 .tag-superseded{background:var(--red-soft);color:var(--red);border-color:color-mix(in srgb,var(--red) 32%,transparent)}
 .tag-clickable{cursor:pointer}
 .tag-clickable:hover{text-decoration:none;opacity:.85}
