@@ -10,6 +10,9 @@ from .store_memories import (  # noqa: F401
     end_session,
     search_memories,
     get_memory_by_id,
+    update_memory,
+    list_deleted_memories,
+    restore_memory,
     list_projects,
     touch_memory,
     track_reads,
@@ -23,6 +26,10 @@ from .store_memories import (  # noqa: F401
     _VALID_SOURCES,
     _VALID_MEMORY_TYPES,
     _SCOPE_PRIORITY,
+)
+from .retention import (  # noqa: F401
+    pin_memory,
+    unpin_memory,
 )
 from .store_observations import (  # noqa: F401
     create_observation,

@@ -19,6 +19,18 @@ _NOT_SUPERSEDED = "(superseded_by IS NULL OR superseded_by = '')"
 
 _SCOPE_PRIORITY = ["session", "context", "project", "global"]
 
+# Whitelisted ORDER BY clauses for search/listing. Keys are the only values a
+# caller (e.g. the web UI) may pass for ``order_by``; the default preserves the
+# historical "most relevant first" ordering used everywhere else.
+_DEFAULT_ORDER = "pinned DESC, salience DESC, created_at DESC"
+_ORDER_BY = {
+    "recent": "created_at DESC",
+    "oldest": "created_at ASC",
+    "salience": "salience DESC, created_at DESC",
+    "access": "access_count DESC, created_at DESC",
+    "title": "title COLLATE NOCASE ASC, created_at DESC",
+}
+
 # Stop words (EN + PT) filtered from free-text queries so a natural-language
 # question doesn't match every row on common glue words.
 _STOP_WORDS = frozenset(
@@ -348,6 +360,12 @@ def search_memories(
     memory_type: str | None = None,
     tags: list[str] | None = None,
     top_k: int = 10,
+    source: str | None = None,
+    pinned_only: bool = False,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    order_by: str | None = None,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     conn = get_connection(db_path)
     try:
@@ -359,6 +377,23 @@ def search_memories(
         if scope:
             conditions.append("scope = ?")
             params.append(scope)
+
+        if source:
+            conditions.append("source = ?")
+            params.append(source)
+
+        if pinned_only:
+            conditions.append("pinned = 1")
+
+        if date_from:
+            conditions.append("created_at >= ?")
+            params.append(date_from)
+
+        if date_to:
+            # inclusive end-of-day: anything created on date_to (or a full
+            # timestamp) should match, so compare against the next boundary.
+            conditions.append("created_at < ?")
+            params.append(date_to + "T99")
 
         if project_id:
             conditions.append("(project_id = ? OR scope = 'global')")
@@ -385,11 +420,13 @@ def search_memories(
             params.extend([like, like])
 
         where = " AND ".join(conditions)
+        order = _ORDER_BY.get(order_by or "", _DEFAULT_ORDER)
         sql = (
             f"SELECT * FROM memories WHERE {where} "
-            "ORDER BY pinned DESC, salience DESC, created_at DESC LIMIT ?"
+            f"ORDER BY {order} LIMIT ? OFFSET ?"
         )
         params.append(top_k)
+        params.append(max(offset, 0))
 
         rows = conn.execute(sql, params).fetchall()
     finally:
@@ -416,6 +453,108 @@ def get_memory_by_id(db_path: Path, memory_id: str) -> dict[str, Any] | None:
         return None
     track_reads(db_path, [memory_id])
     return dict(row)
+
+
+def update_memory(
+    db_path: Path,
+    memory_id: str,
+    *,
+    title: str | None = None,
+    content: str | None = None,
+    tags: list[str] | None = None,
+) -> bool:
+    """Update an existing (non-deleted) memory's editable fields.
+
+    Only ``title``, ``content`` and ``tags`` are user-editable from the web UI;
+    everything else (scope, salience, lineage) is managed by the system.
+    """
+    sets: list[str] = []
+    params: list[Any] = []
+    if title is not None:
+        sets.append("title = ?")
+        params.append(title)
+    if content is not None:
+        sets.append("content = ?")
+        params.append(content)
+    if tags is not None:
+        sets.append("tags = ?")
+        params.append(json.dumps(tags))
+    if not sets:
+        return False
+
+    now = _now_iso()
+    sets.append("updated_at = ?")
+    params.append(now)
+    params.append(memory_id)
+
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        cursor = conn.execute(
+            f"UPDATE memories SET {', '.join(sets)} WHERE id = ? AND deleted_at IS NULL",
+            params,
+        )
+        conn.commit()
+        affected = cursor.rowcount
+    finally:
+        conn.close()
+
+    if affected > 0:
+        try:
+            record_audit(
+                db_path,
+                action="update",
+                target_type="memory",
+                target_id=memory_id,
+            )
+        except Exception:
+            pass
+
+    return affected > 0
+
+
+def list_deleted_memories(db_path: Path, top_k: int = 200) -> list[dict[str, Any]]:
+    """List soft-deleted memories (the trash), most recently deleted first."""
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        rows = conn.execute(
+            "SELECT * FROM memories WHERE deleted_at IS NOT NULL "
+            "ORDER BY deleted_at DESC LIMIT ?",
+            (top_k,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(row) for row in rows]
+
+
+def restore_memory(db_path: Path, memory_id: str) -> bool:
+    """Bring a soft-deleted memory back, clearing its grace period."""
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        cursor = conn.execute(
+            "UPDATE memories SET deleted_at = NULL, grace_until = NULL "
+            "WHERE id = ? AND deleted_at IS NOT NULL",
+            (memory_id,),
+        )
+        conn.commit()
+        affected = cursor.rowcount
+    finally:
+        conn.close()
+
+    if affected > 0:
+        try:
+            record_audit(
+                db_path,
+                action="restore",
+                target_type="memory",
+                target_id=memory_id,
+            )
+        except Exception:
+            pass
+
+    return affected > 0
 
 
 def list_projects(db_path: Path) -> list[dict[str, Any]]:

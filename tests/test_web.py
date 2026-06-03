@@ -28,7 +28,11 @@ def tmp_db(tmp_path: Path) -> Path:
 def client(tmp_db: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr("mem0ry.web.pages._db_path", lambda: tmp_db)
     app = Starlette(routes=get_web_routes())
-    return TestClient(app)
+    c = TestClient(app)
+    # The UI defaults to Portuguese; pin the test client to English so the
+    # assertions below can stay language-stable. PT default is covered separately.
+    c.cookies.set("lang", "en")
+    return c
 
 
 def _seed(db_path: Path) -> list[str]:
@@ -54,9 +58,20 @@ def test_dashboard_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("mem0ry.web.pages._db_path", lambda: tmp_path / "missing.db")
     app = Starlette(routes=get_web_routes())
     c = TestClient(app)
+    c.cookies.set("lang", "en")
     resp = c.get("/")
     assert resp.status_code == 200
     assert "No database found" in resp.text
+
+
+def test_default_language_is_portuguese(tmp_db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("mem0ry.web.pages._db_path", lambda: tmp_db)
+    app = Starlette(routes=get_web_routes())
+    c = TestClient(app)  # no lang cookie -> default pt
+    resp = c.get("/")
+    assert resp.status_code == 200
+    assert 'lang="pt"' in resp.text
+    assert "Painel" in resp.text  # nav "Dashboard" in PT
 
 
 def test_dashboard_with_data(client: TestClient, tmp_db: Path) -> None:
@@ -161,3 +176,73 @@ def test_api_memories_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     resp = c.get("/api/memories")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_search_filter_by_tag(client: TestClient, tmp_db: Path) -> None:
+    create_memory(
+        tmp_db, content="Tagged memory", scope="global", memory_type="log",
+        title="Tagged", source="manual", tags=["alpha", "beta"],
+    )
+    create_memory(
+        tmp_db, content="Untagged memory", scope="global", memory_type="log",
+        title="Untagged", source="manual",
+    )
+    resp = client.get("/search?tags=alpha")
+    assert resp.status_code == 200
+    assert "Tagged" in resp.text
+    assert "Untagged" not in resp.text
+
+
+def test_search_filter_by_source(client: TestClient, tmp_db: Path) -> None:
+    _seed(tmp_db)
+    resp = client.get("/search?source=opencode")
+    assert resp.status_code == 200
+    assert "DB decision" in resp.text
+    assert "Python fact" not in resp.text
+
+
+def test_edit_memory(client: TestClient, tmp_db: Path) -> None:
+    ids = _seed(tmp_db)
+    # edit form renders
+    resp = client.get(f"/memory/{ids[0]}/edit")
+    assert resp.status_code == 200
+    assert "Test fact about Python" in resp.text
+    # save edit
+    resp = client.post(
+        f"/memory/{ids[0]}/edit",
+        data={"title": "Edited title", "content": "Edited content", "tags": "x, y"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    detail = client.get(f"/memory/{ids[0]}")
+    assert "Edited title" in detail.text
+    assert "Edited content" in detail.text
+
+
+def test_pin_unpin_memory(client: TestClient, tmp_db: Path) -> None:
+    # a 'log' memory is not pinned by default
+    mid = create_memory(
+        tmp_db, content="Note", scope="global", memory_type="log",
+        title="Note", source="manual",
+    )
+    resp = client.post(f"/memory/{mid}/pin", follow_redirects=False)
+    assert resp.status_code == 303
+    from mem0ry.db.store import get_memory_by_id
+    assert get_memory_by_id(tmp_db, mid)["pinned"] == 1
+    resp = client.post(f"/memory/{mid}/unpin", follow_redirects=False)
+    assert resp.status_code == 303
+    assert get_memory_by_id(tmp_db, mid)["pinned"] == 0
+
+
+def test_trash_and_restore(client: TestClient, tmp_db: Path) -> None:
+    ids = _seed(tmp_db)
+    client.post(f"/memory/{ids[0]}/delete", follow_redirects=False)
+    # deleted memory shows up in trash
+    resp = client.get("/trash")
+    assert resp.status_code == 200
+    assert "Python fact" in resp.text
+    # restore it
+    resp = client.post(f"/memory/{ids[0]}/restore", follow_redirects=False)
+    assert resp.status_code == 303
+    from mem0ry.db.store import get_memory_by_id
+    assert get_memory_by_id(tmp_db, ids[0]) is not None

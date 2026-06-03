@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-06-03
+
+### Added
+
+- **Web UI redesign** — full visual overhaul of every screen built on a new
+  design system (layered surfaces, accent glow, mono/sans type scale, refined
+  light theme). Shared components in `web/templates.py` so all pages inherit the
+  new look:
+  - **Sticky header** with brand + live "server online" dot, PT/EN language
+    segment, and a one-click theme toggle (☾/☀); nav highlights the active page
+    with an underline.
+  - **Resume band** on the dashboard ("Pick up where you left off") listing open
+    handoffs with repo, relative time, and summary — surfacing the cross-agent
+    handoff path front and center.
+  - **Stats grid** with an accent card for open handoffs and a schema/health
+    chip, plus **composition bars** breaking memories down by scope and type
+    with clickable legends that link into search.
+  - **Redesigned memory cards** with a type-colored rail (decision/fact/
+    pattern), inline recall count, salience bar, and `#tag` chips.
+  - **Floating batch action bar** (centered pill) replacing the fixed footer bar.
+- **Search filters & pagination** — search now supports filtering by `source`,
+  pinned-only, and a created-date range (`from`/`to`), plus selectable sort
+  order (newest, oldest, salience, most accessed, title A–Z) and paged results.
+  Backed by a whitelisted `_ORDER_BY` map and `offset` support in
+  `search_memories()`.
+- **Edit memories from the Web UI** — new edit form (title, content, tags) wired
+  to `update_memory()` in `db/store_memories.py`, with an audit-log entry.
+- **Pin / unpin and trash / restore from the Web UI** — pin toggle on memory
+  detail, a `/trash` page listing soft-deleted memories with grace period, and
+  one-click restore (`list_deleted_memories()`, `restore_memory()`).
+- **Bilingual UI strings** centralized in `web/i18n.py` (pt-BR / en) with
+  cookie-based language and theme preferences.
+
+### Changed
+
+- `store.py` now re-exports `update_memory`, `list_deleted_memories`,
+  `restore_memory`, `pin_memory`, and `unpin_memory`.
+
 ## [0.18.0] - 2026-06-01
 
 ### Added
