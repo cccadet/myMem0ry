@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-06-03
+
+### Fixed
+
+- **Version check false upgrade prompt** — `mymem0ry version` incorrectly warned
+  about an available update when the installed version was *newer* than PyPI
+  (e.g. "myMem0ry 0.18.0 is available (you have 0.20.0)"). The check now
+  performs proper semantic version comparison instead of only testing equality.
+
 ## [0.20.0] - 2026-06-03
 
 ### Added
@@ -433,8 +442,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.15.3...HEAD
-[0.15.3]: https://github.com/cccadet/myMem0ry/compare/v0.15.2...v0.15.3
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/cccadet/myMem0ry/compare/v0.20.0...v0.21.0
+[0.20.0]: https://github.com/cccadet/myMem0ry/compare/v0.19.0...v0.20.0
+[0.19.0]: https://github.com/cccadet/myMem0ry/compare/v0.18.0...v0.19.0
+[0.18.0]: https://github.com/cccadet/myMem0ry/compare/v0.17.0...v0.18.0
+[0.17.0]: https://github.com/cccadet/myMem0ry/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/cccadet/myMem0ry/compare/v0.15.5...v0.16.0
+[0.15.5]: https://github.com/cccadet/myMem0ry/compare/v0.15.4...v0.15.5
 [0.15.2]: https://github.com/cccadet/myMem0ry/compare/v0.15.1...v0.15.2
 [0.14.5]: https://github.com/cccadet/myMem0ry/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/cccadet/myMem0ry/compare/v0.14.3...v0.14.4
