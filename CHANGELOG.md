@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-06-03
+
+### Added
+
+- **Project observations page** (`/project/{id}/observations`) — new page listing
+  all observations for a project with ID, title, kind, agent, and date columns.
+  Each row links to the observation detail page.
+- **Observations link in projects table** — the "Obs" count column in `/projects`
+  is now a clickable link to the project's observations page.
+- **Observations button in project detail** — the project detail page now shows
+  an "Observations (N)" button when the project has observations.
+- **i18n strings** — new translation keys for the observations page in pt-BR and en.
+
 ## [0.21.0] - 2026-06-03
 
 ### Fixed
