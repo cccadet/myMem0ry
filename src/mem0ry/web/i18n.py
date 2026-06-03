@@ -138,6 +138,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "ho.next_steps": "Próximos passos",
         "ho.none_item": "nenhum",
         "ho.not_found": "Repasse {id} não encontrado.",
+        "ho.close": "Fechar",
+        "ho.confirm_close": "Fechar este repasse?",
+        "ho.confirm_delete": "Excluir este repasse permanentemente?",
         # observation
         "obs.agent": "Agente",
         "obs.session": "Sessão",
@@ -302,6 +305,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "ho.next_steps": "Next Steps",
         "ho.none_item": "none",
         "ho.not_found": "Handoff {id} not found.",
+        "ho.close": "Close",
+        "ho.confirm_close": "Close this handoff?",
+        "ho.confirm_delete": "Delete this handoff permanently?",
         # observation
         "obs.agent": "Agent",
         "obs.session": "Session",

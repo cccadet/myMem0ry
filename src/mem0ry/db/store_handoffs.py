@@ -302,6 +302,57 @@ def auto_handoff_from_session(
     )
 
 
+def close_handoff(db_path: Path, handoff_id: str) -> bool:
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        cur = conn.execute(
+            "UPDATE handoffs SET status = 'expired' WHERE id = ? AND status = 'open'",
+            (handoff_id,),
+        )
+        conn.commit()
+        changed = cur.rowcount > 0
+    finally:
+        conn.close()
+
+    if changed:
+        try:
+            record_audit(
+                db_path,
+                action="close_handoff",
+                target_type="handoff",
+                target_id=handoff_id,
+            )
+        except Exception:
+            pass
+
+    return changed
+
+
+def delete_handoff(db_path: Path, handoff_id: str) -> bool:
+    conn = get_connection(db_path)
+    try:
+        init_schema(conn)
+        cur = conn.execute("DELETE FROM handoffs WHERE id = ?", (handoff_id,))
+        conn.commit()
+        changed = cur.rowcount > 0
+    finally:
+        conn.close()
+
+    if changed:
+        try:
+            record_audit(
+                db_path,
+                action="delete_handoff",
+                target_type="handoff",
+                target_id=handoff_id,
+            )
+        except Exception:
+            pass
+
+    return changed
+
+
 def _expire_old_handoffs(conn: sqlite3.Connection) -> None:
     now = _now_iso()
     conn.execute(

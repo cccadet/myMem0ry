@@ -748,6 +748,22 @@ def restore_memory_page(request: Request) -> Any:
     return RedirectResponse(url="/trash", status_code=303)
 
 
+def close_handoff_page(request: Request) -> Any:
+    from ..db.store import close_handoff
+
+    hid = request.path_params["handoff_id"]
+    close_handoff(_db_path(), hid)
+    return RedirectResponse(url=f"/handoff/{hid}", status_code=303)
+
+
+def delete_handoff_page(request: Request) -> Any:
+    from ..db.store import delete_handoff
+
+    hid = request.path_params["handoff_id"]
+    delete_handoff(_db_path(), hid)
+    return RedirectResponse(url="/handoffs", status_code=303)
+
+
 def handoffs_page(request: Request) -> HTMLResponse:
     lang = get_lang(request)
     theme = get_theme(request)
@@ -794,6 +810,7 @@ def handoffs_page(request: Request) -> HTMLResponse:
   <td class="meta">{_esc(dict(r).get('project_id'))}</td>
   <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{_esc((dict(r).get('summary') or '')[:120])}</td>
   <td class="meta">{(dict(r).get('created_at') or '')[:16]}</td>
+  <td><form method="post" action="/handoff/{_esc(dict(r)['id'])}/delete" style="display:inline" onsubmit="return confirm('{t("ho.confirm_delete", lang)}')"><button type="submit" class="btn btn-danger" style="padding:.2rem .5rem;font-size:.8rem">{t("common.delete", lang)}</button></form></td>
 </tr>"""
         for r in rows
     )
@@ -801,8 +818,8 @@ def handoffs_page(request: Request) -> HTMLResponse:
     body = f"""<h2>{t("ho.title", lang)}</h2>
 <div style="margin-bottom:1rem">{status_tabs}</div>
 <table>
-<tr><th>{t("ho.col_id", lang)}</th><th>{t("ho.col_status", lang)}</th><th>{t("ho.col_from", lang)}</th><th>{t("ho.col_project", lang)}</th><th>{t("ho.col_summary", lang)}</th><th>{t("ho.col_created", lang)}</th></tr>
-{rows_html if rows_html else f'<tr><td colspan="6" class="meta">{t("ho.none", lang)}</td></tr>'}
+<tr><th>{t("ho.col_id", lang)}</th><th>{t("ho.col_status", lang)}</th><th>{t("ho.col_from", lang)}</th><th>{t("ho.col_project", lang)}</th><th>{t("ho.col_summary", lang)}</th><th>{t("ho.col_created", lang)}</th><th></th></tr>
+{rows_html if rows_html else f'<tr><td colspan="7" class="meta">{t("ho.none", lang)}</td></tr>'}
 </table>"""
 
     return HTMLResponse(_layout(t("ho.title", lang), body, "handoffs", lang, theme))
@@ -835,6 +852,20 @@ def handoff_detail(request: Request) -> HTMLResponse:
     oq_html = "".join(f"<li>{_esc(qi)}</li>" for qi in oq) if oq else f"<li class='meta'>{t('ho.none_item', lang)}</li>"
     ns_html = "".join(f"<li>{_esc(s)}</li>" for s in ns) if ns else f"<li class='meta'>{t('ho.none_item', lang)}</li>"
 
+    actions: list[str] = []
+    if ho["status"] == "open":
+        actions.append(
+            f'<form method="post" action="/handoff/{hid}/close" style="display:inline" '
+            f'onsubmit="return confirm(\'{t("ho.confirm_close", lang)}\')">'
+            f'<button type="submit" class="btn">{t("ho.close", lang)}</button></form>'
+        )
+    actions.append(
+        f'<form method="post" action="/handoff/{hid}/delete" style="display:inline" '
+        f'onsubmit="return confirm(\'{t("ho.confirm_delete", lang)}\')">'
+        f'<button type="submit" class="btn btn-danger">{t("common.delete", lang)}</button></form>'
+    )
+    actions_html = " ".join(actions)
+
     body = f"""<div class="card">
   <h2>Handoff {_esc(hid)}</h2>
   <div>{status_tag}</div>
@@ -849,6 +880,7 @@ def handoff_detail(request: Request) -> HTMLResponse:
     {t("ho.session", lang)}: {_esc(ho.get('session_id'))}
   </div>
   {f'<div class="meta">{t("ho.accepted_by", lang)}: {_esc(ho.get("accepted_by"))} @ {(ho.get("accepted_at") or "")[:19]}</div>' if ho.get("accepted_by") else ""}
+  <div style="margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap">{actions_html}</div>
 </div>
 <h3>{t("ho.summary", lang)}</h3>
 <pre>{_esc(ho.get('summary') or '')}</pre>

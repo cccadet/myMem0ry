@@ -40,6 +40,8 @@ from .store_observations import (  # noqa: F401
 from .store_handoffs import (  # noqa: F401
     begin_handoff,
     accept_handoff,
+    close_handoff,
+    delete_handoff,
     pending_handoff,
     auto_handoff_from_session,
     export_handoffs,
