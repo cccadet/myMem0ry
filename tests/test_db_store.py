@@ -513,3 +513,149 @@ def test_search_excludes_superseded(db: Path) -> None:
 
     results = search_memories(db, query="superseded")
     assert all(r["id"] != old for r in results)
+
+
+def test_fts5_table_created(db: Path) -> None:
+    conn = get_connection(db)
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    conn.close()
+    assert "memories_fts" in tables
+
+
+def test_fts5_ranking(db: Path) -> None:
+    create_memory(db, content="authentication token JWT bearer", scope="global", title="Auth")
+    create_memory(db, content="token is a small word that appears briefly", scope="global", title="Brief")
+    create_memory(db, content="unrelated content about database", scope="global", title="DB")
+
+    results = search_memories(db, query="authentication token")
+    assert len(results) >= 2
+    assert results[0]["title"] == "Auth"
+
+
+def test_fts5_or_match(db: Path) -> None:
+    create_memory(db, content="only about authentication", scope="global", title="AuthOnly")
+    create_memory(db, content="only about database", scope="global", title="DBOnly")
+
+    results = search_memories(db, query="authentication database")
+    titles = {r["title"] for r in results}
+    assert "AuthOnly" in titles
+    assert "DBOnly" in titles
+
+
+def test_fts5_sync_on_insert(db: Path) -> None:
+    create_memory(db, content="findable via fts", scope="global", title="FTS")
+    results = search_memories(db, query="findable")
+    assert len(results) == 1
+    assert results[0]["title"] == "FTS"
+
+
+def test_fts5_sync_on_soft_delete(db: Path) -> None:
+    from mem0ry.db.store import delete_memory
+
+    mem_id = create_memory(db, content="temporary fts content", scope="global", title="Temp")
+    assert len(search_memories(db, query="temporary")) == 1
+
+    delete_memory(db, mem_id)
+    assert len(search_memories(db, query="temporary")) == 0
+
+
+def test_fts5_sync_on_restore(db: Path) -> None:
+    from mem0ry.db.store import delete_memory, restore_memory
+
+    mem_id = create_memory(db, content="restored fts content", scope="global", title="Restore")
+    delete_memory(db, mem_id)
+    assert len(search_memories(db, query="restored")) == 0
+
+    restore_memory(db, mem_id)
+    assert len(search_memories(db, query="restored")) == 1
+
+
+def test_fts5_sync_on_update(db: Path) -> None:
+    from mem0ry.db.store import update_memory
+
+    mem_id = create_memory(db, content="original content", scope="global", title="Update")
+    assert len(search_memories(db, query="original")) == 1
+    assert len(search_memories(db, query="modified")) == 0
+
+    update_memory(db, mem_id, content="modified content")
+    assert len(search_memories(db, query="modified")) == 1
+    assert len(search_memories(db, query="original")) == 0
+
+
+def test_fts5_accent_insensitive(db: Path) -> None:
+    create_memory(db, content="configuração do sistema de autenticação", scope="global", title="Config")
+    results = search_memories(db, query="configuracao")
+    assert len(results) == 1
+
+
+def test_fts5_superseded_excluded(db: Path) -> None:
+    from mem0ry.db.store import evolve_memories
+
+    old = create_memory(db, content="deprecated approach for caching", scope="global", memory_type="fact", title="Old")
+    evolve_memories(db, old_ids=[old], evolved_content="new caching approach", rationale="improved")
+
+    results = search_memories(db, query="deprecated caching")
+    assert all(r["id"] != old for r in results)
+
+
+def test_search_expanded_terms(db: Path) -> None:
+    create_memory(db, content="login page with credentials", scope="global", title="Login")
+    create_memory(db, content="unrelated topic", scope="global", title="Other")
+
+    results = search_memories(db, query="xyznonexistent", expanded_terms=["credentials"])
+    assert len(results) == 1
+    assert results[0]["title"] == "Login"
+
+
+def test_search_no_query_returns_all(db: Path) -> None:
+    create_memory(db, content="alpha", scope="global", title="A")
+    create_memory(db, content="beta", scope="global", title="B")
+
+    results = search_memories(db)
+    assert len(results) == 2
+
+
+def test_normalize_strips_accents() -> None:
+    from mem0ry.db.store_memories import _normalize
+
+    assert _normalize("configuração") == "configuracao"
+    assert _normalize("autenticação") == "autenticacao"
+    assert _normalize("São Paulo") == "sao paulo"
+
+
+def test_strip_accents() -> None:
+    from mem0ry.db.store_memories import _strip_accents
+
+    assert _strip_accents("índice") == "indice"
+    assert _strip_accents("CONFIANÇA") == "CONFIANCA"
+    assert _strip_accents("hello") == "hello"
+
+
+def test_query_terms_normalizes() -> None:
+    from mem0ry.db.store_memories import _query_terms
+
+    terms = _query_terms("configuração do sistema")
+    assert "configuracao" in terms
+    assert "sistema" in terms
+    assert "do" not in terms
+
+
+def test_query_terms_filters_stop_words() -> None:
+    from mem0ry.db.store_memories import _query_terms
+
+    terms = _query_terms("the authentication and the authorization")
+    assert "authentication" in terms
+    assert "authorization" in terms
+    assert "the" not in terms
+    assert "and" not in terms
+
+
+def test_query_terms_raw_preserves_accents() -> None:
+    from mem0ry.db.store_memories import _query_terms_raw
+
+    terms = _query_terms_raw("configuração do sistema")
+    assert "configuração" in terms
+    assert "sistema" in terms
+    assert "do" not in terms

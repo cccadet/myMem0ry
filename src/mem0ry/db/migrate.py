@@ -258,3 +258,42 @@ def migrate_v6_to_v7(db_path: Path) -> dict:
     conn.close()
 
     return {"old_version": old_version, "new_version": 7}
+
+
+def migrate_v7_to_v8(db_path: Path) -> dict:
+    """Upgrade v7 schema to v8: add FTS5 index + triggers on memories."""
+    from .schema import (
+        _CREATE_MEMORIES_FTS,
+        _TRIGGER_FTS_INSERT,
+        _TRIGGER_FTS_UPDATE,
+        _TRIGGER_FTS_DELETE,
+    )
+
+    conn = get_connection(db_path)
+    init_schema(conn)
+
+    version_row = conn.execute(_VERSION_SQL).fetchone()
+    old_version = int(version_row["value"]) if version_row else 7
+
+    conn.execute(_CREATE_MEMORIES_FTS)
+
+    conn.execute(
+        "INSERT INTO memories_fts(rowid, title, content, tags) "
+        "SELECT rowid, COALESCE(title, ''), content, tags "
+        "FROM memories WHERE deleted_at IS NULL "
+        "AND (superseded_by IS NULL OR superseded_by = '')"
+    )
+
+    for sql in (
+        _TRIGGER_FTS_INSERT,
+        _TRIGGER_FTS_UPDATE,
+        _TRIGGER_FTS_DELETE,
+    ):
+        conn.execute(sql)
+
+    conn.execute(_SET_VERSION_SQL, ("version", "8"))
+    conn.execute("PRAGMA user_version = 8")
+    conn.commit()
+    conn.close()
+
+    return {"old_version": old_version, "new_version": 8}

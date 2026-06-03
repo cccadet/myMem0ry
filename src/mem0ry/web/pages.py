@@ -9,7 +9,7 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Re
 
 from ..db.connection import get_connection
 from ..db.schema import init_schema
-from ..db.store_memories import _query_terms
+from ..db.store_memories import _query_terms_raw
 from .i18n import get_lang, get_theme, t
 from .templates import (
     _TITLE_AUDIT,
@@ -565,7 +565,7 @@ def search_page(request: Request) -> HTMLResponse:
         )
         has_next = len(rows) > _PAGE_SIZE
         rows = rows[:_PAGE_SIZE]
-        terms = _query_terms(q)
+        terms = _query_terms_raw(q)
 
         if rows:
             results_html = f'<div class="meta">{len(rows)} {t("common.results", lang)}</div>' + "".join(

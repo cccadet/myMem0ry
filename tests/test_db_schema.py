@@ -39,7 +39,7 @@ def test_init_schema_version(tmp_path: Path) -> None:
     init_schema(conn)
 
     row = conn.execute("SELECT value FROM schema_meta WHERE key='version'").fetchone()
-    assert row["value"] == "7"
+    assert row["value"] == "8"
     conn.close()
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
+import unicodedata
 import uuid
 from pathlib import Path
 from typing import Any
@@ -22,13 +24,13 @@ _SCOPE_PRIORITY = ["session", "context", "project", "global"]
 # Whitelisted ORDER BY clauses for search/listing. Keys are the only values a
 # caller (e.g. the web UI) may pass for ``order_by``; the default preserves the
 # historical "most relevant first" ordering used everywhere else.
-_DEFAULT_ORDER = "pinned DESC, salience DESC, created_at DESC"
-_ORDER_BY = {
-    "recent": "created_at DESC",
-    "oldest": "created_at ASC",
-    "salience": "salience DESC, created_at DESC",
-    "access": "access_count DESC, created_at DESC",
-    "title": "title COLLATE NOCASE ASC, created_at DESC",
+_DEFAULT_ORDER_M = "m.pinned DESC, m.salience DESC, m.created_at DESC"
+_ORDER_BY_M = {
+    "recent": "m.created_at DESC",
+    "oldest": "m.created_at ASC",
+    "salience": "m.salience DESC, m.created_at DESC",
+    "access": "m.access_count DESC, m.created_at DESC",
+    "title": "m.title COLLATE NOCASE ASC, m.created_at DESC",
 }
 
 # Stop words (EN + PT) filtered from free-text queries so a natural-language
@@ -41,8 +43,51 @@ _STOP_WORDS = frozenset(
 )
 
 
+_SUFFIXES_PT = frozenset(
+    "acao cao mento acao acoes amente ismo ista iveis aveis "
+    "ando endo indo aram eram iram asse esse isse ado edo ido "
+    "aram erem irem aria eria iria".split()
+)
+
+_SUFFIXES_EN = frozenset(
+    "ing tion sion ment ness ly ful less able ible ous ive "
+    "ize ise ate ful ings tions sions ments nesses".split()
+)
+
+_ALL_SUFFIXES = _SUFFIXES_PT | _SUFFIXES_EN
+
+
+def _strip_accents(text: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.category(c).startswith("M"))
+
+
+def _stem_word(word: str) -> str:
+    for suffix in _ALL_SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    return word
+
+
+def _normalize(text: str) -> str:
+    return _strip_accents(text.lower())
+
+
 def _query_terms(query: str | None) -> list[str]:
-    """Extract meaningful search terms from a free-text query."""
+    """Extract meaningful, normalized search terms from a free-text query."""
+    if not query:
+        return []
+    words = re.findall(r"[\wáàãâéêíóôõúüçÁÀÃÂÉÊÍÓÔÕÚÜÇ]+", query.lower())
+    terms: list[str] = []
+    for w in words:
+        if len(w) <= 1 or w in _STOP_WORDS:
+            continue
+        terms.append(_normalize(w))
+    return terms
+
+
+def _query_terms_raw(query: str | None) -> list[str]:
+    """Extract raw (un-normalized) terms for UI highlighting."""
     if not query:
         return []
     words = re.findall(r"[\wáàãâéêíóôõúüçÁÀÃÂÉÊÍÓÔÕÚÜÇ]+", query.lower())
@@ -351,6 +396,67 @@ def end_session(db_path: Path, session_id: str, summary: str | None = None) -> b
     return True
 
 
+def _has_fts(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("SELECT count(*) FROM memories_fts LIMIT 0")
+        return True
+    except Exception:
+        return False
+
+
+def _build_filter_conditions(
+    scope: str | None,
+    project_id: str | None,
+    context: str | None,
+    memory_type: str | None,
+    tags: list[str] | None,
+    source: str | None,
+    pinned_only: bool,
+    date_from: str | None,
+    date_to: str | None,
+) -> tuple[list[str], list[Any]]:
+    conditions: list[str] = ["m.deleted_at IS NULL", "(m.superseded_by IS NULL OR m.superseded_by = '')"]
+    params: list[Any] = []
+
+    if scope:
+        conditions.append("m.scope = ?")
+        params.append(scope)
+
+    if source:
+        conditions.append("m.source = ?")
+        params.append(source)
+
+    if pinned_only:
+        conditions.append("m.pinned = 1")
+
+    if date_from:
+        conditions.append("m.created_at >= ?")
+        params.append(date_from)
+
+    if date_to:
+        conditions.append("m.created_at < ?")
+        params.append(date_to + "T99")
+
+    if project_id:
+        conditions.append("(m.project_id = ? OR m.scope = 'global')")
+        params.append(project_id)
+
+    if context:
+        conditions.append("(m.context = ? OR m.scope IN ('project', 'global'))")
+        params.append(context)
+
+    if memory_type:
+        conditions.append("m.memory_type = ?")
+        params.append(memory_type)
+
+    if tags:
+        for tag in tags:
+            conditions.append("m.tags LIKE ?")
+            params.append(f'%"{tag}"%')
+
+    return conditions, params
+
+
 def search_memories(
     db_path: Path,
     query: str | None = None,
@@ -366,69 +472,32 @@ def search_memories(
     date_to: str | None = None,
     order_by: str | None = None,
     offset: int = 0,
+    expanded_terms: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     conn = get_connection(db_path)
     try:
         init_schema(conn)
 
-        conditions: list[str] = ["deleted_at IS NULL", _NOT_SUPERSEDED]
-        params: list[Any] = []
-
-        if scope:
-            conditions.append("scope = ?")
-            params.append(scope)
-
-        if source:
-            conditions.append("source = ?")
-            params.append(source)
-
-        if pinned_only:
-            conditions.append("pinned = 1")
-
-        if date_from:
-            conditions.append("created_at >= ?")
-            params.append(date_from)
-
-        if date_to:
-            # inclusive end-of-day: anything created on date_to (or a full
-            # timestamp) should match, so compare against the next boundary.
-            conditions.append("created_at < ?")
-            params.append(date_to + "T99")
-
-        if project_id:
-            conditions.append("(project_id = ? OR scope = 'global')")
-            params.append(project_id)
-
-        if context:
-            conditions.append("(context = ? OR scope IN ('project', 'global'))")
-            params.append(context)
-
-        if memory_type:
-            conditions.append("memory_type = ?")
-            params.append(memory_type)
-
-        if tags:
-            for tag in tags:
-                conditions.append("tags LIKE ?")
-                params.append(f'%"{tag}"%')
-
-        # Free-text: every term must appear in content or title (AND of ORs),
-        # so the result set narrows as the query gets more specific.
-        for term in _query_terms(query):
-            conditions.append("(content LIKE ? OR title LIKE ?)")
-            like = f"%{term}%"
-            params.extend([like, like])
-
-        where = " AND ".join(conditions)
-        order = _ORDER_BY.get(order_by or "", _DEFAULT_ORDER)
-        sql = (
-            f"SELECT * FROM memories WHERE {where} "
-            f"ORDER BY {order} LIMIT ? OFFSET ?"
+        conditions, params = _build_filter_conditions(
+            scope, project_id, context, memory_type,
+            tags, source, pinned_only, date_from, date_to,
         )
-        params.append(top_k)
-        params.append(max(offset, 0))
+        terms = _query_terms(query)
 
-        rows = conn.execute(sql, params).fetchall()
+        if expanded_terms:
+            existing = set(terms)
+            for et in expanded_terms:
+                norm = _normalize(et)
+                if norm not in existing and len(norm) > 1:
+                    terms.append(norm)
+                    existing.add(norm)
+
+        if terms and _has_fts(conn):
+            rows = _search_fts(conn, terms, conditions, params, top_k, offset)
+        elif terms:
+            rows = _search_like(conn, terms, conditions, params, order_by, top_k, offset)
+        else:
+            rows = _search_filtered(conn, conditions, params, order_by, top_k, offset)
     finally:
         conn.close()
 
@@ -436,6 +505,70 @@ def search_memories(
     track_reads(db_path, [r["id"] for r in results])
 
     return results
+
+
+def _search_fts(
+    conn: sqlite3.Connection,
+    terms: list[str],
+    conditions: list[str],
+    params: list[Any],
+    top_k: int,
+    offset: int,
+) -> list[Any]:
+    fts_query = " OR ".join(f'"{t}"' for t in terms)
+    where = " AND ".join(conditions)
+    sql = (
+        "SELECT m.* FROM memories m "
+        "JOIN memories_fts fts ON m.rowid = fts.rowid "
+        f"WHERE fts.memories_fts MATCH ? AND {where} "
+        "ORDER BY fts.rank "
+        "LIMIT ? OFFSET ?"
+    )
+    fts_params: list[Any] = [fts_query] + params + [top_k, max(offset, 0)]
+    return conn.execute(sql, fts_params).fetchall()
+
+
+def _search_like(
+    conn: sqlite3.Connection,
+    terms: list[str],
+    conditions: list[str],
+    params: list[Any],
+    order_by: str | None,
+    top_k: int,
+    offset: int,
+) -> list[Any]:
+    like_conditions = list(conditions)
+    like_params = list(params)
+    for term in terms:
+        like_conditions.append("(m.content LIKE ? OR m.title LIKE ?)")
+        like = f"%{term}%"
+        like_params.extend([like, like])
+    where = " AND ".join(like_conditions)
+    order = _ORDER_BY_M.get(order_by or "", _DEFAULT_ORDER_M)
+    sql = (
+        f"SELECT m.* FROM memories m WHERE {where} "
+        f"ORDER BY {order} LIMIT ? OFFSET ?"
+    )
+    like_params.extend([top_k, max(offset, 0)])
+    return conn.execute(sql, like_params).fetchall()
+
+
+def _search_filtered(
+    conn: sqlite3.Connection,
+    conditions: list[str],
+    params: list[Any],
+    order_by: str | None,
+    top_k: int,
+    offset: int,
+) -> list[Any]:
+    where = " AND ".join(conditions)
+    order = _ORDER_BY_M.get(order_by or "", _DEFAULT_ORDER_M)
+    sql = (
+        f"SELECT m.* FROM memories m WHERE {where} "
+        f"ORDER BY {order} LIMIT ? OFFSET ?"
+    )
+    params.extend([top_k, max(offset, 0)])
+    return conn.execute(sql, params).fetchall()
 
 
 def get_memory_by_id(db_path: Path, memory_id: str) -> dict[str, Any] | None:

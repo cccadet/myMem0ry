@@ -260,6 +260,14 @@ def search_memory(
 
     resolved = _resolve_cwd(cwd)
 
+    expanded_terms: list[str] | None = None
+    try:
+        expander = _get_expander()
+        similar = expander.similar_tokens(query, top_k=5)
+        expanded_terms = [tok for tok, _ in similar if len(tok) > 1]
+    except Exception:
+        pass
+
     rows = search_memories(
         db,
         query=query,
@@ -269,6 +277,7 @@ def search_memory(
         memory_type=memory_type,
         tags=tags,
         top_k=top_k,
+        expanded_terms=expanded_terms,
     )
 
     results: list[dict[str, Any]] = []

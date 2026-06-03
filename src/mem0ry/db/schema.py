@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-_SCHEMA_VERSION = 7
+_SCHEMA_VERSION = 8
 
 _CREATE_MEMORIES = """
 CREATE TABLE IF NOT EXISTS memories (
@@ -168,6 +168,40 @@ CREATE INDEX IF NOT EXISTS idx_memories_superseded
 ON memories(superseded_by)
 """
 
+_CREATE_MEMORIES_FTS = """
+CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+    title, content, tags,
+    tokenize='unicode61 remove_diacritics 2'
+)
+"""
+
+_TRIGGER_FTS_INSERT = """
+CREATE TRIGGER IF NOT EXISTS memories_fts_ai AFTER INSERT ON memories
+WHEN NEW.deleted_at IS NULL AND (NEW.superseded_by IS NULL OR NEW.superseded_by = '')
+BEGIN
+    INSERT INTO memories_fts(rowid, title, content, tags)
+    VALUES (NEW.rowid, COALESCE(NEW.title, ''), NEW.content, NEW.tags);
+END
+"""
+
+_TRIGGER_FTS_UPDATE = """
+CREATE TRIGGER IF NOT EXISTS memories_fts_au AFTER UPDATE ON memories
+BEGIN
+    DELETE FROM memories_fts WHERE rowid = OLD.rowid;
+    INSERT INTO memories_fts(rowid, title, content, tags)
+    SELECT NEW.rowid, COALESCE(NEW.title, ''), NEW.content, NEW.tags
+    WHERE NEW.deleted_at IS NULL
+      AND (NEW.superseded_by IS NULL OR NEW.superseded_by = '');
+END
+"""
+
+_TRIGGER_FTS_DELETE = """
+CREATE TRIGGER IF NOT EXISTS memories_fts_ad AFTER DELETE ON memories
+BEGIN
+    DELETE FROM memories_fts WHERE rowid = OLD.rowid;
+END
+"""
+
 
 _EXTRA_COLUMNS: list[tuple[str, str]] = [
     ("project_id", "TEXT"),
@@ -237,6 +271,13 @@ def init_schema(conn: sqlite3.Connection) -> None:
         _INDEX_AUDIT_TARGET,
         _INDEX_AUDIT_CREATED,
         _INDEX_SUPERSEDED,
+        _CREATE_MEMORIES_FTS,
+    ):
+        conn.execute(sql)
+    for sql in (
+        _TRIGGER_FTS_INSERT,
+        _TRIGGER_FTS_UPDATE,
+        _TRIGGER_FTS_DELETE,
     ):
         conn.execute(sql)
     conn.execute(
