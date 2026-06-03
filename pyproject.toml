@@ -1,6 +1,6 @@
 [project]
 name = "mymem0ry"
-version = "0.19.0"
+version = "0.20.0"
 description = "Personal memory system for AI coding agents — offline, zero API keys, cross-agent handoffs, semantic search"
 readme = "README.md"
 license = "MIT"

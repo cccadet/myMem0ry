@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-06-03
+
+### Added
+
+- **FTS5 + bm25 ranking** for memory search — new `memories_fts` virtual table
+  (schema v8) with `unicode61 remove_diacritics 2` tokenizer. Triggers auto-sync
+  on INSERT, UPDATE, and DELETE. `search_memories()` now uses FTS5 MATCH with
+  bm25() relevance ranking instead of AND-of-LIKE, with transparent LIKE fallback
+  for pre-v8 databases.
+- **Accent normalization** — `_query_terms()` strips diacritics so queries like
+  "configuracao" match content containing "configuração". FTS5 tokenizer also
+  removes diacritics at index time.
+- **spaCy query expansion** — the MCP `search_memory` tool now expands queries
+  with semantically related tokens from spaCy word vectors (e.g. "autenticação"
+  → also matches "login", "credencial", "token"). Uses the cached `_expander`
+  instance, zero additional LLM tokens.
+- Migration `v7_to_v8()` in `db/migrate.py` — creates FTS5 table, populates from
+  existing memories, installs sync triggers.
+
+### Changed
+
+- `_query_terms()` returns accent-normalized terms for search; new
+  `_query_terms_raw()` preserves accents for Web UI highlighting.
+- `_build_filter_conditions()` extracted from `search_memories()` to reduce
+  duplication across FTS, LIKE, and filtered search paths.
+- `_DEFAULT_ORDER` / `_ORDER_BY` replaced by `_DEFAULT_ORDER_M` / `_ORDER_BY_M`
+  with `m.` aliases for the unified query style.
+
 ## [0.19.0] - 2026-06-03
 
 ### Added
