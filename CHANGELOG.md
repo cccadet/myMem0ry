@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-06-10
+
+### Added
+
+- **Serena project memories** (`.serena/memories/`) — ten short, on-demand notes
+  giving future agents fast context on the project: `project-overview`,
+  `code-style`, `architecture-context-cascade`, `schema-and-enums`,
+  `mcp-server-quirks`, `hooks-and-spool`, `retention-and-evolve`, `testing`,
+  `gotchas-and-config`, `search-backends`. The `schema-and-enums` memory
+  carries an auto-update rule tied to `_SCHEMA_VERSION`.
+
+### Changed
+
+- **AGENTS.md** — refreshed to reflect current repository layout, hook
+  architecture, MCP tool set, and CLI entrypoints.
+- **uv.lock** — dependency lockfile re-synced with `pyproject.toml`.
+
 ## [0.22.0] - 2026-06-03
 
 ### Added
