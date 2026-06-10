@@ -210,6 +210,7 @@ def get_context(
         top_k: Maximum number of memories to return. Defaults to 5.
     """
     from .db.store import get_context as _get_ctx
+    from .utils.compress import compress_memory_array
 
     db = _db_path()
     if not db.exists():
@@ -217,13 +218,14 @@ def get_context(
 
     resolved = _resolve_cwd(cwd)
 
-    return _get_ctx(
+    results = _get_ctx(
         db,
         project_id=resolved["project_id"],
         context=resolved["context"],
         session_id=resolved["session_id"],
         top_k=top_k,
     )
+    return compress_memory_array(results, query="")
 
 
 @mcp.tool()

@@ -83,3 +83,5 @@ class MemoryConfig:
     auth_token: str | None = os.environ.get("MEM0RY_TOKEN", None)
     allowed_hosts: str = os.environ.get("MEM0RY_ALLOWED_HOSTS", "localhost,127.0.0.1")
     cors_origins: str = os.environ.get("MEM0RY_CORS_ORIGINS", "")
+    compress_enabled: bool = os.environ.get("MEM0RY_COMPRESS", "0") == "1"
+    compress_log: bool = os.environ.get("MEM0RY_COMPRESS_LOG", "0") == "1"
