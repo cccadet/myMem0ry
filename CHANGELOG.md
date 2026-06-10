@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-06-10
+
+### Added
+
+- **Optional SmartCrusher compression** for `get_context` — integrates headroom-ai
+  to compress memory arrays before returning them to the LLM. Opt-in via
+  `MEM0RY_COMPRESS=1` env var (default disabled). CCR explicitly disabled to
+  prevent marker injection. Fail-safe: returns original on any error.
+  New optional dependency: `uv sync --extra compress` (installs `headroom-ai[code]`).
+  New config fields: `compress_enabled`, `compress_log` in `MemoryConfig`.
+  New module: `utils/compress.py` with `compress_memory_array()`.
+
 ## [0.24.0] - 2026-06-10
 
 ### Added
