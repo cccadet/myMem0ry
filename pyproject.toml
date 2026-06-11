@@ -1,13 +1,13 @@
 [project]
 name = "mymem0ry"
-version = "0.25.0"
+version = "0.25.1"
 description = "Personal memory system for AI coding agents — offline, zero API keys, cross-agent handoffs, semantic search"
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "cccadet", email = "perestra.ccds@gmail.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",

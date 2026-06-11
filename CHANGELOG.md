@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-06-10
+
+### Fixed
+
+- **Python version constraint** — added upper bound `<3.14` to `requires-python`
+  because `headroom-ai` (optional dependency for compression) only supports
+  Python 3.11–3.13. Without this, `pip install mymem0ry[compress]` on Python
+  3.14+ would fail at dependency resolution.
+
 ## [0.25.0] - 2026-06-10
 
 ### Added
