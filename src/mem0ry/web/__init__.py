@@ -28,6 +28,7 @@ from .pages import (
     delete_handoff_page,
     batch_delete_memories,
     export_memories_page,
+    export_page,
     import_page,
     import_memories_page,
 )
@@ -59,6 +60,7 @@ def get_web_routes() -> list[Route]:
         Route("/api/memories", api_memories),
         Route("/memories/batch-delete", batch_delete_memories, methods=["POST"]),
         Route("/memories/export", export_memories_page, methods=["POST"]),
+        Route("/export", export_page),
         Route("/import", import_page),
         Route("/memories/import", import_memories_page, methods=["POST"]),
     ]

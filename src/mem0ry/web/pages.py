@@ -343,26 +343,56 @@ def project_observations(request: Request) -> HTMLResponse:
     if not obs_rows:
         body = f"""<h2>{_esc(pid)} — {t("obs.project_obs", lang)}</h2>
 <p><a href="/project/{html.escape(pid)}">← {t("common.back", lang)}</a></p>
-<div class="card meta">{t("obs.none_for_project", lang)}</div>"""
+<div class="empty-state">
+  <div class="empty-state-icon">👁</div>
+  <div class="empty-state-text">{t("obs.none_for_project", lang)}</div>
+</div>"""
         return HTMLResponse(_layout(f"{t('obs.project_obs', lang)}: {pid}", body, "projects", lang, theme))
 
-    rows_html = "".join(
-        f"""<tr>
-  <td><a href="/observation/{_esc(dict(r)['id'])}">{_esc(dict(r)['id'][:12])}…</a></td>
-  <td>{_esc(dict(r).get('title') or '—')}</td>
-  <td>{_tag(dict(r).get('kind', 'other') or 'other', dict(r).get('kind', 'other') or 'other')}</td>
-  <td class="meta">{_esc(dict(r).get('agent') or '—')}</td>
-  <td class="meta">{(dict(r).get('created_at') or '')[:19]}</td>
-</tr>"""
-        for r in obs_rows
-    )
+    kind_icons = {
+        "session-start": "🚀",
+        "user-prompt": "💬",
+        "post-tool-use": "🔧",
+        "pre-compact": "📦",
+        "session-end": "🏁",
+        "log": "📝",
+        "other": "📌",
+    }
 
-    body = f"""<h2>{_esc(pid)} — {t("obs.project_obs", lang)} ({len(obs_rows)})</h2>
+    cards_html = ""
+    for r in obs_rows:
+        row = dict(r)
+        oid = row["id"]
+        kind = row.get("kind") or "other"
+        icon = kind_icons.get(kind, "📌")
+        title = _esc(row.get("title") or oid[:16])
+        agent = _esc(row.get("agent") or "—")
+        created = (row.get("created_at") or "")[:19]
+        body_preview = _esc((row.get("body") or "")[:150])
+        if len(row.get("body") or "") > 150:
+            body_preview += "…"
+
+        cards_html += f"""<article class="card reveal" style="margin-bottom:.8rem">
+  <div style="display:flex;align-items:flex-start;gap:.7rem">
+    <span style="font-size:1.3rem;flex-shrink:0">{icon}</span>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.3rem">
+        <a href="/observation/{_esc(oid)}" style="font-weight:600;font-size:1rem">{title}</a>
+        {_tag(kind, kind)}
+      </div>
+      <div class="meta row">
+        <span>{agent}</span><span class="sep"></span>
+        <span>{created}</span>
+      </div>
+      {f'<div class="snippet" style="margin-top:.4rem">{body_preview}</div>' if body_preview.strip() else ''}
+    </div>
+  </div>
+</article>"""
+
+    body = f"""<h2>{_esc(pid)} — {t("obs.project_obs", lang)}</h2>
 <p><a href="/project/{html.escape(pid)}">← {t("common.back", lang)}</a></p>
-<table>
-<tr><th>{t("obs.col_id", lang)}</th><th>{t("obs.col_title", lang)}</th><th>{t("obs.col_kind", lang)}</th><th>{t("obs.col_agent", lang)}</th><th>{t("obs.col_created", lang)}</th></tr>
-{rows_html}
-</table>"""
+<div class="meta" style="margin-bottom:1rem">{len(obs_rows)} {t("obs.total", lang)}</div>
+{cards_html}"""
 
     return HTMLResponse(_layout(f"{t('obs.project_obs', lang)}: {pid}", body, "projects", lang, theme))
 
@@ -544,7 +574,7 @@ def observation_detail(request: Request) -> HTMLResponse:
 def _build_filters(lang: str, q: str, scope: str, mtype: str,
                    source: str, tags_raw: str, date_from: str, date_to: str,
                    pinned_only: bool, sort: str) -> str:
-    """Render the search/filter form, preserving current values."""
+    """Render the search/filter form with grid layout, preserving current values."""
     def opts(options: list[tuple[str, str]], current: str, placeholder: str) -> str:
         out = f'<option value="">{placeholder}</option>'
         for v, label in options:
@@ -562,16 +592,44 @@ def _build_filters(lang: str, q: str, scope: str, mtype: str,
     pinned_checked = "checked" if pinned_only else ""
 
     return f"""<form method="get" action="/search" class="filters">
-  <input type="text" name="q" value="{html.escape(q)}" placeholder="{t('search.placeholder', lang)}" autofocus>
-  <input type="text" name="tags" value="{html.escape(tags_raw)}" placeholder="{t('search.tags_placeholder', lang)}">
-  <select name="scope">{scope_opts}</select>
-  <select name="type">{type_opts}</select>
-  <select name="source">{source_opts}</select>
-  <label class="meta">{t('search.date_from', lang)} <input type="date" name="from" value="{html.escape(date_from)}"></label>
-  <label class="meta">{t('search.date_to', lang)} <input type="date" name="to" value="{html.escape(date_to)}"></label>
-  <label class="meta"><input type="checkbox" name="pinned" value="1" {pinned_checked}> {t('search.only_pinned', lang)}</label>
-  <label class="meta">{t('search.sort', lang)} <select name="sort">{sort_opts}</select></label>
-  <button type="submit" class="btn">{t('search.button', lang)}</button>
+  <div class="filter-group">
+    <label for="f-q">{t('search.label_query', lang)}</label>
+    <input type="text" id="f-q" name="q" value="{html.escape(q)}" placeholder="{t('search.placeholder', lang)}" autofocus>
+  </div>
+  <div class="filter-group">
+    <label for="f-tags">{t('search.label_tags', lang)}</label>
+    <input type="text" id="f-tags" name="tags" value="{html.escape(tags_raw)}" placeholder="{t('search.tags_placeholder', lang)}">
+  </div>
+  <div class="filter-group">
+    <label for="f-scope">{t('search.label_scope', lang)}</label>
+    <select id="f-scope" name="scope">{scope_opts}</select>
+  </div>
+  <div class="filter-group">
+    <label for="f-type">{t('search.label_type', lang)}</label>
+    <select id="f-type" name="type">{type_opts}</select>
+  </div>
+  <div class="filter-group">
+    <label for="f-source">{t('search.label_source', lang)}</label>
+    <select id="f-source" name="source">{source_opts}</select>
+  </div>
+  <div class="filter-group">
+    <label for="f-from">{t('search.date_from', lang)}</label>
+    <input type="date" id="f-from" name="from" value="{html.escape(date_from)}">
+  </div>
+  <div class="filter-group">
+    <label for="f-to">{t('search.date_to', lang)}</label>
+    <input type="date" id="f-to" name="to" value="{html.escape(date_to)}">
+  </div>
+  <div class="filter-group">
+    <label for="f-sort">{t('search.sort', lang)}</label>
+    <select id="f-sort" name="sort">{sort_opts}</select>
+  </div>
+  <div class="filter-group filter-actions">
+    <label class="meta" style="font-size:.85rem;text-transform:none;letter-spacing:0">
+      <input type="checkbox" name="pinned" value="1" {pinned_checked}> {t('search.only_pinned', lang)}
+    </label>
+    <button type="submit" class="btn">{t('search.button', lang)}</button>
+  </div>
 </form>"""
 
 
@@ -962,24 +1020,53 @@ async def export_memories_page(request: Request) -> Response:
 
     form = await request.form()
     ids = [str(v) for v in form.getlist("ids")]
-    scope_val = form.get("scope", "")
-    project_id_val = form.get("project_id", "")
-
-    scope_str = str(scope_val) if scope_val else ""
-    project_id_str = str(project_id_val) if project_id_val else ""
+    scope_val = str(form.get("scope", ""))
+    project_id_val = str(form.get("project_id", ""))
+    project_ids = [str(v) for v in form.getlist("project_ids")]
+    scopes = [str(v) for v in form.getlist("scopes")]
 
     filters: dict[str, Any] = {}
     if ids:
         filters["memory_ids"] = ids
-    if scope_str:
-        filters["scope"] = scope_str
-    if project_id_str:
-        filters["project_id"] = project_id_str
+    elif project_ids:
+        all_memories: list[dict[str, Any]] = []
+        all_handoffs: list[dict[str, Any]] = []
+        for pid in project_ids:
+            mem_data = export_memories(_db_path(), project_id=pid)
+            all_memories.extend(mem_data.get("memories", []))
+            ho_data = export_handoffs(_db_path(), project_id=pid)
+            all_handoffs.extend(ho_data)
+        data = {"memories": all_memories, "handoffs": all_handoffs}
+        json_str = json.dumps(data, indent=2, ensure_ascii=False)
+        filename = "mem0ry-export-projects.json"
+        return Response(
+            content=json_str,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    elif scopes:
+        all_memories = []
+        all_handoffs = []
+        for sc in scopes:
+            mem_data = export_memories(_db_path(), scope=sc)
+            all_memories.extend(mem_data.get("memories", []))
+        data = {"memories": all_memories, "handoffs": all_handoffs}
+        json_str = json.dumps(data, indent=2, ensure_ascii=False)
+        filename = f"mem0ry-export-{'-'.join(scopes)}.json"
+        return Response(
+            content=json_str,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    elif scope_val:
+        filters["scope"] = scope_val
+    elif project_id_val:
+        filters["project_id"] = project_id_val
 
     data = export_memories(_db_path(), **filters)
 
-    pid = project_id_str or None
-    handoffs = export_handoffs(_db_path(), project_id=pid)
+    export_pid: str | None = project_id_val or None
+    handoffs = export_handoffs(_db_path(), project_id=export_pid)
     if handoffs:
         data["handoffs"] = handoffs
 
@@ -996,26 +1083,240 @@ def import_page(request: Request) -> HTMLResponse:
     lang = get_lang(request)
     theme = get_theme(request)
     msg = request.query_params.get("msg", "")
-    msg_html = f'<div class="card" style="border-color:var(--green)"><p>{html.escape(msg)}</p></div>' if msg else ""
+    msg_type = request.query_params.get("type", "success")
+
+    msg_html = ""
+    if msg:
+        border_color = "var(--green)" if msg_type == "success" else "var(--red)"
+        bg_color = "var(--green-soft)" if msg_type == "success" else "var(--red-soft)"
+        icon = "✓" if msg_type == "success" else "⚠"
+        msg_html = f'''<div class="card" style="border-color:{border_color};background:{bg_color}">
+  <div style="display:flex;align-items:center;gap:.6rem">
+    <span style="font-size:1.3rem">{icon}</span>
+    <p style="margin:0">{html.escape(msg)}</p>
+  </div>
+</div>'''
 
     body = f"""<h2>{t("imp.title", lang)}</h2>
 {msg_html}
-<form method="post" action="/memories/import" enctype="multipart/form-data" style="margin:1rem 0">
-  <div style="margin-bottom:.5rem">
-    <label for="file" style="color:var(--text2)">{t("imp.select_file", lang)}</label><br>
-    <input type="file" name="file" accept=".json" required style="margin-top:.3rem;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.5rem;border-radius:6px">
-  </div>
-  <div style="margin-bottom:.5rem">
-    <label style="color:var(--text2)">{t("imp.override", lang)}</label><br>
-    <input type="text" name="project_id_override" placeholder="e.g. https://github.com/org/repo" style="margin-top:.3rem">
-  </div>
-  <button type="submit" class="btn">{t("imp.button", lang)}</button>
-</form>
-<div class="card">
-  <p class="meta">{t("imp.help", lang)}</p>
-</div>"""
+<div class="card" style="margin-top:1.2rem">
+  <form method="post" action="/memories/import" enctype="multipart/form-data" id="import-form">
+    <div style="margin-bottom:1.2rem">
+      <label style="display:block;color:var(--text-2);margin-bottom:.5rem;font-weight:600">{t("imp.select_file", lang)}</label>
+      <div id="drop-zone" style="border:2px dashed var(--border-strong);border-radius:12px;padding:2rem;text-align:center;
+        background:var(--surface);cursor:pointer;transition:.2s">
+        <div style="font-size:2.5rem;margin-bottom:.5rem;opacity:.5">📁</div>
+        <div style="color:var(--text-2);margin-bottom:.5rem">{t("imp.drop_hint", lang)}</div>
+        <div style="color:var(--text-3);font-size:.85rem">{t("imp.or_click", lang)}</div>
+        <input type="file" name="file" id="file-input" accept=".json" required
+          style="display:none">
+        <div id="file-name" style="margin-top:.8rem;color:var(--accent);font-family:var(--mono);font-size:.9rem;display:none"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:1.2rem">
+      <label style="display:block;color:var(--text-2);margin-bottom:.5rem;font-weight:600">{t("imp.override", lang)}</label>
+      <input type="text" name="project_id_override" placeholder="e.g. https://github.com/org/repo"
+        style="max-width:100%;width:100%">
+      <div style="color:var(--text-3);font-size:.82rem;margin-top:.3rem">{t("imp.override_hint", lang)}</div>
+    </div>
+    <div style="display:flex;gap:.6rem;align-items:center">
+      <button type="submit" class="btn" id="import-btn" disabled style="display:flex;align-items:center;gap:.4rem">
+        <span>↑</span> {t("imp.button", lang)}
+      </button>
+      <span id="import-status" class="meta" style="display:none"></span>
+    </div>
+  </form>
+</div>
+<div class="card" style="margin-top:1rem">
+  <h3 style="margin-top:0">{t("imp.help_title", lang)}</h3>
+  <ul style="padding-left:1.2rem;color:var(--text-2);line-height:1.7">
+    <li>{t("imp.help_1", lang)}</li>
+    <li>{t("imp.help_2", lang)}</li>
+    <li>{t("imp.help_3", lang)}</li>
+  </ul>
+</div>
+<script>
+(function() {{
+  var dropZone = document.getElementById('drop-zone');
+  var fileInput = document.getElementById('file-input');
+  var fileName = document.getElementById('file-name');
+  var importBtn = document.getElementById('import-btn');
+  var form = document.getElementById('import-form');
+
+  dropZone.addEventListener('click', function() {{ fileInput.click(); }});
+
+  dropZone.addEventListener('dragover', function(e) {{
+    e.preventDefault();
+    dropZone.style.borderColor = 'var(--accent)';
+    dropZone.style.background = 'var(--accent-soft)';
+  }});
+
+  dropZone.addEventListener('dragleave', function(e) {{
+    e.preventDefault();
+    dropZone.style.borderColor = 'var(--border-strong)';
+    dropZone.style.background = 'var(--surface)';
+  }});
+
+  dropZone.addEventListener('drop', function(e) {{
+    e.preventDefault();
+    dropZone.style.borderColor = 'var(--border-strong)';
+    dropZone.style.background = 'var(--surface)';
+    if (e.dataTransfer.files.length) {{
+      fileInput.files = e.dataTransfer.files;
+      showFile(e.dataTransfer.files[0]);
+    }}
+  }});
+
+  fileInput.addEventListener('change', function() {{
+    if (fileInput.files.length) showFile(fileInput.files[0]);
+  }});
+
+  function showFile(file) {{
+    if (!file.name.endsWith('.json')) {{
+      fileName.textContent = '⚠ {t("imp.invalid_type", lang)}';
+      fileName.style.color = 'var(--red)';
+      importBtn.disabled = true;
+    }} else {{
+      fileName.textContent = '✓ ' + file.name + ' (' + formatSize(file.size) + ')';
+      fileName.style.color = 'var(--green)';
+      importBtn.disabled = false;
+    }}
+    fileName.style.display = 'block';
+  }}
+
+  function formatSize(bytes) {{
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }}
+
+  form.addEventListener('submit', function() {{
+    importBtn.disabled = true;
+    importBtn.innerHTML = '<span>⏳</span> {t("imp.importing", lang)}...';
+  }});
+}})();
+</script>"""
 
     return HTMLResponse(_layout(t("imp.title", lang), body, "import-page", lang, theme))
+
+
+def export_page(request: Request) -> HTMLResponse:
+    lang = get_lang(request)
+    theme = get_theme(request)
+    db = _db_path()
+
+    if not db.exists():
+        return HTMLResponse(_layout(t("exp.title", lang), _no_db(lang), "export", lang, theme))
+
+    conn = get_connection(db)
+    init_schema(conn)
+
+    projects = conn.execute(
+        "SELECT project_id, count(*) as cnt FROM memories "
+        "WHERE project_id IS NOT NULL AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') "
+        "GROUP BY project_id ORDER BY cnt DESC"
+    ).fetchall()
+
+    total_mem = conn.execute(
+        "SELECT count(*) FROM memories WHERE deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '')"
+    ).fetchone()[0]
+
+    global_cnt = conn.execute(
+        "SELECT count(*) FROM memories WHERE scope='global' AND deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '')"
+    ).fetchone()[0]
+
+    scopes = conn.execute(
+        "SELECT scope, count(*) as cnt FROM memories WHERE deleted_at IS NULL AND (superseded_by IS NULL OR superseded_by = '') GROUP BY scope"
+    ).fetchall()
+
+    conn.close()
+
+    project_options = "".join(
+        f'<label class="project-option" style="display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;'
+        f'border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:.15s">'
+        f'<input type="checkbox" name="project_ids" value="{html.escape(dict(r)["project_id"])}" '
+        f'style="accent-color:var(--accent)">'
+        f'<span style="flex:1;font-family:var(--mono);font-size:.85rem">{_esc(dict(r)["project_id"])}</span>'
+        f'<span class="meta">{dict(r)["cnt"]}</span>'
+        f'</label>'
+        for r in projects
+    )
+
+    scope_options = "".join(
+        f'<label style="display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;'
+        f'border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:.15s">'
+        f'<input type="checkbox" name="scopes" value="{r["scope"]}" style="accent-color:var(--accent)">'
+        f'{_tag(r["scope"], r["scope"])}'
+        f'<span class="meta">{r["cnt"]}</span>'
+        f'</label>'
+        for r in scopes
+    )
+
+    body = f"""<h2>{t("exp.title", lang)}</h2>
+<p class="meta" style="margin-bottom:1.2rem">{t("exp.description", lang)}</p>
+
+<form method="post" action="/memories/export" id="export-form">
+  <div class="card" style="margin-bottom:1rem">
+    <h3 style="margin-top:0">{t("exp.quick_export", lang)}</h3>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+      <button type="submit" name="scope" value="" class="btn btn-export">
+        ↓ {t("exp.all_memories", lang)} ({total_mem})
+      </button>
+      <button type="submit" name="scope" value="global" class="btn btn-export">
+        ↓ {t("exp.global_only", lang)} ({global_cnt})
+      </button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:1rem">
+    <h3 style="margin-top:0">{t("exp.by_scope", lang)}</h3>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem">
+      {scope_options}
+    </div>
+    <button type="submit" class="btn btn-export" id="scope-export-btn" disabled>
+      ↓ {t("exp.export_selected_scopes", lang)}
+    </button>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">{t("exp.by_project", lang)}</h3>
+    {f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.5rem;margin-bottom:.8rem">{project_options}</div>' if project_options else f'<p class="meta">{t("exp.no_projects", lang)}</p>'}
+    <button type="submit" class="btn btn-export" id="project-export-btn" disabled>
+      ↓ {t("exp.export_selected_projects", lang)}
+    </button>
+  </div>
+</form>
+
+<script>
+(function() {{
+  var scopeCheckboxes = document.querySelectorAll('input[name="scopes"]');
+  var projectCheckboxes = document.querySelectorAll('input[name="project_ids"]');
+  var scopeBtn = document.getElementById('scope-export-btn');
+  var projectBtn = document.getElementById('project-export-btn');
+
+  scopeCheckboxes.forEach(function(cb) {{
+    cb.addEventListener('change', function() {{
+      scopeBtn.disabled = !document.querySelectorAll('input[name="scopes"]:checked').length;
+    }});
+  }});
+
+  projectCheckboxes.forEach(function(cb) {{
+    cb.addEventListener('change', function() {{
+      projectBtn.disabled = !document.querySelectorAll('input[name="project_ids"]:checked').length;
+    }});
+  }});
+
+  document.getElementById('export-form').addEventListener('submit', function(e) {{
+    var btn = e.submitter;
+    if (btn) {{
+      btn.innerHTML = '<span>⏳</span> {t("exp.exporting", lang)}...';
+      btn.disabled = true;
+    }}
+  }});
+}})();
+</script>"""
+
+    return HTMLResponse(_layout(t("exp.title", lang), body, "export", lang, theme))
 
 
 async def import_memories_page(request: Request) -> Any:
@@ -1028,13 +1329,13 @@ async def import_memories_page(request: Request) -> Any:
     project_id_override: str | None = str(pid_raw) if pid_raw else None
 
     if not upload or not hasattr(upload, "read"):
-        return RedirectResponse(url=f"/import?msg={html.escape(t('imp.no_file', lang))}", status_code=303)
+        return RedirectResponse(url=f"/import?msg={html.escape(t('imp.no_file', lang))}&type=error", status_code=303)
 
     content_bytes = await upload.read()
     try:
         data = json.loads(content_bytes)
     except json.JSONDecodeError as e:
-        return RedirectResponse(url=f"/import?msg={html.escape(t('imp.invalid_json', lang, err=str(e)))}", status_code=303)
+        return RedirectResponse(url=f"/import?msg={html.escape(t('imp.invalid_json', lang, err=str(e)))}&type=error", status_code=303)
 
     mem_result = import_memories(_db_path(), data, project_id_override=project_id_override)
     ho_result = {"imported": 0, "skipped": 0}
@@ -1051,4 +1352,4 @@ async def import_memories_page(request: Request) -> Any:
         mem_skip=mem_result["skipped"],
         ho_skip=ho_result["skipped"],
     )
-    return RedirectResponse(url=f"/import?msg={html.escape(msg)}", status_code=303)
+    return RedirectResponse(url=f"/import?msg={html.escape(msg)}&type=success", status_code=303)

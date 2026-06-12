@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-06-11
+
+### Added
+
+- **Export page** (`/export`) — new web UI page for exporting memories as JSON.
+  Supports quick export (all, global only), by scope (multi-select), and by
+  project (multi-select). Added navigation entry and i18n strings (PT/EN).
+
+- **Enhanced import page** — drag-and-drop file upload with visual feedback,
+  file type validation, size display, progress states. Added "How it works"
+  help section. Error/success messages now styled with icons and colors.
+
+### Changed
+
+- **Project observations** — replaced table layout with card-based design.
+  Each observation shows icon by type (session-start, user-prompt, etc.),
+  title, agent, date, and body preview. Empty state with icon when none exist.
+
+- **Search filters** — converted to grid layout with labeled fields. Each
+  filter (query, tags, scope, type, source, dates, sort) now has its own
+  labeled group for better UX.
+
+- **CSS polish** — added transitions on links, buttons, cards, bars. Focus
+  states for accessibility (outline on interactive elements). Improved hover
+  effects on memory cards (lift + accent border). Better table striping.
+  Added empty-state and skeleton-loading styles. Improved responsive
+  breakpoints (900px, 500px).
+
 ## [0.25.1] - 2026-06-10
 
 ### Fixed
