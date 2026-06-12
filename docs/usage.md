@@ -213,7 +213,7 @@ mymem0ry decay --days 90
 ### Re-ingest from scratch
 
 ```bash
-mymem0ry migrate --reprocess    # Drops DB, reingests all .md files into v3 schema
+mymem0ry migrate --reprocess    # Drops DB, reingests all .md files
 ```
 
 ## Language support

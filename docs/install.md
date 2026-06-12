@@ -96,6 +96,7 @@ docker run --rm -v mymem0ry-data:/data -v $(pwd):/backup alpine \
 **One-liner:**
 ```bash
 claude mcp add --scope user mymem0ry -- mymem0ry-mcp
+```
 
 **Or manual config** — add to `~/.claude/settings.json`:
 
@@ -257,8 +258,8 @@ export VECTOR_DB_PATH=/path/to/shared/conversations/.vec.db
 | `VECTOR_DB_PATH` | `data/conversations/.vec.db` | sqlite-vec index |
 | `SPACY_MODEL` | `en_core_web_lg` | spaCy model for embeddings and search |
 | `MCP_TRANSPORT` | `stdio` | MCP transport: `stdio`, `sse`, `streamable-http` |
-| `MCP_HOST` | `127.0.0.1` | Host for HTTP transport |
-| `MCP_PORT` | `49374` | Port for HTTP transport |
+| `MEM0RY_HOST` | `127.0.0.1` | Host for HTTP transport |
+| `MEM0RY_PORT` | `49374` | Port for HTTP transport |
 
 ### Language support
 

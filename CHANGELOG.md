@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-06-11
+
+### Documentation
+
+- **README** — added "Retention & Pinning" section explaining memory decay tiers,
+  pinning, and fact evolution concepts. Fixed `SPACY_MODEL` default (English, not
+  Portuguese). Added missing `evolve_fact` to MCP tools table.
+- **docs/install.md** — fixed broken markdown code block in Claude Code section.
+  Corrected env var names (`MEM0RY_HOST`/`MEM0RY_PORT` instead of `MCP_*`).
+- **docs/usage.md** — removed outdated "v3 schema" reference (now v8).
+- **docs/analise-fluxo-mcp.md** — updated MCP tool count (10 → 12) and table.
+
 ## [0.26.0] - 2026-06-11
 
 ### Added
@@ -521,7 +533,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.25.2...HEAD
+[0.25.2]: https://github.com/cccadet/myMem0ry/compare/v0.25.1...v0.25.2
 [0.21.0]: https://github.com/cccadet/myMem0ry/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/cccadet/myMem0ry/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/cccadet/myMem0ry/compare/v0.18.0...v0.19.0

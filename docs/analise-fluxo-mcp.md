@@ -17,19 +17,21 @@ sobrepõem.
 
 ### 1.1 Caminho A — Ferramentas MCP (custam tokens, o agente decide chamar)
 
-Expostas em `mcp_server.py` (10 tools):
+Expostas em `mcp_server.py` (12 tools):
 
 | Tool | O que faz | Lê/escreve em |
 |------|-----------|---------------|
 | `get_context` | Agrega memórias por escopo no início da sessão | SQLite (`memories`) |
 | `save_memory` | Salva 1 memória | SQLite **+** arquivo `.md` |
-| `search_memory` | Busca textual/semântica | **Só** arquivos `.md` (ripgrep/bm25/hybrid) |
-| `read_memory` | Lê o `.md` completo de um resultado | Arquivo `.md` |
+| `search_memory` | Busca textual/semântica em memórias curadas | SQLite (`memories`) |
+| `search_conversations` | Busca geral em transcripts arquivados | `.md` + vector store |
+| `read_memory` | Lê conteúdo completo por `id` ou `path` | SQLite ou arquivo `.md` |
 | `memory_handoff_begin` | Abre handoff para o próximo agente | SQLite (`handoffs`) |
-| `memory_handoff_accept` | Pega + marca handoff aberto | SQLite (`handoffs`) |
+| `memory_handoff_accept` | Peek do handoff pendente (não-mutante) | SQLite (`handoffs`) |
 | `memory_pin` / `memory_unpin` | Protege memória da decadência | SQLite (`memories`) |
 | `memory_forget_sweep` | Limpa memórias obsoletas | SQLite (`memories`) |
 | `memory_stats` | Estatísticas gerais | SQLite (`memories`) |
+| `evolve_fact` | Consolida fatos contraditórios | SQLite (`memories`) |
 
 ### 1.2 Caminho B — Hooks (zero tokens, automático)
 
@@ -288,9 +290,9 @@ Todos os itens acima foram implementados nesta rodada de reorganização:
 | 3.11 | `.env` com `SPACY_MODEL=pt_core_news_lg`; expansão de query tolera modelo ausente (degrada para query crua). |
 | 3.12 | Desserialização duplicada em `accept_handoff` removida; `/health` reporta a versão real do pacote. |
 
-### Superfície de ferramentas MCP resultante (11)
+### Superfície de ferramentas MCP resultante (12)
 `get_context`, `save_memory`, `search_memory` (memórias curadas, com escopo),
 `search_conversations` (busca geral), `read_memory` (id ou path),
 `memory_handoff_begin`, `memory_handoff_accept` (peek), `memory_pin`,
-`memory_unpin`, `memory_forget_sweep`, `memory_stats`.
+`memory_unpin`, `memory_forget_sweep`, `memory_stats`, `evolve_fact`.
 ```

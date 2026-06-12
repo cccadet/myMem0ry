@@ -46,7 +46,7 @@ uv tool install mymem0ry
 mymem0ry doctor
 ```
 
-The default spaCy model is Portuguese (`pt_core_news_lg`). For English, set `SPACY_MODEL=en_core_web_lg` in `.env` before running `mymem0ry doctor`.
+The default spaCy model is English (`en_core_web_lg`). For Portuguese, set `SPACY_MODEL=pt_core_news_lg` in `.env` before running `mymem0ry doctor`.
 
 **Zero config**: after install, just add the MCP server + hooks to your agent config below.
 The HTTP server auto-starts when the MCP server runs — no separate `serve` command needed.
@@ -196,7 +196,7 @@ All via environment variables (or `.env` file in the project root):
 | `MEMORIES_DIR` | `data/memories` | Where curated memory `.md` exports are stored (kept separate so general search doesn't bury them) |
 | `DB_PATH` | `data/memories.db` | SQLite memories database (source of truth) |
 | `VECTOR_DB_PATH` | `data/conversations/.vec.db` | sqlite-vec index |
-| `SPACY_MODEL` | `pt_core_news_lg` | spaCy model for embeddings and search (set `en_core_web_lg` for English) |
+| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for embeddings and search (set `pt_core_news_lg` for Portuguese) |
 | `MEM0RY_HOST` | `127.0.0.1` | Host for HTTP transport |
 | `MEM0RY_PORT` | `49374` | Port for HTTP transport |
 | `MEM0RY_TOKEN` | _(empty)_ | Bearer token for HTTP auth (skip = no auth) |
@@ -277,6 +277,21 @@ Resolved automatically from `cwd` — no manual configuration needed:
 
 `get_context()` aggregates all 4 levels in priority order.
 
+## Retention & Pinning
+
+Memories decay based on their type:
+
+| Memory type | Retention tier | Behaviour |
+|---|---|---|
+| `log` | working | 30–90 day decay |
+| `pattern` | procedural | frequency-based decay (up to 365d) |
+| `fact` | semantic | indefinite (pinned by default) |
+| `decision` | semantic | indefinite (pinned by default) |
+
+**Pinning** exempts a memory from decay — pinned memories are never deleted by `forget-sweep`. Use `memory_pin` / `memory_unpin` (or CLI `mymem0ry pin` / `mymem0ry unpin`) to protect important memories.
+
+**Fact evolution** (`evolve_fact`) consolidates contradictory facts. When information changes (e.g. "Uses Postgres" → "Migrated to SQLite"), the old fact is soft-deleted and a new evolved fact replaces it, keeping the memory clean and current.
+
 ## MCP Tools + Hook Writes
 
 ### MCP Tools (low token cost — reads + selective writes)
@@ -294,6 +309,7 @@ Resolved automatically from `cwd` — no manual configuration needed:
 | `memory_pin` | Pin a memory (exempt from decay) |
 | `memory_unpin` | Unpin a memory |
 | `memory_forget_sweep` | Sweep stale memories |
+| `evolve_fact` | Consolidate contradictory facts (old facts soft-deleted, new evolved fact created) |
 
 ### Hook writes (zero LLM tokens)
 
