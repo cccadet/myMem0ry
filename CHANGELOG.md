@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.3] - 2026-06-11
+
+### Added
+
+- **Proactive context retrieval** — improved `mymem0ry_memory_instructions()` prompt
+  to explicitly instruct agents to always call `get_context()` at session start
+  (not assume hook injection was sufficient) and to search memories before
+  executing workflows (release, deploy, etc.). Added "Proactive memory usage"
+  section to AGENTS.md.
+
 ## [0.25.2] - 2026-06-11
 
 ### Documentation
@@ -533,7 +543,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.25.2...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.25.3...HEAD
+[0.25.3]: https://github.com/cccadet/myMem0ry/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/cccadet/myMem0ry/compare/v0.25.1...v0.25.2
 [0.21.0]: https://github.com/cccadet/myMem0ry/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/cccadet/myMem0ry/compare/v0.19.0...v0.20.0

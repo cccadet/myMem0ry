@@ -145,6 +145,12 @@ docs/                        # install.md, usage.md, analise-fluxo-mcp.md
 - **Project** = `git remote get-url origin` raw URL (`utils/git_context.py:resolve_project_id`). Falls back to `None` outside a git repo.
 - **Context** = `git rev-parse --abbrev-ref HEAD` (`utils/git_context.py:resolve_context`). Generic — branch, worktree, feature.
 
+## Proactive memory usage
+
+- **Always call `get_context()` at session start** — do not assume the hook injection was sufficient. The hook provides a summary, but `get_context()` gives full ranked context with pinned memories first.
+- **Search before workflows** — when the user asks for "release", "deploy", "migrate", etc., search for related memories by tags or keywords before executing. Pinned memories are important by definition.
+- **Pinned memories = high priority** — `memory_pin` exempts from decay. These are facts/decisions the user explicitly marked as important. Prioritize them in context retrieval.
+
 ## Hook architecture
 
 - Hooks `curl POST /hook` on the HTTP server (fire-and-forget, `--max-time 0.2` in OpenCode script). Server auto-starts when MCP server runs — no separate `serve` step needed.
