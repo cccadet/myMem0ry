@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.4] - 2026-06-16
+
+### Added
+
+- **Code intelligence integration guide** — documented how to use myMem0ry
+  alongside Serena and codebase-memory-mcp. Added "Using with Code Intelligence
+  Tools" to README.md and "Using myMem0ry alongside code intelligence tools" to
+  AGENTS.md.
+
+### Changed
+
+- **System prompt** — updated `mymem0ry_memory_instructions()` to instruct the
+  agent to use a three-layer stack: myMem0ry for decisions/facts/handoffs,
+  Serena for symbol editing/navigation, and codebase-memory-mcp for
+  architecture/call-graph/impact analysis.
+
+### Fixed
+
+- Added missing top-level import of `SpacyConceptSearch` in `mcp_server.py`.
+- Removed unused `json` import in `tests/test_export_import.py`.
+
 ## [0.25.3] - 2026-06-11
 
 ### Added

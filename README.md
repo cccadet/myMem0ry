@@ -159,6 +159,24 @@ curl http://127.0.0.1:49374/health
 
 For detailed per-agent instructions: [docs/install.md](docs/install.md)
 
+## Using with Code Intelligence Tools
+
+myMem0ry focuses on *curated, human memory*: decisions, facts, patterns, handoffs
+and conversations. It pairs well with code-intelligence MCP servers that
+understand the codebase itself.
+
+Recommended division of labour:
+
+| Tool | Use for | Don't use for |
+|---|---|---|
+| **myMem0ry** | Decisions, facts, handoffs, conversation history | Finding symbols or editing code |
+| **Serena** | Symbol navigation, refactoring, safe edits via LSP | Big-picture architecture or impact analysis |
+| **codebase-memory-mcp** | Call graphs, architecture overview, impact analysis, Cypher queries | Precise refactoring or live debugging |
+
+The system prompt exposed by myMem0ry instructs the agent to prefer Serena for
+symbol-level work and codebase-memory-mcp for structural analysis, while routing
+decisions and long-lived context through myMem0ry.
+
 ## Lifecycle Hooks
 
 Hooks POST lifecycle events to `POST /hook` on the myMem0ry HTTP server.

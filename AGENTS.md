@@ -151,6 +151,28 @@ docs/                        # install.md, usage.md, analise-fluxo-mcp.md
 - **Search before workflows** — when the user asks for "release", "deploy", "migrate", etc., search for related memories by tags or keywords before executing. Pinned memories are important by definition.
 - **Pinned memories = high priority** — `memory_pin` exempts from decay. These are facts/decisions the user explicitly marked as important. Prioritize them in context retrieval.
 
+## Using myMem0ry alongside code intelligence tools
+
+myMem0ry is the *curated, human memory* layer. It does not parse or edit code.
+When the agent also has access to code-intelligence MCP servers, use them as
+follows:
+
+| Tool | Use for | Don't use for |
+|---|---|---|
+| **myMem0ry** | Decisions, facts, patterns, handoffs, conversation history | Finding symbols or editing code |
+| **Serena** | Symbol navigation, refactoring, safe edits via LSP | Big-picture architecture or impact analysis |
+| **codebase-memory-mcp** | Call graphs, architecture overview, impact analysis, Cypher queries | Precise refactoring or live debugging |
+
+Rules of thumb:
+
+- **WHY / WHAT DECIDED** → save in myMem0ry (`save_memory`, `memory_type='decision'`).
+- **EDIT / NAVIGATE SYMBOLS** → use Serena (`find_symbol`, `rename_symbol`, etc.).
+- **ARCHITECTURE / CALL GRAPH / IMPACT** → use codebase-memory-mcp (`get_architecture`, `trace_path`, `detect_changes`).
+
+The MCP system prompt (`mcp_server.py:mymem0ry_memory_instructions`) encodes
+this division so the agent routes queries correctly without burning tokens on
+redundant searches.
+
 ## Hook architecture
 
 - Hooks `curl POST /hook` on the HTTP server (fire-and-forget, `--max-time 0.2` in OpenCode script). Server auto-starts when MCP server runs — no separate `serve` step needed.
