@@ -12,7 +12,7 @@ def train_val_split(
     values = list(examples)
     if not values:
         return [], []
-    random.Random(seed).shuffle(values)
+    random.Random(seed).shuffle(values)  # nosec B311
     val_size = max(1, int(len(values) * val_ratio)) if len(values) > 1 else 0
     if val_size >= len(values):
         val_size = len(values) // 2

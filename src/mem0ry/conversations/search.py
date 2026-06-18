@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 
 # Common Portuguese stop words to filter from queries
@@ -61,7 +61,7 @@ def search(
     # Build ripgrep pattern: match any keyword
     pattern = "|".join(re.escape(kw) for kw in keywords)
 
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 B607
         [
             "rg",
             "--count",

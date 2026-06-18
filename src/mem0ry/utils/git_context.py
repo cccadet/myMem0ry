@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,7 +15,7 @@ _CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 def _git(cwd: Path, *args: str) -> str | None:
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607
             ["git", *args],
             cwd=str(cwd),
             stdin=subprocess.DEVNULL,

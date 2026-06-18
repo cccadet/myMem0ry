@@ -61,7 +61,7 @@ def stats() -> None:
 
 def _download_spacy_model(model: str) -> None:
     import shutil
-    import subprocess
+    import subprocess  # nosec B404
     import sys
 
     from spacy.cli.download import get_compatibility, get_version
@@ -78,7 +78,7 @@ def _download_spacy_model(model: str) -> None:
     cmd = [uv, "pip", "install", "--python", sys.executable, wheel_url] if uv else [
         sys.executable, "-m", "pip", "install", wheel_url
     ]
-    subprocess.check_call(cmd)
+    subprocess.check_call(cmd)  # nosec B603
 
 
 def _check_spacy(config: MemoryConfig, ok: Any, fail: Any) -> None:

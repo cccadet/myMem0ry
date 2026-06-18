@@ -268,8 +268,8 @@ def search_memory(
         expander = _get_expander()
         similar = expander.similar_tokens(query, top_k=5)
         expanded_terms = [tok for tok, _ in similar if len(tok) > 1]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Query expansion failed: %s", exc)
 
     rows = search_memories(
         db,
@@ -825,8 +825,8 @@ def _write_runtime_file() -> None:
             encoding="utf-8",
             newline="\n",  # no CRLF — the bash hook reads line 1 raw
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to write runtime file: %s", exc)
 
 
 def _drain_spool_once() -> int:
@@ -880,8 +880,8 @@ def _start_spool_drainer() -> None:
         while True:
             try:
                 _drain_spool_once()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Spool drain failed: %s", exc)
             time.sleep(_SPOOL_POLL_SECONDS)
 
     threading.Thread(target=_loop, daemon=True).start()
@@ -897,9 +897,9 @@ def main():
         mcp.run(transport="stdio")
         return
 
-    host = os.environ.get("MCP_HOST", "127.0.0.1")
-    port = int(os.environ.get("MCP_PORT", "49374"))
     config = MemoryConfig()
+    host = config.server_host
+    port = config.server_port
 
     if transport in ("sse", "streamable-http"):
         from .auth import AuthMiddleware, CORSMiddleware, parse_allowed_hosts

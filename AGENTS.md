@@ -89,7 +89,7 @@ src/mem0ry/
 │   ├── schema.py            # _SCHEMA_VERSION = 8 (memories, observations, handoffs, audit_log, schema_meta)
 │   ├── migrate.py           # migrate_v1_to_v2 … migrate_v7_to_v8
 │   ├── store.py             # Re-exports from store_memories, store_observations, store_handoffs, store_audit
-│   ├── store_memories.py    # CRUD + batch delete, export, import
+│   ├── store_memories/      # CRUD + batch delete, export, import (package split by responsibility)
 │   ├── store_handoffs.py    # CRUD + export, import
 │   ├── store_audit.py       # Audit log writes
 │   ├── store_observations.py

@@ -6,6 +6,7 @@ so the MCP tools can stay read-only and avoid burning LLM tokens.
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from datetime import date
@@ -14,6 +15,8 @@ from typing import Any
 
 from ..config import MemoryConfig
 from .sanitize import _sanitize_message, sanitize_payload
+
+logger = logging.getLogger(__name__)
 
 
 # Tools whose use is worth remembering for a handoff: anything that mutates the
@@ -116,8 +119,8 @@ def _handle_log_event(db_path: Path, payload: dict[str, Any], project_id: str | 
             source="hook",
             title=payload.get("title") or "log",
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to create log memory from hook: %s", exc)
 
 
 def _handle_session_end(db_path: Path, payload: dict[str, Any]) -> None:
@@ -138,21 +141,21 @@ def _handle_session_end(db_path: Path, payload: dict[str, Any]) -> None:
         summary = payload.get("body")
         try:
             _write_conversation_md(title=title, messages=messages, summary=summary)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to archive conversation: %s", exc)
 
     try:
         end_session(db_path, payload["session_id"], summary=payload.get("body"))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to end session from hook: %s", exc)
 
     try:
         agent = payload.get("agent") or "unknown"
         auto_handoff_from_session(
             db_path, payload["session_id"], agent, user_prompts=user_prompts,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to create handoff from session: %s", exc)
 
 
 def handle_hook_event(

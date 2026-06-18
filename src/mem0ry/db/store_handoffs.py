@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 import uuid
@@ -13,6 +14,8 @@ from .schema import init_schema
 from ._helpers import _now_iso
 from .store_audit import record_audit
 from .store_observations import get_session_observations
+
+logger = logging.getLogger(__name__)
 
 _FILE_RE = re.compile(r"file:\s*([^\s;]+)")
 _ERROR_RE = re.compile(r"error:\s*(.+)(?=;|$)")
@@ -118,8 +121,8 @@ def begin_handoff(
             agent=from_agent,
             details=summary[:200],
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to record begin_handoff audit: %s", exc)
 
     return ho_id
 
@@ -173,8 +176,8 @@ def accept_handoff(
             target_id=ho["id"],
             agent=accepted_by,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to record accept_handoff audit: %s", exc)
 
     return ho
 
@@ -323,8 +326,8 @@ def close_handoff(db_path: Path, handoff_id: str) -> bool:
                 target_type="handoff",
                 target_id=handoff_id,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to record close_handoff audit: %s", exc)
 
     return changed
 
@@ -347,8 +350,8 @@ def delete_handoff(db_path: Path, handoff_id: str) -> bool:
                 target_type="handoff",
                 target_id=handoff_id,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to record delete_handoff audit: %s", exc)
 
     return changed
 
@@ -387,7 +390,7 @@ def export_handoffs(
             params.extend(handoff_ids)
         where = " AND ".join(conditions)
         rows = conn.execute(
-            f"SELECT * FROM handoffs WHERE {where} ORDER BY created_at DESC",
+            f"SELECT * FROM handoffs WHERE {where} ORDER BY created_at DESC",  # nosec B608
             params,
         ).fetchall()
     finally:

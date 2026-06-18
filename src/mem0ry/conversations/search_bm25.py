@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-import pickle
+import pickle  # nosec B403
 import re
 from pathlib import Path
 
@@ -68,7 +68,7 @@ def search_bm25(
         build_bm25_index(conversations_dir)
 
     with open(path, "rb") as fh:
-        data = pickle.load(fh)
+        data = pickle.load(fh)  # nosec B301
 
     bm25: BM25Okapi = data["bm25"]
     paths: list[Path] = data["paths"]

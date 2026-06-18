@@ -9,15 +9,27 @@ from ._app import app
 _CONFIG_DIR = ".config"
 
 
+_AGENT_DIRS = {"claude-code", "opencode", "codex", "cursor", "gemini-cli"}
+
+
+def _is_hooks_dir(candidate: Path) -> bool:
+    """True if candidate contains agent hook subdirectories."""
+    try:
+        return bool(_AGENT_DIRS.intersection({p.name for p in candidate.iterdir() if p.is_dir()}))
+    except OSError:
+        return False
+
+
 def _hooks_dir() -> Path:
     import mem0ry
+
     pkg_dir = Path(mem0ry.__file__).parent
     candidate = pkg_dir / "hooks"
-    if candidate.is_dir():
+    if _is_hooks_dir(candidate):
         return candidate.resolve()
     for parent in pkg_dir.parents:
         candidate = parent / "hooks"
-        if candidate.is_dir():
+        if _is_hooks_dir(candidate):
             return candidate.resolve()
     msg = "Could not locate hooks/ directory. Reinstall myMem0ry or clone the repo."
     typer.echo(msg, err=True)

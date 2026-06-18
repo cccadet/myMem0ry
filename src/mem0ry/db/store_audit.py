@@ -59,7 +59,7 @@ def query_audit_log(
             params.append(target_id)
 
         where = " AND ".join(conditions) if conditions else "1=1"
-        sql = f"SELECT * FROM audit_log WHERE {where} ORDER BY created_at DESC LIMIT ?"
+        sql = f"SELECT * FROM audit_log WHERE {where} ORDER BY created_at DESC LIMIT ?"  # nosec B608
         params.append(top_k)
 
         rows = conn.execute(sql, params).fetchall()

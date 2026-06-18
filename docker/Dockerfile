@@ -23,6 +23,9 @@ except OSError:
 "
 
 ENV MCP_TRANSPORT=streamable-http
+ENV MEM0RY_HOST=0.0.0.0
+ENV MEM0RY_PORT=49374
+# Backwards-compatible aliases for older scripts that read MCP_*.
 ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=49374
 ENV CONVERSATIONS_DIR=/data/conversations

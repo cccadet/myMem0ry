@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import urllib.request
 import urllib.error
 
 from mem0ry.config import _DATA_DIR
+
+logger = logging.getLogger(__name__)
 
 _PACKAGE = "mymem0ry"
 _CACHE_FILE = _DATA_DIR / ".pypi_version_cache.json"
@@ -18,7 +21,8 @@ def _installed_version() -> str:
     try:
         from importlib.metadata import version as _v
         return _v(_PACKAGE)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Unable to read installed version: %s", exc)
         return "0.0.0"
 
 
@@ -26,10 +30,11 @@ def _fetch_latest() -> str | None:
     url = f"https://pypi.org/pypi/{_PACKAGE}/json"
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310
             data = json.loads(resp.read())
             return data["info"]["version"]
-    except Exception:
+    except Exception as exc:
+        logger.debug("Unable to fetch latest version from PyPI: %s", exc)
         return None
 
 
@@ -40,8 +45,8 @@ def _read_cache() -> str | None:
         cached = json.loads(_CACHE_FILE.read_text())
         if time.time() - cached.get("ts", 0) < _CACHE_TTL:
             return cached.get("version")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Unable to read version cache: %s", exc)
     return None
 
 
@@ -49,8 +54,8 @@ def _write_cache(version: str) -> None:
     try:
         _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         _CACHE_FILE.write_text(json.dumps({"version": version, "ts": time.time()}))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Unable to write version cache: %s", exc)
 
 
 def check_for_update() -> None:

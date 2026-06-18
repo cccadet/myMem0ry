@@ -6,6 +6,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from ..config import MemoryConfig
 from ..dataset import (
@@ -80,7 +81,7 @@ def build_dataset_from_openai(
 
     _write_jsonl(train, train_path)
     _write_jsonl(val, val_path)
-    stats_dict = stats.to_dict()
+    stats_dict: dict[str, Any] = stats.to_dict()
     stats_dict["total_examples"] = len(train) + len(val)
     stats_dict["processed_at"] = datetime.now(timezone.utc).isoformat()
     stats_dict["chunk_examples"] = len(raw_examples)

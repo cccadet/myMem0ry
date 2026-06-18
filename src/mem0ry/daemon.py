@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import signal
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 from pathlib import Path
@@ -73,7 +73,7 @@ def _wait_for_health(url: str, timeout: float = 5.0) -> bool:
     while time.monotonic() < deadline:
         try:
             req = urllib.request.Request(f"{url}/health")
-            with urllib.request.urlopen(req, timeout=1.0) as resp:
+            with urllib.request.urlopen(req, timeout=1.0) as resp:  # nosec B310
                 if resp.status == 200:
                     return True
         except OSError:
@@ -116,6 +116,8 @@ def ensure_server() -> str:
     env = {
         **os.environ,
         "MCP_TRANSPORT": "streamable-http",
+        "MEM0RY_HOST": cfg.server_host,
+        "MEM0RY_PORT": str(cfg.server_port),
         "MCP_HOST": cfg.server_host,
         "MCP_PORT": str(cfg.server_port),
     }
@@ -143,7 +145,7 @@ def _spawn_detached(cmd: list[str], env: dict[str, str]) -> subprocess.Popen[byt
     }
     if sys.platform != "win32":
         kwargs["start_new_session"] = True
-        return subprocess.Popen(cmd, **kwargs)
+        return subprocess.Popen(cmd, **kwargs)  # nosec B603
 
     # CREATE_NO_WINDOW runs the console-subsystem python with no visible window
     # (DETACHED_PROCESS would pop a black console window). It's mutually exclusive
@@ -154,13 +156,13 @@ def _spawn_detached(cmd: list[str], env: dict[str, str]) -> subprocess.Popen[byt
     CREATE_BREAKAWAY_FROM_JOB = 0x01000000
     base_flags = CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
     try:
-        return subprocess.Popen(
+        return subprocess.Popen(  # nosec B603
             cmd, creationflags=base_flags | CREATE_BREAKAWAY_FROM_JOB, **kwargs
         )
     except OSError:
         # Job doesn't allow breakaway (ERROR_ACCESS_DENIED). No-window + own group is
         # the best we can do; the server may stay in the job but won't show a window.
-        return subprocess.Popen(cmd, creationflags=base_flags, **kwargs)
+        return subprocess.Popen(cmd, creationflags=base_flags, **kwargs)  # nosec B603
 
 
 def _terminate_pid(pid: int) -> None:
@@ -220,7 +222,7 @@ def server_status() -> dict[str, Any]:
     if running:
         try:
             req = urllib.request.Request(f"{url}/health")
-            with urllib.request.urlopen(req, timeout=2.0) as resp:
+            with urllib.request.urlopen(req, timeout=2.0) as resp:  # nosec B310
                 import json
 
                 health = json.loads(resp.read())

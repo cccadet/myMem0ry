@@ -75,8 +75,12 @@ class MemoryConfig:
             os.environ.get("DB_PATH", str(_DATA_DIR / _DB_FILENAME)), _DB_FILENAME
         )).parent / "spool"),
     )
-    server_host: str = os.environ.get("MEM0RY_HOST", "127.0.0.1")
-    server_port: int = int(os.environ.get("MEM0RY_PORT", "49374"))
+    server_host: str = os.environ.get(
+        "MEM0RY_HOST", os.environ.get("MCP_HOST", "127.0.0.1")
+    )
+    server_port: int = int(
+        os.environ.get("MEM0RY_PORT", os.environ.get("MCP_PORT", "49374"))
+    )
     server_pid_file: str = os.environ.get(
         "MEM0RY_PID_FILE", str(_DATA_DIR / "server.pid")
     )

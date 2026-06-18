@@ -618,7 +618,7 @@ def test_search_no_query_returns_all(db: Path) -> None:
 
 
 def test_normalize_strips_accents() -> None:
-    from mem0ry.db.store_memories import _normalize
+    from mem0ry.db.store_memories.helpers import _normalize
 
     assert _normalize("configuração") == "configuracao"
     assert _normalize("autenticação") == "autenticacao"
@@ -626,7 +626,7 @@ def test_normalize_strips_accents() -> None:
 
 
 def test_strip_accents() -> None:
-    from mem0ry.db.store_memories import _strip_accents
+    from mem0ry.db.store_memories.helpers import _strip_accents
 
     assert _strip_accents("índice") == "indice"
     assert _strip_accents("CONFIANÇA") == "CONFIANCA"
@@ -634,7 +634,7 @@ def test_strip_accents() -> None:
 
 
 def test_query_terms_normalizes() -> None:
-    from mem0ry.db.store_memories import _query_terms
+    from mem0ry.db.store_memories.helpers import _query_terms
 
     terms = _query_terms("configuração do sistema")
     assert "configuracao" in terms
@@ -643,7 +643,7 @@ def test_query_terms_normalizes() -> None:
 
 
 def test_query_terms_filters_stop_words() -> None:
-    from mem0ry.db.store_memories import _query_terms
+    from mem0ry.db.store_memories.helpers import _query_terms
 
     terms = _query_terms("the authentication and the authorization")
     assert "authentication" in terms
@@ -653,7 +653,7 @@ def test_query_terms_filters_stop_words() -> None:
 
 
 def test_query_terms_raw_preserves_accents() -> None:
-    from mem0ry.db.store_memories import _query_terms_raw
+    from mem0ry.db.store_memories.helpers import _query_terms_raw
 
     terms = _query_terms_raw("configuração do sistema")
     assert "configuração" in terms

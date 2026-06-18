@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,8 @@ from .connection import get_connection
 from .schema import init_schema
 from ._helpers import _now_iso
 from .store_audit import record_audit
+
+logger = logging.getLogger(__name__)
 
 _VALID_KINDS = {
     "session-start",
@@ -71,8 +74,8 @@ def delete_observation(db_path: Path, observation_id: str) -> bool:
                 target_type="observation",
                 target_id=observation_id,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to record observation delete audit: %s", exc)
 
     return affected > 0
 

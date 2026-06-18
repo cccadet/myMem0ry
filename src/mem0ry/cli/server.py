@@ -20,7 +20,7 @@ def serve(
     bind_port = port or config.server_port
 
     if detach:
-        import subprocess
+        import subprocess  # nosec B404
         import sys
 
         pid_file = Path(config.server_pid_file)
@@ -40,10 +40,12 @@ def serve(
         env = {
             **os.environ,
             "MCP_TRANSPORT": "streamable-http",
+            "MEM0RY_HOST": bind_host,
+            "MEM0RY_PORT": str(bind_port),
             "MCP_HOST": bind_host,
             "MCP_PORT": str(bind_port),
         }
-        proc = subprocess.Popen(
+        proc = subprocess.Popen(  # nosec B603
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -55,6 +57,8 @@ def serve(
         return
 
     os.environ["MCP_TRANSPORT"] = "streamable-http"
+    os.environ["MEM0RY_HOST"] = bind_host
+    os.environ["MEM0RY_PORT"] = str(bind_port)
     os.environ["MCP_HOST"] = bind_host
     os.environ["MCP_PORT"] = str(bind_port)
 
@@ -111,7 +115,7 @@ def observe(
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=2.0) as resp:
+        with urllib.request.urlopen(req, timeout=2.0) as resp:  # nosec B310
             result = json.loads(resp.read())
             typer.echo(f"Observed: {result.get('id', '?')}")
     except urllib.error.HTTPError as e:

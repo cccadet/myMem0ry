@@ -1,6 +1,6 @@
 [project]
 name = "mymem0ry"
-version = "0.25.4"
+version = "0.25.5"
 description = "Personal memory system for AI coding agents — offline, zero API keys, cross-agent handoffs, semantic search"
 readme = "README.md"
 license = "MIT"
@@ -90,3 +90,7 @@ do_not_mutate = ["test_*", "__init__.py"]
 [[tool.mypy.overrides]]
 module = ["sqlite_vec", "rank_bm25", "spacy.*"]
 ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B311"]

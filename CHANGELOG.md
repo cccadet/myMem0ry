@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.25.5] - 2026-06-17
+
+### Added
+
+- **New test suites** — `tests/test_cli_conversation.py` (12 tests) and
+  `tests/test_mcp_server_extra.py` (24 tests) covering previously untapped paths
+  in the conversation CLI and MCP server tools/endpoints.
+- **Bandit configuration** — `[tool.bandit]` section in `pyproject.toml` excludes
+  tests and skips B311; inline `# nosec` comments document acceptable risks.
+
+### Changed
+
+- **Security audit** — replaced bare `except Exception: pass` with
+  `logger.warning(...)` across audit/write fallbacks in the DB stores, hook
+  router, MCP server and update-check utilities.
+- **Refactored large modules** — `db/store_memories.py` split into
+  `db/store_memories/` (8 focused modules) and `web/pages.py` split into
+  `web/pages/` (9 modules), reducing file size and cognitive complexity.
+- **Simplified context/search logic** — extracted helpers in
+  `db/store_memories/context.py` and `db/store_memories/search.py`.
+- **Unified server env vars** — `MemoryConfig.server_host/server_port` now read
+  `MEM0RY_*` with backward-compatible fallback to `MCP_*`.
+
+### Security
+
+- Audited and resolved all Bandit findings: subprocess calls use trusted fixed
+  binaries, `urlopen` is restricted to PyPI/local health checks, BM25 pickle
+  cache is local to the process, and dynamic SQL uses parameterized
+  placeholders only.
+
+### Fixed
+
+- `tests/test_config.py::test_defaults` no longer fails when `.env` overrides
+  `SPACY_MODEL`.
+- `src/mem0ry/cli/hooks.py:_hooks_dir()` now correctly distinguishes the Python
+  module `src/mem0ry/hooks/` from the shipped hooks directory `hooks/`.
+- Web route order fixed so `/project/{project_id:path}/observations` is not
+  swallowed by the greedy `/project/{project_id:path}` route.
+- Resolved 2 `mypy` type errors in `pipeline/dataset.py` and
+  `conversations/spacy_expand.py`.
+
 ## [0.25.4] - 2026-06-16
 
 ### Added

@@ -192,7 +192,7 @@ def forget_sweep(
         if not dry_run and hard_delete_ids:
             placeholders = ",".join("?" for _ in hard_delete_ids)
             conn.execute(
-                f"DELETE FROM memories WHERE id IN ({placeholders})",
+                f"DELETE FROM memories WHERE id IN ({placeholders})",  # nosec B608
                 hard_delete_ids,
             )
             conn.commit()

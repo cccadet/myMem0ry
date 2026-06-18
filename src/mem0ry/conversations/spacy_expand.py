@@ -48,7 +48,7 @@ class SpacyConceptSearch:
         if not vecs:
             return []
 
-        query = np.mean(vecs, axis=0).astype(np.float32)
+        query = np.mean(np.array(vecs), axis=0).astype(np.float32)
         norm = np.linalg.norm(query)
         if norm == 0:
             return []
