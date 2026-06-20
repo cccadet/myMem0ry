@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-06-11
+
+### Added
+
+- **Export page** (`/export`) — new web UI page for exporting memories as JSON.
+  Supports quick export (all, global only), by scope (multi-select), and by
+  project (multi-select). Added navigation entry and i18n strings (PT/EN).
+
+- **Enhanced import page** — drag-and-drop file upload with visual feedback,
+  file type validation, size display, progress states. Added "How it works"
+  help section. Error/success messages now styled with icons and colors.
+
+### Changed
+
+- **Project observations** — replaced table layout with card-based design.
+  Each observation shows icon by type (session-start, user-prompt, etc.),
+  title, agent, date, and body preview. Empty state with icon when none exist.
+
+- **Search filters** — converted to grid layout with labeled fields. Each
+  filter (query, tags, scope, type, source, dates, sort) now has its own
+  labeled group for better UX.
+
+- **CSS polish** — added transitions on links, buttons, cards, bars. Focus
+  states for accessibility (outline on interactive elements). Improved hover
+  effects on memory cards (lift + accent border). Better table striping.
+  Added empty-state and skeleton-loading styles. Improved responsive
+  breakpoints (900px, 500px).
+
 ## [0.25.5] - 2026-06-17
 
 ### Added
@@ -80,7 +108,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.25.2] - 2026-06-11
 
-### Documentation
+### Added
 
 - **README** — added "Retention & Pinning" section explaining memory decay tiers,
   pinning, and fact evolution concepts. Fixed `SPACY_MODEL` default (English, not
@@ -89,34 +117,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Corrected env var names (`MEM0RY_HOST`/`MEM0RY_PORT` instead of `MCP_*`).
 - **docs/usage.md** — removed outdated "v3 schema" reference (now v8).
 - **docs/analise-fluxo-mcp.md** — updated MCP tool count (10 → 12) and table.
-
-## [0.26.0] - 2026-06-11
-
-### Added
-
-- **Export page** (`/export`) — new web UI page for exporting memories as JSON.
-  Supports quick export (all, global only), by scope (multi-select), and by
-  project (multi-select). Added navigation entry and i18n strings (PT/EN).
-
-- **Enhanced import page** — drag-and-drop file upload with visual feedback,
-  file type validation, size display, progress states. Added "How it works"
-  help section. Error/success messages now styled with icons and colors.
-
-### Changed
-
-- **Project observations** — replaced table layout with card-based design.
-  Each observation shows icon by type (session-start, user-prompt, etc.),
-  title, agent, date, and body preview. Empty state with icon when none exist.
-
-- **Search filters** — converted to grid layout with labeled fields. Each
-  filter (query, tags, scope, type, source, dates, sort) now has its own
-  labeled group for better UX.
-
-- **CSS polish** — added transitions on links, buttons, cards, bars. Focus
-  states for accessibility (outline on interactive elements). Improved hover
-  effects on memory cards (lift + accent border). Better table striping.
-  Added empty-state and skeleton-loading styles. Improved responsive
-  breakpoints (900px, 500px).
 
 ## [0.25.1] - 2026-06-10
 
@@ -605,9 +605,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.25.3...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.25.5...HEAD
+[0.26.0]: https://github.com/cccadet/myMem0ry/compare/v0.25.5...v0.26.0
+[0.25.5]: https://github.com/cccadet/myMem0ry/compare/v0.25.4...v0.25.5
+[0.25.4]: https://github.com/cccadet/myMem0ry/compare/v0.25.3...v0.25.4
 [0.25.3]: https://github.com/cccadet/myMem0ry/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/cccadet/myMem0ry/compare/v0.25.1...v0.25.2
+[0.25.1]: https://github.com/cccadet/myMem0ry/compare/v0.25.0...v0.25.1
+[0.25.0]: https://github.com/cccadet/myMem0ry/compare/v0.24.0...v0.25.0
+[0.24.0]: https://github.com/cccadet/myMem0ry/compare/v0.22.0...v0.24.0
+[0.22.0]: https://github.com/cccadet/myMem0ry/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/cccadet/myMem0ry/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/cccadet/myMem0ry/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/cccadet/myMem0ry/compare/v0.18.0...v0.19.0
@@ -615,7 +622,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 [0.17.0]: https://github.com/cccadet/myMem0ry/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/cccadet/myMem0ry/compare/v0.15.5...v0.16.0
 [0.15.5]: https://github.com/cccadet/myMem0ry/compare/v0.15.4...v0.15.5
+[0.15.4]: https://github.com/cccadet/myMem0ry/compare/v0.15.3...v0.15.4
+[0.15.3]: https://github.com/cccadet/myMem0ry/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/cccadet/myMem0ry/compare/v0.15.1...v0.15.2
+[0.15.1]: https://github.com/cccadet/myMem0ry/compare/v0.15.0...v0.15.1
+[0.14.9]: https://github.com/cccadet/myMem0ry/compare/v0.14.7...v0.14.9
+[0.14.7]: https://github.com/cccadet/myMem0ry/compare/v0.14.6...v0.14.7
+[0.14.6]: https://github.com/cccadet/myMem0ry/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/cccadet/myMem0ry/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/cccadet/myMem0ry/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/cccadet/myMem0ry/compare/v0.14.2...v0.14.3
@@ -624,4 +637,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 [0.14.0]: https://github.com/cccadet/myMem0ry/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/cccadet/myMem0ry/releases/tag/v0.13.0
 [0.12.2]: https://github.com/cccadet/myMem0ry/compare/v0.3.0...v0.12.2
+[0.3.0]: https://github.com/cccadet/myMem0ry/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cccadet/myMem0ry/releases/tag/v0.2.0

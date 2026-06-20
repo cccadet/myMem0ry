@@ -25,7 +25,7 @@ Persistent memory that any AI agent can read and write. Quit Claude Code mid-tas
 - **Zero LLM tokens for writes** — bulk writes (conversation archiving, logging) via hooks only
 - **Retention** — salience-based decay with tiers (working/procedural/semantic), pin/unpin
 - **Auth** — Bearer token, host allowlisting, CORS
-- **Web UI** — dark mode read-only viewer (dashboard, projects, search, audit log)
+- **Web UI** — dark mode viewer (dashboard, projects, search, audit log) with edit, pin/unpin, trash/restore, import/export, and batch actions
 - **Backup/restore** — tarball CLI commands
 - **Multi-agent** — Claude Code, OpenCode, Codex, Cursor, Gemini CLI, VS Code, Docker
 
@@ -301,8 +301,8 @@ Memories decay based on their type:
 
 | Memory type | Retention tier | Behaviour |
 |---|---|---|
-| `log` | working | 30–90 day decay |
-| `pattern` | procedural | frequency-based decay (up to 365d) |
+| `log` | working | up to 90 day decay |
+| `pattern` | procedural | up to 365 day decay |
 | `fact` | semantic | indefinite (pinned by default) |
 | `decision` | semantic | indefinite (pinned by default) |
 
@@ -340,7 +340,7 @@ Memories decay based on their type:
 
 ## Web UI
 
-When running in HTTP mode (`MCP_TRANSPORT=streamable-http`), a read-only web UI is available:
+When running in HTTP mode (`MCP_TRANSPORT=streamable-http`), a web UI is available:
 
 - `/` — Dashboard with stats and recent memories
 - `/projects` — List of projects with memory counts

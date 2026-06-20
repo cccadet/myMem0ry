@@ -11,7 +11,7 @@ uv run mymem0ry doctor             # Health check; auto-downloads spaCy model if
 ```
 
 - **ripgrep (`rg`) on PATH is required** — the default `ripgrep` search backend shells out to it.
-- Default `SPACY_MODEL` in `config.py:56` is `en_core_news_lg`. The repo's `.env` overrides to `pt_core_news_lg` (Portuguese). Set `SPACY_MODEL` in `.env` before `mymem0ry doctor` for the first run.
+- Default `SPACY_MODEL` in `config.py:56` is `en_core_web_lg`. The repo's `.env` overrides to `pt_core_news_lg` (Portuguese). Set `SPACY_MODEL` in `.env` before `mymem0ry doctor` for the first run.
 - `data/` is gitignored. DB files (`data/memories.db`, `data/conversations/.vec.db`) and the spool dir are created at runtime.
 
 ## CI order (from `.github/workflows/ci.yml`)
@@ -34,45 +34,61 @@ uv run pytest -x                                                # stop on first 
 ## CLI entrypoints (from `pyproject.toml [project.scripts]`)
 
 ```bash
-mymem0ry search "query"                    # ripgrep default
-mymem0ry search "query" --backend hybrid --expand   # BM25+vector RRF + spaCy expansion
-mymem0ry index                             # Build BM25 + FTS5 + vector indexes
-mymem0ry split [source]                    # Export → .md by date (auto-detects openai/gemini/claude)
-mymem0ry migrate                           # .md → SQLite structured memories
-mymem0ry migrate --reprocess               # Drop DB + reingest
-mymem0ry stats                             # DB overview (by scope, type, source, project)
-mymem0ry projects                          # List projects with memories (by git remote URL)
-mymem0ry doctor                            # 6-check system health
-mymem0ry decay [--days 90] [--dry-run]     # Remove old session logs
-mymem0ry benchmark "query"                 # Compare search backends
-mymem0ry expand "token"                    # Semantically related tokens
-mymem0ry backup --to file.tar.gz           # DB + conversations
-mymem0ry restore --from file.tar.gz
+# Context & memory
+mymem0ry context --cwd .                          # Load context for current project
+mymem0ry save "Title" "Content" --scope project   # Save a memory
+mymem0ry log "message"                            # Quick session log
 
-# Share
+# Search & indexes
+mymem0ry search "query"                           # ripgrep search
+mymem0ry search "query" --backend hybrid --expand # BM25+vector RRF + spaCy expansion
+mymem0ry index                                    # Build BM25 + FTS5 + vector indexes
+mymem0ry benchmark "query"                        # Compare search backends
+mymem0ry expand "token"                           # Semantically related tokens
+
+# Conversation import
+mymem0ry split [source]                           # Export → .md by date
+                                                  # auto-detects: openai, gemini, claude-code, claude-export
+mymem0ry split --source path/to/data --type claude-code  # Force parser
+mymem0ry migrate                                  # .md → SQLite structured memories
+mymem0ry migrate --reprocess                      # Drop DB + reingest
+mymem0ry dataset                                  # Build ChatML dataset (legacy/experimental)
+
+# Overview & diagnostics
+mymem0ry version                                  # Print installed version
+mymem0ry stats                                    # DB overview (by scope, type, source, project)
+mymem0ry projects                                 # List projects with memories (by git remote URL)
+mymem0ry doctor                                   # 6-check system health
+
+# Retention
+mymem0ry decay [--days 90] [--dry-run]            # Alias for forget-sweep (days ignored)
+mymem0ry forget-sweep [--execute/--dry-run]       # Soft-delete low-salience + purge expired
+mymem0ry pin <memory_id>                          # Pin memory (exempt from decay)
+mymem0ry unpin <memory_id>                        # Unpin memory
+
+# Handoffs
+mymem0ry handoff begin --summary "..."            # Create handoff for next agent
+mymem0ry handoff accept                           # Peek pending handoff for current project
+mymem0ry handoff status                           # Check server status
+
+# Hooks & server
+mymem0ry serve                                    # Foreground HTTP (MCP + hooks + handoffs + web UI)
+mymem0ry serve --detach                           # Background (daemon.py manages PID + health)
+mymem0ry observe session-start                    # Send lifecycle observation (CLI fallback)
+mymem0ry hooks --config                           # Print settings.json snippet for current agent
+mymem0ry hooks --path                             # Print hooks dir path
+mymem0ry hooks --install                          # Install hooks for detected agent
+
+# Backup & share
+mymem0ry backup --to file.tar.gz                  # Backup DB + conversations
+mymem0ry restore --from file.tar.gz
 mymem0ry export --output file.json
 mymem0ry export --project-id X -o out.json
 mymem0ry import file.json
-mymem0ry import file.json --project-id Y   # remap to project Y on import
-
-# Server & handoffs
-mymem0ry serve                             # Foreground HTTP (MCP + hooks + handoffs + web UI)
-mymem0ry serve --detach                    # Background (daemon.py manages PID + health)
-mymem0ry handoff begin --summary "..."     # Create handoff for next agent
-mymem0ry handoff accept                    # Peek pending handoff for current project
-mymem0ry handoff status                    # Check server status
-mymem0ry hooks --config                    # Print settings.json snippet for current agent
-mymem0ry hooks --path                      # Print hooks dir path
-mymem0ry hooks --install                   # Install hooks for detected agent
-mymem0ry observe session-start             # Send lifecycle observation (CLI fallback)
-
-# Legacy (pre-HTTP) — still used by some hook scripts
-mymem0ry context --cwd .
-mymem0ry save "Title" "Content"
-mymem0ry log "message"
+mymem0ry import file.json --project-id Y          # remap to project Y on import
 
 # MCP server (separate entrypoint)
-mymem0ry-mcp                               # FastMCP server (stdio or streamable-http)
+mymem0ry-mcp                                      # FastMCP server (stdio or streamable-http)
 ```
 
 ## Repo layout
@@ -191,7 +207,7 @@ redundant searches.
 
 ## Web UI
 
-Routes live in `web/__init__.py` (Starlette `Route(...)` list). All read-only except for explicit `methods=["POST"]` routes. Full set:
+Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only; explicit `methods=["POST"]` routes handle mutations. Full set:
 
 - Pages: `/`, `/projects`, `/project/{id}`, `/project/{id}/observations`, `/memory/{id}`, `/memory/{id}/edit` (GET+POST), `/memory/{id}/{pin,unpin,restore,delete}` (POST), `/observation/{id}`, `/observation/{id}/delete` (POST), `/trash`, `/handoffs`, `/handoff/{id}`, `/handoff/{id}/{close,delete}` (POST), `/search`, `/audit`, `/import` (GET), `/memories/import` (POST).
 - APIs: `/api/memories`, `/memories/batch-delete` (POST), `/memories/export` (POST).
@@ -204,7 +220,7 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). All read-only ex
 
 ## Retention and fact evolution
 
-- `db/retention.py` — salience-based decay. Tiers: `log` (working, 90d), `pattern` (procedural, 365d), `fact`/`decision` (semantic, indefinite, auto-pinned).
+- `db/retention.py` — salience-based decay. Tiers: `log` (working, 90d max), `pattern` (procedural, 365d max), `fact`/`decision` (semantic, indefinite, auto-pinned).
 - `evolve_fact` MCP tool (`mcp_server.py:530`) — agent LLM consolidates contradictory facts. Old facts get `superseded_by` set + soft-deleted; a new evolved fact is created. `get_context()` and `search_memories()` exclude superseded rows. The agent decides when to evolve (no heuristics, instruction-based).
 - `audit_log` records mutations (create, delete, import, handoff, evolve) — auto-written in `store.py`.
 
@@ -225,6 +241,8 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). All read-only ex
 | `MEM0RY_CORS_ORIGINS` | _(empty)_ | CORS origins for web UI |
 | `MEM0RY_PID_FILE` | `data/server.pid` | Daemon PID file |
 | `MEM0RY_NO_UPDATE_CHECK` | _(unset)_ | Set `1` to skip CLI update check (CI does this via `tests/conftest.py:3`) |
+| `MEM0RY_COMPRESS` | `0` | Set `1` to enable headroom-ai compression of `get_context()` results |
+| `MEM0RY_COMPRESS_LOG` | `0` | Set `1` to log compression details for debugging |
 | `EMBEDDING_DIM` | `300` | Vector dimensionality (must match spaCy model) |
 | `RRF_K` | `60` | RRF fusion constant |
 | `EXPAND_TOP_K` | `10` | spaCy concept expansion depth |

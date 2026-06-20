@@ -76,9 +76,8 @@ All data lives in `/data` inside the container, mounted as a Docker volume:
 ```
 /data/
 ├── conversations/    # .md conversation files
-├── memories.db       # SQLite structured memories
-└── conversations/
-    └── .vec.db       # sqlite-vec embeddings index
+│   └── .vec.db       # sqlite-vec embeddings index
+└── memories.db       # SQLite structured memories
 ```
 
 To back up:
@@ -101,7 +100,7 @@ claude mcp add --scope user mymem0ry -- mymem0ry-mcp
 **Or manual config** — add to `~/.claude/settings.json`:
 
 ```json
-  "servers": {
+  "mcpServers": {
     "mymem0ry": {
       "command": "mymem0ry-mcp"
     }
