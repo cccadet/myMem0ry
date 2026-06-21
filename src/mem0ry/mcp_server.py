@@ -321,8 +321,8 @@ def search_conversations(
         top_k: Maximum number of results. Defaults to 5.
         backend: Search backend — "ripgrep", "bm25", "hybrid". Defaults to "ripgrep".
     """
-    from .conversations.spacy_expand import expand_query_spacy
     from .conversations.search import search as rg_search
+    from .conversations.spacy_expand import expand_query_spacy
 
     conv_dir = _conversations_dir()
     if not conv_dir.exists():
@@ -891,8 +891,9 @@ def main():
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
 
     if transport == "stdio":
-        from .daemon import ensure_server
         import threading
+
+        from .daemon import ensure_server
         threading.Thread(target=ensure_server, daemon=True).start()
         mcp.run(transport="stdio")
         return

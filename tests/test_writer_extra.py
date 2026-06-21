@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 
 from mem0ry.conversations.writer import (
-    _format_conversation,
     _classify_payload,
+    _detect_source_type,
+    _format_conversation,
     _is_gemini_list,
     _is_openai_dict,
     _is_openai_list,
-    _detect_source_type,
     split_conversations,
 )
 from mem0ry.parsers.base import ParsedConversation, ParsedMessage

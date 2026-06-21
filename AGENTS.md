@@ -224,6 +224,22 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 - `evolve_fact` MCP tool (`mcp_server.py:530`) — agent LLM consolidates contradictory facts. Old facts get `superseded_by` set + soft-deleted; a new evolved fact is created. `get_context()` and `search_memories()` exclude superseded rows. The agent decides when to evolve (no heuristics, instruction-based).
 - `audit_log` records mutations (create, delete, import, handoff, evolve) — auto-written in `store.py`.
 
+## DoltLite sync (experimental)
+
+- `db/connection.py` auto-detects DoltLite when the binding is installed and the database file was created as DoltLite. Plain SQLite remains the default/fallback.
+- `db/doltlite_sync.py` centralizes version-control helpers (`auto_commit`, `dolt_push`, `dolt_pull`, etc.).
+- `cli/sync.py` exposes `mymem0ry sync {init,push,pull,status}`.
+- Schema v9 added `memories.fts_rowid` because DoltLite does not expose an implicit `rowid` on a TEXT PRIMARY KEY.
+- DoltLite requires a Python build where `_sqlite3` is a shared extension. It does **not** work with `uv python install` (python-build-standalone). Use Homebrew, distro, pyenv, or conda Python instead.
+
+### Cross-machine sync workflow
+
+1. **Memories DB** (`DB_PATH`, e.g. `data/memories.db`) — synced via DoltLite remote (`mymem0ry sync push/pull`).
+2. **Everything else in `data/`** (conversation `.md` files, `.vec.db`, BM25/FTS5 indexes) — synced via a separate git repository.
+3. On a new machine: clone the git repo into `data/`, run `mymem0ry sync init --remote <REMOTE>`, then `mymem0ry sync pull`.
+4. After a git pull, rebuild conversation indexes if they changed: `mymem0ry index --backend vector/bm25/fts5`.
+5. Conflicts in DoltLite are resolved with `dolt_conflicts_resolve('--ours'/'--theirs', 'memories')` inside the DB.
+
 ## Env (loaded at `config.py` import time via `load_dotenv`)
 
 | Var | Default | Purpose |
@@ -249,6 +265,10 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 | `SEARCH_TOP_K` | `3` | Default search result count |
 | `SEARCH_BACKEND` | `ripgrep` | Default backend |
 | `MCP_TRANSPORT` | _(unset)_ | Set to `streamable-http` to expose web UI |
+| `MEM0RY_SYNC_ENGINE` | `auto` | `auto` / `doltlite` / `sqlite` — engine selection for new DBs |
+| `MEM0RY_SYNC_REMOTE` | _(unset)_ | DoltLite remote URL (`file://` or `http://`) |
+| `MEM0RY_SYNC_BRANCH` | `main` | Default branch for `mymem0ry sync` |
+| `MEM0RY_SYNC_AUTO_COMMIT` | `1` | Auto-commit each write on DoltLite when `1` |
 
 ## Tests
 

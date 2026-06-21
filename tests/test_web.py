@@ -6,14 +6,13 @@ import json
 from pathlib import Path
 
 import pytest
+from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from mem0ry.db.connection import get_connection
 from mem0ry.db.schema import init_schema
 from mem0ry.db.store import create_memory
 from mem0ry.web import get_web_routes
-
-from starlette.applications import Starlette
 
 
 @pytest.fixture
@@ -509,8 +508,8 @@ def test_handoffs_page_filters_by_status(client: TestClient, tmp_db: Path) -> No
 
 
 def test_memory_detail_superseded(client: TestClient, tmp_db: Path) -> None:
-    from mem0ry.db.store_memories import create_memory
     from mem0ry.db.store import evolve_memories
+    from mem0ry.db.store_memories import create_memory
 
     old = create_memory(tmp_db, title="Old", content="old", scope="global", memory_type="fact", source="manual")
     evolve_memories(
@@ -544,8 +543,8 @@ def test_trash_page_lists_deleted_memories(client: TestClient, tmp_db: Path) -> 
 
 
 def test_dashboard_handles_invalid_timestamp_gracefully(client: TestClient, tmp_db: Path) -> None:
-    from mem0ry.db.store_memories import create_memory
     from mem0ry.db.connection import get_connection
+    from mem0ry.db.store_memories import create_memory
 
     mid = create_memory(tmp_db, title="Bad time", content="C", scope="global", memory_type="fact", source="manual")
     conn = get_connection(tmp_db)

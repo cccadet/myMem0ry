@@ -201,8 +201,8 @@ class TestExtractToolResponsePartsRegression:
 
 class TestRouterRegression:
     def test_session_end_creates_handoff_still(self, db: Path) -> None:
+        from mem0ry.db.store import create_observation, pending_handoff
         from mem0ry.hooks.router import handle_hook_event
-        from mem0ry.db.store import pending_handoff, create_observation
 
         create_observation(db, session_id="se1", kind="user-prompt", body="Fix login bug")
 
@@ -216,8 +216,8 @@ class TestRouterRegression:
         assert "login" in (ho.get("summary") or "").lower()
 
     def test_log_creates_session_memory(self, db: Path) -> None:
-        from mem0ry.hooks.router import handle_hook_event
         from mem0ry.db.store import get_session_observations
+        from mem0ry.hooks.router import handle_hook_event
 
         handle_hook_event(db, {
             "kind": "log",
@@ -229,8 +229,8 @@ class TestRouterRegression:
         assert len(obs) >= 1
 
     def test_post_tool_use_edit_records(self, db: Path) -> None:
-        from mem0ry.hooks.router import handle_hook_event
         from mem0ry.db.store import get_session_observations
+        from mem0ry.hooks.router import handle_hook_event
 
         eid = handle_hook_event(db, {
             "kind": "post-tool-use",
@@ -258,8 +258,8 @@ class TestRouterRegression:
         assert eid == ""
 
     def test_post_tool_use_error_recorded(self, db: Path) -> None:
-        from mem0ry.hooks.router import handle_hook_event
         from mem0ry.db.store import get_session_observations
+        from mem0ry.hooks.router import handle_hook_event
 
         eid = handle_hook_event(db, {
             "kind": "post-tool-use",
@@ -292,8 +292,8 @@ class TestRouterRegression:
             assert "Hello" in content
 
     def test_hook_event_name_fallback_in_full_pipeline(self, db: Path) -> None:
-        from mem0ry.hooks.router import handle_hook_event
         from mem0ry.db.store import get_session_observations
+        from mem0ry.hooks.router import handle_hook_event
 
         eid = handle_hook_event(db, {
             "hook_event_name": "SessionStart",
@@ -311,7 +311,7 @@ class TestRouterRegression:
 
 class TestErrorRegexRegression:
     def test_error_extraction_from_body(self, db: Path) -> None:
-        from mem0ry.db.store import create_observation, auto_handoff_from_session
+        from mem0ry.db.store import auto_handoff_from_session, create_observation
 
         create_observation(
             db, session_id="se3", kind="post-tool-use",
@@ -329,7 +329,7 @@ class TestErrorRegexRegression:
         assert "permission denied" in summary
 
     def test_error_at_end_of_body(self, db: Path) -> None:
-        from mem0ry.db.store import create_observation, auto_handoff_from_session
+        from mem0ry.db.store import auto_handoff_from_session, create_observation
 
         create_observation(
             db, session_id="se4", kind="post-tool-use",
@@ -346,7 +346,7 @@ class TestErrorRegexRegression:
         assert "command not found" in row["summary"]
 
     def test_multiple_errors_extracted(self, db: Path) -> None:
-        from mem0ry.db.store import create_observation, auto_handoff_from_session
+        from mem0ry.db.store import auto_handoff_from_session, create_observation
 
         create_observation(
             db, session_id="se5", kind="post-tool-use",
@@ -423,7 +423,7 @@ class TestRetentionRegression:
         assert result["soft_count"] == 0
 
     def test_forget_sweep_hard_deletes_after_grace(self, db: Path) -> None:
-        from mem0ry.db.retention import forget_sweep, _GRACE_DAYS
+        from mem0ry.db.retention import _GRACE_DAYS, forget_sweep
 
         mem_id = self._insert_old_memory(db, memory_type="log", days_old=200)
 
@@ -470,7 +470,7 @@ class TestRetentionRegression:
         assert result["soft_count"] == 0
 
     def test_forget_sweep_file_cleanup_on_hard_delete(self, db: Path) -> None:
-        from mem0ry.db.retention import forget_sweep, _GRACE_DAYS
+        from mem0ry.db.retention import _GRACE_DAYS, forget_sweep
 
         mem_dir = db.parent / "memories"
         mem_dir.mkdir()
@@ -508,7 +508,7 @@ class TestRetentionRegression:
 
 class TestHandoffSummaryRegression:
     def test_auto_handoff_includes_user_prompts(self, db: Path) -> None:
-        from mem0ry.db.store import create_observation, auto_handoff_from_session
+        from mem0ry.db.store import auto_handoff_from_session, create_observation
 
         create_observation(
             db, session_id="sh1", kind="user-prompt", body="Refactor the API layer"
@@ -527,7 +527,7 @@ class TestHandoffSummaryRegression:
         assert "Add error handling" in summary
 
     def test_auto_handoff_includes_files_touched(self, db: Path) -> None:
-        from mem0ry.db.store import create_observation, auto_handoff_from_session
+        from mem0ry.db.store import auto_handoff_from_session, create_observation
 
         create_observation(
             db, session_id="sh2", kind="post-tool-use",
@@ -542,7 +542,7 @@ class TestHandoffSummaryRegression:
         assert "app.py" in row["summary"]
 
     def test_auto_handoff_includes_errors(self, db: Path) -> None:
-        from mem0ry.db.store import create_observation, auto_handoff_from_session
+        from mem0ry.db.store import auto_handoff_from_session, create_observation
 
         create_observation(
             db, session_id="sh3", kind="post-tool-use",
@@ -562,7 +562,7 @@ class TestHandoffSummaryRegression:
         assert auto_handoff_from_session(db, "nonexistent", "test-agent") is None
 
     def test_auto_handoff_skips_duplicate(self, db: Path) -> None:
-        from mem0ry.db.store import create_observation, auto_handoff_from_session
+        from mem0ry.db.store import auto_handoff_from_session, create_observation
 
         create_observation(db, session_id="sh4", kind="user-prompt", body="First")
         ho1 = auto_handoff_from_session(db, "sh4", "test-agent")

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mem0ry.db.connection import get_connection
 from mem0ry.db.schema import init_schema
-from mem0ry.hooks.sanitize import sanitize_payload
 from mem0ry.hooks.router import handle_hook_event
+from mem0ry.hooks.sanitize import sanitize_payload
 
 
 class TestSanitize:

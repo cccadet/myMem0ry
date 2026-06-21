@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 from mem0ry.config import _DATA_DIR
 

@@ -6,13 +6,14 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .helpers import _JOIN_AND, _NOT_SUPERSEDED, _validate_scope
-from ..connection import get_connection
-from ..schema import init_schema
 from .._helpers import _now_iso
-from ..store_audit import record_audit
+from ..connection import get_connection
+from ..doltlite_sync import maybe_auto_commit
 from ..retention import compute_salience
+from ..schema import init_schema, next_fts_rowid
+from ..store_audit import record_audit
 from .crud import create_memory
+from .helpers import _JOIN_AND, _NOT_SUPERSEDED, _validate_scope
 
 logger = logging.getLogger(__name__)
 
@@ -119,13 +120,15 @@ def import_memories(
             salience = compute_salience(mtype, now, 0, None)
             pinned = 1 if mtype in ("fact", "decision") else 0
 
+            fts_rowid = next_fts_rowid(conn)
             conn.execute(
-                "INSERT INTO memories(id, content, scope, project_id, project_path, context, "
+                "INSERT INTO memories(id, fts_rowid, content, scope, project_id, project_path, context, "
                 "session_id, memory_type, source, tags, title, created_at, file_path, "
                 "access_count, last_accessed_at, salience, pinned) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
                 (
                     new_id,
+                    fts_rowid,
                     mem["content"],
                     mem.get("scope", "global"),
                     pid,
@@ -151,6 +154,7 @@ def import_memories(
             )
             imported += 1
         conn.commit()
+        maybe_auto_commit(conn)
     finally:
         conn.close()
     return {"imported": imported, "skipped": skipped}
@@ -228,6 +232,7 @@ def evolve_memories(
             [new_id, now] + old_ids,
         )
         conn.commit()
+        maybe_auto_commit(conn)
     finally:
         conn.close()
 

@@ -4,9 +4,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .connection import get_connection
-from .schema import init_schema
 from ._helpers import _now_iso
+from .connection import get_connection
+from .doltlite_sync import maybe_auto_commit
+from .schema import init_schema
 
 
 def record_audit(
@@ -29,6 +30,7 @@ def record_audit(
             (audit_id, action, target_type, target_id, agent, details, now),
         )
         conn.commit()
+        maybe_auto_commit(conn)
     finally:
         conn.close()
     return audit_id

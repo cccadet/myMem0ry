@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from mem0ry.conversations.spacy_expand import expand_query_spacy, SpacyConceptSearch
+from mem0ry.conversations.spacy_expand import SpacyConceptSearch, expand_query_spacy
 
 
 def _fake_expander(

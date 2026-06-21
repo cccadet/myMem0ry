@@ -6,8 +6,8 @@ import logging
 from pathlib import Path
 
 from mem0ry.conversations.search_bm25 import (
-    _tokenize,
     _index_path,
+    _tokenize,
     build_bm25_index,
     search_bm25,
 )

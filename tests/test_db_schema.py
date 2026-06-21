@@ -39,7 +39,7 @@ def test_init_schema_version(tmp_path: Path) -> None:
     init_schema(conn)
 
     row = conn.execute("SELECT value FROM schema_meta WHERE key='version'").fetchone()
-    assert row["value"] == "8"
+    assert row["value"] == "9"
     conn.close()
 
 
@@ -52,6 +52,7 @@ def test_memories_columns(tmp_path: Path) -> None:
     names = [row["name"] for row in cols]
     expected = [
         "id",
+        "fts_rowid",
         "content",
         "scope",
         "project_id",

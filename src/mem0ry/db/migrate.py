@@ -8,7 +8,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from .connection import get_connection
-from .schema import init_schema
+from .schema import init_schema, next_fts_rowid
 
 _VERSION_SQL = "SELECT value FROM schema_meta WHERE key='version'"
 _SET_VERSION_SQL = "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)"
@@ -81,10 +81,11 @@ def migrate_v1_to_v2(conversations_dir: Path, db_path: Path) -> dict:
         except (ValueError, TypeError):
             created_at = date.today().isoformat()
 
+        fts_rowid = next_fts_rowid(conn)
         conn.execute(
-            "INSERT INTO memories(id, content, scope, source, tags, title, created_at, file_path) "
-            "VALUES(?, ?, 'global', 'import', '[]', ?, ?, ?)",
-            (mem_id, parsed["content"], parsed["title"], created_at, rel_path),
+            "INSERT INTO memories(id, fts_rowid, content, scope, source, tags, title, created_at, file_path) "
+            "VALUES(?, ?, ?, 'global', 'import', '[]', ?, ?, ?)",
+            (mem_id, fts_rowid, parsed["content"], parsed["title"], created_at, rel_path),
         )
         stats["migrated"] += 1
 
@@ -130,12 +131,14 @@ def migrate_v2_to_v3(conversations_dir: Path, db_path: Path) -> dict:
 
         memory_type = _guess_memory_type(parsed["title"])
 
+        fts_rowid = next_fts_rowid(conn)
         conn.execute(
-            "INSERT INTO memories(id, content, scope, memory_type, source, tags, "
+            "INSERT INTO memories(id, fts_rowid, content, scope, memory_type, source, tags, "
             "title, created_at, file_path, access_count, last_accessed_at) "
-            "VALUES(?, ?, 'global', ?, 'import', '[]', ?, ?, ?, 0, ?)",
+            "VALUES(?, ?, ?, 'global', ?, 'import', '[]', ?, ?, ?, 0, ?)",
             (
                 mem_id,
+                fts_rowid,
                 parsed["content"],
                 memory_type,
                 parsed["title"],
@@ -264,9 +267,9 @@ def migrate_v7_to_v8(db_path: Path) -> dict:
     """Upgrade v7 schema to v8: add FTS5 index + triggers on memories."""
     from .schema import (
         _CREATE_MEMORIES_FTS,
+        _TRIGGER_FTS_DELETE,
         _TRIGGER_FTS_INSERT,
         _TRIGGER_FTS_UPDATE,
-        _TRIGGER_FTS_DELETE,
     )
 
     conn = get_connection(db_path)
@@ -297,3 +300,72 @@ def migrate_v7_to_v8(db_path: Path) -> dict:
     conn.close()
 
     return {"old_version": old_version, "new_version": 8}
+
+
+def migrate_v8_to_v9(db_path: Path) -> dict:
+    """Upgrade v8 schema to v9: explicit fts_rowid for DoltLite compatibility.
+
+    DoltLite does not expose an implicit ``rowid`` on tables with a TEXT PRIMARY
+    KEY, so FTS5 triggers and joins break. We add an explicit ``fts_rowid``
+    column, backfill it for existing rows, rebuild the FTS index, and rewrite
+    the triggers to reference ``fts_rowid``.
+    """
+    from .schema import (
+        _CREATE_MEMORIES_FTS,
+        _INDEX_FTS_ROWID,
+        _TRIGGER_FTS_DELETE,
+        _TRIGGER_FTS_INSERT,
+        _TRIGGER_FTS_UPDATE,
+        next_fts_rowid,
+    )
+
+    conn = get_connection(db_path)
+    init_schema(conn)
+
+    version_row = conn.execute(_VERSION_SQL).fetchone()
+    old_version = int(version_row["value"]) if version_row else 8
+
+    existing = {
+        row[1] for row in conn.execute("PRAGMA table_info(memories)").fetchall()
+    }
+    if "fts_rowid" not in existing:
+        conn.execute("ALTER TABLE memories ADD COLUMN fts_rowid INTEGER")
+        conn.execute(_INDEX_FTS_ROWID)
+
+    # Backfill existing rows with a stable, monotonically increasing fts_rowid.
+    rows = conn.execute(
+        "SELECT id FROM memories WHERE fts_rowid IS NULL ORDER BY created_at, id"
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE memories SET fts_rowid = ? WHERE id = ?",
+            (next_fts_rowid(conn), row["id"]),
+        )
+
+    # Rebuild FTS index using the explicit column.
+    conn.execute("DROP TABLE IF EXISTS memories_fts")
+    conn.execute(_CREATE_MEMORIES_FTS)
+    conn.execute(
+        "INSERT INTO memories_fts(rowid, title, content, tags) "
+        "SELECT fts_rowid, COALESCE(title, ''), content, tags "
+        "FROM memories WHERE deleted_at IS NULL "
+        "AND (superseded_by IS NULL OR superseded_by = '')"
+    )
+
+    # Drop old triggers referencing rowid and recreate the v9 ones.
+    conn.execute("DROP TRIGGER IF EXISTS memories_fts_ai")
+    conn.execute("DROP TRIGGER IF EXISTS memories_fts_au")
+    conn.execute("DROP TRIGGER IF EXISTS memories_fts_ad")
+    for sql in (
+        _TRIGGER_FTS_INSERT,
+        _TRIGGER_FTS_UPDATE,
+        _TRIGGER_FTS_DELETE,
+    ):
+        conn.execute(sql)
+
+    conn.execute(_SET_VERSION_SQL, ("version", "9"))
+    conn.execute("PRAGMA user_version = 9")
+    conn.commit()
+    conn.close()
+
+    return {"old_version": old_version, "new_version": 9}

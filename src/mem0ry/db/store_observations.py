@@ -5,9 +5,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .connection import get_connection
-from .schema import init_schema
 from ._helpers import _now_iso
+from .connection import get_connection
+from .doltlite_sync import maybe_auto_commit
+from .schema import init_schema
 from .store_audit import record_audit
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ def create_observation(
             (obs_id, session_id, kind, agent, cwd, project_id, title, body, now),
         )
         conn.commit()
+        maybe_auto_commit(conn)
     finally:
         conn.close()
 
@@ -62,6 +64,7 @@ def delete_observation(db_path: Path, observation_id: str) -> bool:
             "DELETE FROM observations WHERE id = ?", (observation_id,)
         )
         conn.commit()
+        maybe_auto_commit(conn)
         affected = cursor.rowcount
     finally:
         conn.close()

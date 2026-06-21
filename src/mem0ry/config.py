@@ -89,3 +89,9 @@ class MemoryConfig:
     cors_origins: str = os.environ.get("MEM0RY_CORS_ORIGINS", "")
     compress_enabled: bool = os.environ.get("MEM0RY_COMPRESS", "0") == "1"
     compress_log: bool = os.environ.get("MEM0RY_COMPRESS_LOG", "0") == "1"
+    # DoltLite version-control sync settings. DoltLite is opt-in/experimental;
+    # when disabled the system runs on plain SQLite.
+    sync_remote: str | None = os.environ.get("MEM0RY_SYNC_REMOTE", None)
+    sync_branch: str = os.environ.get("MEM0RY_SYNC_BRANCH", "main")
+    sync_auto_commit: bool = os.environ.get("MEM0RY_SYNC_AUTO_COMMIT", "1") == "1"
+    sync_engine: str = os.environ.get("MEM0RY_SYNC_ENGINE", "auto")

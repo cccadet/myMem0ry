@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from .connection import get_connection
+from .doltlite_sync import maybe_auto_commit
 from .schema import init_schema
-
 
 _TIER_MAP: dict[str, str] = {
     "log": "working",
@@ -92,6 +92,7 @@ def pin_memory(db_path: Path, memory_id: str) -> bool:
             (memory_id,),
         )
         conn.commit()
+        maybe_auto_commit(conn)
         affected = cursor.rowcount
     finally:
         conn.close()
@@ -106,6 +107,7 @@ def unpin_memory(db_path: Path, memory_id: str) -> bool:
             "UPDATE memories SET pinned = 0 WHERE id = ?", (memory_id,)
         )
         conn.commit()
+        maybe_auto_commit(conn)
         affected = cursor.rowcount
     finally:
         conn.close()
@@ -196,6 +198,7 @@ def forget_sweep(
                 hard_delete_ids,
             )
             conn.commit()
+            maybe_auto_commit(conn)
 
         candidates = conn.execute(
             "SELECT id, memory_type, created_at, access_count, last_accessed_at, "
@@ -221,6 +224,7 @@ def forget_sweep(
 
         if not dry_run and to_soft_delete:
             conn.commit()
+            maybe_auto_commit(conn)
     finally:
         conn.close()
 
@@ -262,6 +266,7 @@ def update_salience_for_all(db_path: Path) -> int:
             updated += 1
 
         conn.commit()
+        maybe_auto_commit(conn)
     finally:
         conn.close()
     return updated

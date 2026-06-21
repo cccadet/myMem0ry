@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mem0ry.db.connection import get_connection
 from mem0ry.db.schema import init_schema

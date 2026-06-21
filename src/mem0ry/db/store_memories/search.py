@@ -4,6 +4,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from ..connection import get_connection
+from ..schema import init_schema
 from .helpers import (
     _DEFAULT_ORDER_M,
     _JOIN_AND,
@@ -13,8 +15,6 @@ from .helpers import (
     _normalize,
     _query_terms,
 )
-from ..connection import get_connection
-from ..schema import init_schema
 from .lifecycle import track_reads
 
 
@@ -166,7 +166,7 @@ def _search_fts(
     where = _JOIN_AND.join(conditions)
     sql = (
         "SELECT m.* FROM memories m "
-        "JOIN memories_fts fts ON m.rowid = fts.rowid "
+        "JOIN memories_fts fts ON m.fts_rowid = fts.rowid "
         f"WHERE fts.memories_fts MATCH ? AND {where} "  # nosec B608
         "ORDER BY fts.rank "
         "LIMIT ? OFFSET ?"

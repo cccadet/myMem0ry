@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from mem0ry.parsers.base import ParsedConversation, ParsedMessage
 from mem0ry.dataset.builder import (
     ChatMLExample,
-    build_chatml_examples,
-    _resolve_prompt,
     _build_messages,
+    _resolve_prompt,
     _split_messages,
+    build_chatml_examples,
 )
+from mem0ry.parsers.base import ParsedConversation, ParsedMessage
 
 
 def _make_conv(

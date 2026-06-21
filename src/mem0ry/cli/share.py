@@ -6,7 +6,12 @@ from pathlib import Path
 import typer
 
 from ..config import MemoryConfig
-from ..db.store import export_memories, export_handoffs, import_memories, import_handoffs
+from ..db.store import (
+    export_handoffs,
+    export_memories,
+    import_handoffs,
+    import_memories,
+)
 from ._app import app
 
 

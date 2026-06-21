@@ -8,7 +8,6 @@ from typing import Any
 
 from .i18n import t
 
-
 _TITLE_AUDIT = "Audit Log"
 _NO_DB = '<div class="card"><p>No database found.</p></div>'
 

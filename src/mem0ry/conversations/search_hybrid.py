@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .embeddings import SpacyEncoder
 from .search_bm25 import search_bm25
 from .vector_store import VectorStore
-from .embeddings import SpacyEncoder
 
 
 def _rrf_fuse(

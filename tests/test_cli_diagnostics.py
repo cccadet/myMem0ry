@@ -95,6 +95,7 @@ def test_doctor_all_ok(capsys: pytest.CaptureFixture[str], tmp_path: Path, monke
 
     with (
         patch("mem0ry.cli.diagnostics._check_spacy") as check_spacy,
+        patch("mem0ry.cli.diagnostics._check_doltlite") as check_doltlite,
         patch("mem0ry.cli.diagnostics._check_db") as check_db,
         patch("mem0ry.cli.diagnostics._check_index") as check_index,
     ):
@@ -103,6 +104,7 @@ def test_doctor_all_ok(capsys: pytest.CaptureFixture[str], tmp_path: Path, monke
     captured = capsys.readouterr()
     assert "tudo OK" in captured.out
     check_spacy.assert_called_once()
+    check_doltlite.assert_called_once()
     check_db.assert_called_once()
     assert check_index.call_count == 3
 
@@ -140,8 +142,8 @@ def test_check_db_ok_when_exists(capsys: pytest.CaptureFixture[str], tmp_path: P
 
     db_path = tmp_path / "memories.db"
     # Create a minimal DB with schema_meta so init_schema works.
-    from mem0ry.db.schema import init_schema
     from mem0ry.db.connection import get_connection
+    from mem0ry.db.schema import init_schema
 
     conn = get_connection(db_path)
     init_schema(conn)

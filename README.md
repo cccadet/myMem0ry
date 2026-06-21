@@ -220,6 +220,10 @@ All via environment variables (or `.env` file in the project root):
 | `MEM0RY_TOKEN` | _(empty)_ | Bearer token for HTTP auth (skip = no auth) |
 | `MEM0RY_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host allowlist (DNS rebinding protection) |
 | `MEM0RY_CORS_ORIGINS` | _(empty)_ | CORS origins for web UI |
+| `MEM0RY_SYNC_ENGINE` | `auto` | Engine selection for new DBs: `auto`, `doltlite`, `sqlite` |
+| `MEM0RY_SYNC_REMOTE` | _(unset)_ | DoltLite remote URL (`file://` or `http://`) |
+| `MEM0RY_SYNC_BRANCH` | `main` | Default branch for `mymem0ry sync` |
+| `MEM0RY_SYNC_AUTO_COMMIT` | `1` | Auto-commit each write on DoltLite when `1` |
 
 ```bash
 # Custom storage location
@@ -230,6 +234,89 @@ export CONVERSATIONS_DIR=/path/to/shared/conversations
 export SPACY_MODEL=pt_core_news_lg
 mymem0ry doctor
 ```
+
+## DoltLite sync (experimental)
+
+myMem0ry can use [DoltLite](https://github.com/dolthub/doltlite) for version-controlled memory storage with push/pull/merge. DoltLite is opt-in and falls back to plain SQLite when unavailable.
+
+### Setup
+
+```bash
+# 1. Use a Python with _sqlite3 as a shared extension
+#    (Homebrew/distro/pyenv/conda — NOT uv python install)
+
+# 2. Install the DoltLite binding
+pip install doltlite
+
+# 3. Initialize the database with a remote
+export MEM0RY_SYNC_ENGINE=doltlite
+export MEM0RY_SYNC_REMOTE=file:///path/to/shared/remote.doltlite
+mymem0ry sync init --remote $MEM0RY_SYNC_REMOTE
+```
+
+### Sync commands
+
+```bash
+mymem0ry sync push              # push current branch to remote
+mymem0ry sync pull              # pull and merge remote changes
+mymem0ry sync status            # show branch/status/recent commits
+```
+
+### Remote types
+
+- **`file://`** — shared folder, NFS, or synced cloud directory (Dropbox, iCloud Drive, Syncthing).
+- **`http://` / `https://`** — DoltLite remote server (dolt remote-server or compatible endpoint).
+
+```bash
+# HTTP remote example
+export MEM0RY_SYNC_REMOTE=https://dolt-server.example.com/myrepo
+mymem0ry sync init --remote $MEM0RY_SYNC_REMOTE
+```
+
+### Syncing everything across machines
+
+DoltLite syncs only the structured memories DB (`DB_PATH`). The rest of the data lives in `data/`:
+
+- `data/conversations/*.md` — archived conversation files
+- `data/conversations/.vec.db` — sqlite-vec embedding index
+- `data/conversations/.bm25_index.pkl` — BM25 index
+- `data/conversations/.fts5_index.db` — conversation FTS5 index
+
+Use a separate git repository for `data/`:
+
+```bash
+# Machine A
+cd data
+git init
+git add .
+git commit -m "initial memory data"
+git remote add origin https://github.com/you/my-mem0ry-data.git
+git push -u origin main
+
+# Machine B
+git clone https://github.com/you/my-mem0ry-data.git data
+```
+
+After pulling `data/` on machine B, run `mymem0ry sync pull` to merge any DoltLite DB changes. Rebuild conversation indexes if needed:
+
+```bash
+mymem0ry index --backend vector
+mymem0ry index --backend bm25
+mymem0ry index --backend fts5
+```
+
+### Conflict resolution
+
+DoltLite merges branches automatically when possible. If the same memory was edited on two machines, a conflict is created. Resolve it keeping the local version:
+
+```bash
+mymem0ry sync pull
+# if conflicts are reported:
+# sqlite3 $DB_PATH "SELECT dolt_conflicts_resolve('--ours', 'memories');"
+# sqlite3 $DB_PATH "SELECT dolt_commit('-m', 'resolve conflict');"
+```
+
+> **Python compatibility:** DoltLite requires a Python build where `_sqlite3` is a shared extension. It does **not** work with `uv python install` (python-build-standalone). Use Homebrew, distro, pyenv, or conda Python instead.
 
 ## Import Conversations
 

@@ -6,11 +6,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .helpers import _validate_memory_type, _validate_scope, _validate_source
-from ..connection import get_connection
-from ..schema import init_schema
 from .._helpers import _now_iso
+from ..connection import get_connection
+from ..doltlite_sync import maybe_auto_commit
+from ..schema import init_schema
 from ..store_audit import record_audit
+from .helpers import _validate_memory_type, _validate_scope, _validate_source
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ def create_memory(
     tags_json = json.dumps(tags or [])
 
     from ..retention import compute_salience
+    from ..schema import next_fts_rowid
 
     salience = compute_salience(memory_type, now, 0, None)
     pinned = 1 if memory_type in ("fact", "decision") else 0
@@ -44,13 +46,15 @@ def create_memory(
     conn = get_connection(db_path)
     try:
         init_schema(conn)
+        fts_rowid = next_fts_rowid(conn)
         conn.execute(
-            "INSERT INTO memories(id, content, scope, project_id, project_path, context, "
+            "INSERT INTO memories(id, fts_rowid, content, scope, project_id, project_path, context, "
             "session_id, memory_type, source, tags, title, created_at, file_path, "
             "access_count, last_accessed_at, salience, pinned) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
             (
                 mem_id,
+                fts_rowid,
                 content,
                 scope,
                 project_id,
@@ -69,6 +73,7 @@ def create_memory(
             ),
         )
         conn.commit()
+        maybe_auto_commit(conn)
     finally:
         conn.close()
 
@@ -145,6 +150,7 @@ def update_memory(
             params,
         )
         conn.commit()
+        maybe_auto_commit(conn)
         affected = cursor.rowcount
     finally:
         conn.close()
@@ -189,6 +195,7 @@ def restore_memory(db_path: Path, memory_id: str) -> bool:
             (memory_id,),
         )
         conn.commit()
+        maybe_auto_commit(conn)
         affected = cursor.rowcount
     finally:
         conn.close()
@@ -216,6 +223,7 @@ def delete_memory(db_path: Path, memory_id: str) -> bool:
         (now, memory_id),
     )
     conn.commit()
+    maybe_auto_commit(conn)
     affected = cursor.rowcount
     conn.close()
 

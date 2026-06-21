@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mem0ry.conversations.search import search, _check_rg
+from mem0ry.conversations.search import _check_rg, search
 
 
 def test_check_rg_raises_when_missing() -> None:

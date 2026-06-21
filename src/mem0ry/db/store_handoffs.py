@@ -9,9 +9,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .connection import get_connection
-from .schema import init_schema
 from ._helpers import _now_iso
+from .connection import get_connection
+from .doltlite_sync import maybe_auto_commit
+from .schema import init_schema
 from .store_audit import record_audit
 from .store_observations import get_session_observations
 
@@ -109,6 +110,7 @@ def begin_handoff(
             ),
         )
         conn.commit()
+        maybe_auto_commit(conn)
     finally:
         conn.close()
 
@@ -158,6 +160,7 @@ def accept_handoff(
             (accepted_by, now, ho["id"]),
         )
         conn.commit()
+        maybe_auto_commit(conn)
 
         ho["status"] = "accepted"
         ho["accepted_by"] = accepted_by
@@ -314,6 +317,7 @@ def close_handoff(db_path: Path, handoff_id: str) -> bool:
             (handoff_id,),
         )
         conn.commit()
+        maybe_auto_commit(conn)
         changed = cur.rowcount > 0
     finally:
         conn.close()
@@ -338,6 +342,7 @@ def delete_handoff(db_path: Path, handoff_id: str) -> bool:
         init_schema(conn)
         cur = conn.execute("DELETE FROM handoffs WHERE id = ?", (handoff_id,))
         conn.commit()
+        maybe_auto_commit(conn)
         changed = cur.rowcount > 0
     finally:
         conn.close()
@@ -364,6 +369,7 @@ def _expire_old_handoffs(conn: sqlite3.Connection) -> None:
         (now,),
     )
     conn.commit()
+    maybe_auto_commit(conn)
 
 
 def export_handoffs(
@@ -450,6 +456,7 @@ def import_handoffs(
             )
             imported += 1
         conn.commit()
+        maybe_auto_commit(conn)
     finally:
         conn.close()
     return {"imported": imported, "skipped": skipped}

@@ -140,7 +140,7 @@ def _tag_html(scope: str, label: str) -> str:
 
 
 async def export_memories_page(request: Request) -> Response:
-    from ...db.store import export_memories, export_handoffs
+    from ...db.store import export_handoffs, export_memories
 
     form = await request.form()
     ids = [str(v) for v in form.getlist("ids")]
@@ -204,7 +204,7 @@ async def export_memories_page(request: Request) -> Response:
 
 
 async def import_memories_page(request: Request) -> Any:
-    from ...db.store import import_memories, import_handoffs
+    from ...db.store import import_handoffs, import_memories
 
     lang = get_lang(request)
     form = await request.form()

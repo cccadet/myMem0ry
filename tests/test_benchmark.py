@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from mem0ry.conversations.benchmark import run_benchmark, format_table
+from mem0ry.conversations.benchmark import format_table, run_benchmark
 
 
 def test_format_table_basic() -> None:

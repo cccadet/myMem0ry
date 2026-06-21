@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import sqlite3
 
-_SCHEMA_VERSION = 8
+_SCHEMA_VERSION = 9
 
 _CREATE_MEMORIES = """
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
+    fts_rowid INTEGER UNIQUE,
     content TEXT NOT NULL,
     scope TEXT NOT NULL DEFAULT 'global',
     project_id TEXT,
@@ -168,6 +169,11 @@ CREATE INDEX IF NOT EXISTS idx_memories_superseded
 ON memories(superseded_by)
 """
 
+_INDEX_FTS_ROWID = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_fts_rowid
+ON memories(fts_rowid)
+"""
+
 _CREATE_MEMORIES_FTS = """
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
     title, content, tags,
@@ -180,16 +186,16 @@ CREATE TRIGGER IF NOT EXISTS memories_fts_ai AFTER INSERT ON memories
 WHEN NEW.deleted_at IS NULL AND (NEW.superseded_by IS NULL OR NEW.superseded_by = '')
 BEGIN
     INSERT INTO memories_fts(rowid, title, content, tags)
-    VALUES (NEW.rowid, COALESCE(NEW.title, ''), NEW.content, NEW.tags);
+    VALUES (NEW.fts_rowid, COALESCE(NEW.title, ''), NEW.content, NEW.tags);
 END
 """
 
 _TRIGGER_FTS_UPDATE = """
 CREATE TRIGGER IF NOT EXISTS memories_fts_au AFTER UPDATE ON memories
 BEGIN
-    DELETE FROM memories_fts WHERE rowid = OLD.rowid;
+    DELETE FROM memories_fts WHERE rowid = OLD.fts_rowid;
     INSERT INTO memories_fts(rowid, title, content, tags)
-    SELECT NEW.rowid, COALESCE(NEW.title, ''), NEW.content, NEW.tags
+    SELECT NEW.fts_rowid, COALESCE(NEW.title, ''), NEW.content, NEW.tags
     WHERE NEW.deleted_at IS NULL
       AND (NEW.superseded_by IS NULL OR NEW.superseded_by = '');
 END
@@ -198,12 +204,15 @@ END
 _TRIGGER_FTS_DELETE = """
 CREATE TRIGGER IF NOT EXISTS memories_fts_ad AFTER DELETE ON memories
 BEGIN
-    DELETE FROM memories_fts WHERE rowid = OLD.rowid;
+    DELETE FROM memories_fts WHERE rowid = OLD.fts_rowid;
 END
 """
 
 
 _EXTRA_COLUMNS: list[tuple[str, str]] = [
+    # fts_rowid is added without UNIQUE here because SQLite ALTER TABLE cannot
+    # add a UNIQUE column. The unique index is created separately below.
+    ("fts_rowid", "INTEGER"),
     ("project_id", "TEXT"),
     ("project_path", "TEXT"),
     ("context", "TEXT"),
@@ -231,6 +240,57 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
     for col_name, col_def in _EXTRA_COLUMNS:
         if col_name not in existing:
             conn.execute(f"ALTER TABLE memories ADD COLUMN {col_name} {col_def}")
+
+
+def next_fts_rowid(conn: sqlite3.Connection) -> int:
+    """Return the next available fts_rowid for the memories table.
+
+    SQLite exposes an implicit rowid, but DoltLite does not for tables with a
+    TEXT PRIMARY KEY. We maintain an explicit ``fts_rowid`` column so FTS5
+    indexing works on both engines.
+    """
+    row = conn.execute("SELECT COALESCE(MAX(fts_rowid), 0) + 1 FROM memories").fetchone()
+    return int(row[0]) if row else 1
+
+
+def _ensure_v9(conn: sqlite3.Connection) -> None:
+    """Migrate v8 schema to v9 in-place using an open connection."""
+    existing = {
+        row[1] for row in conn.execute("PRAGMA table_info(memories)").fetchall()
+    }
+    if "fts_rowid" not in existing:
+        conn.execute("ALTER TABLE memories ADD COLUMN fts_rowid INTEGER")
+        conn.execute(_INDEX_FTS_ROWID)
+
+    rows = conn.execute(
+        "SELECT id FROM memories WHERE fts_rowid IS NULL ORDER BY created_at, id"
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE memories SET fts_rowid = ? WHERE id = ?",
+            (next_fts_rowid(conn), row["id"]),
+        )
+
+    conn.execute("DROP TABLE IF EXISTS memories_fts")
+    conn.execute(_CREATE_MEMORIES_FTS)
+    conn.execute(
+        "INSERT INTO memories_fts(rowid, title, content, tags) "
+        "SELECT fts_rowid, COALESCE(title, ''), content, tags "
+        "FROM memories WHERE deleted_at IS NULL "
+        "AND (superseded_by IS NULL OR superseded_by = '')"
+    )
+
+    conn.execute("DROP TRIGGER IF EXISTS memories_fts_ai")
+    conn.execute("DROP TRIGGER IF EXISTS memories_fts_au")
+    conn.execute("DROP TRIGGER IF EXISTS memories_fts_ad")
+    for sql in (_TRIGGER_FTS_INSERT, _TRIGGER_FTS_UPDATE, _TRIGGER_FTS_DELETE):
+        conn.execute(sql)
+
+    conn.execute(
+        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
+        ("version", str(_SCHEMA_VERSION)),
+    )
+    conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
@@ -271,6 +331,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
         _INDEX_AUDIT_TARGET,
         _INDEX_AUDIT_CREATED,
         _INDEX_SUPERSEDED,
+        _INDEX_FTS_ROWID,
         _CREATE_MEMORIES_FTS,
     ):
         conn.execute(sql)
@@ -280,6 +341,11 @@ def init_schema(conn: sqlite3.Connection) -> None:
         _TRIGGER_FTS_DELETE,
     ):
         conn.execute(sql)
+
+    # Existing databases from schema v8 need the explicit fts_rowid migration.
+    if v == 8:
+        _ensure_v9(conn)
+
     conn.execute(
         "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)",
         ("version", str(_SCHEMA_VERSION)),

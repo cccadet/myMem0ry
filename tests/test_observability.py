@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from mem0ry.db.connection import get_connection
 from mem0ry.db.schema import init_schema
-from mem0ry.db.store import create_memory, record_audit, query_audit_log
+from mem0ry.db.store import create_memory, query_audit_log, record_audit
 
 
 def _setup_db(tmp_path: Path) -> Path:

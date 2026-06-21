@@ -3,11 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .helpers import _NOT_SUPERSEDED
 from ..connection import get_connection
 from ..schema import init_schema
+from .helpers import _NOT_SUPERSEDED
 from .lifecycle import track_reads
-
 
 _ORDER = "ORDER BY pinned DESC, salience DESC, created_at DESC"
 

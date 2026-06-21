@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
-from mem0ry.pipeline.dataset import _write_jsonl, _write_json
+from mem0ry.pipeline.dataset import _write_json, _write_jsonl
 
 
 def test_write_jsonl_creates_file(tmp_path: Path) -> None:

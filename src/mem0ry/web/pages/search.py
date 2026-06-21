@@ -10,7 +10,7 @@ from ...db.schema import init_schema
 from ...db.store_memories.helpers import _query_terms_raw
 from ..i18n import get_lang, get_theme, t
 from ..templates import _db_path, _layout, _memory_card
-from .shared import PAGE_SIZE, SOURCES, SORTS
+from .shared import PAGE_SIZE, SORTS, SOURCES
 
 
 def _build_filters(

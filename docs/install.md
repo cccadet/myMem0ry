@@ -281,3 +281,57 @@ mymem0ry split                        # Auto-detect all
 mymem0ry index                        # Build search indexes
 mymem0ry migrate --reprocess          # Migrate into structured memories
 ```
+
+### DoltLite sync (experimental)
+
+For cross-machine memory sync, myMem0ry supports [DoltLite](https://github.com/dolthub/doltlite) as a version-controlled backend for the memories DB.
+
+Requirements:
+
+- Python with `_sqlite3` as a shared extension (Homebrew, distro, pyenv, conda). It does **not** work with `uv python install`.
+- `pip install doltlite`
+
+Setup:
+
+```bash
+export MEM0RY_SYNC_ENGINE=doltlite
+export MEM0RY_SYNC_REMOTE=file:///path/to/shared/remote.doltlite
+mymem0ry sync init --remote $MEM0RY_SYNC_REMOTE
+mymem0ry sync push
+```
+
+Remote types:
+
+- `file://` — shared folder / synced cloud drive.
+- `http://` / `https://` — DoltLite remote server.
+
+Full cross-machine workflow:
+
+1. Sync the memories DB via DoltLite:
+   ```bash
+   mymem0ry sync push   # on machine A
+   mymem0ry sync pull   # on machine B
+   ```
+2. Sync conversation files and indexes via git:
+   ```bash
+   cd data
+   git init
+   git remote add origin https://github.com/you/my-mem0ry-data
+   git add .
+   git commit -m "initial data"
+   git push
+   ```
+3. On a new machine:
+   ```bash
+   git clone https://github.com/you/my-mem0ry-data.git data
+   mymem0ry sync init --remote $MEM0RY_SYNC_REMOTE
+   mymem0ry sync pull
+   mymem0ry index --backend vector
+   ```
+
+Resolve DoltLite conflicts keeping the local version:
+
+```bash
+sqlite3 $DB_PATH "SELECT dolt_conflicts_resolve('--ours', 'memories');"
+sqlite3 $DB_PATH "SELECT dolt_commit('-m', 'resolve conflict');"
+```

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mem0ry.db.connection import get_connection
 from mem0ry.db.schema import init_schema
 from mem0ry.db.store import (
+    accept_handoff,
     auto_handoff_from_session,
     begin_handoff,
-    accept_handoff,
     create_observation,
     pending_handoff,
 )
