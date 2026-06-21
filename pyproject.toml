@@ -33,6 +33,9 @@ dependencies = [
     "spacy>=3.8",
     "mcp[cli]>=1.0",
     "sqlite-vec>=0.1.9",
+    "onnxruntime>=1.27.0",
+    "huggingface-hub>=1.16.1",
+    "tokenizers>=0.23.1",
 ]
 
 [project.urls]
@@ -44,6 +47,11 @@ Changelog = "https://github.com/cccadet/myMem0ry/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
 compress = ["headroom-ai[code]"]
+# DoltLite sync requires a Python build where _sqlite3 is a shared extension.
+# It does NOT work with uv/python-build-standalone Python; use distro/homebrew/pyenv.
+sync = [
+    "doltlite>=0.11.15",
+]
 
 [project.scripts]
 mymem0ry = "mem0ry.cli.main:app"
@@ -88,7 +96,15 @@ runner = "uv run pytest -x --tb=short -q"
 do_not_mutate = ["test_*", "__init__.py"]
 
 [[tool.mypy.overrides]]
-module = ["sqlite_vec", "rank_bm25", "spacy.*"]
+module = [
+    "sqlite_vec",
+    "rank_bm25",
+    "spacy.*",
+    "onnxruntime",
+    "huggingface_hub",
+    "tokenizers",
+    "doltlite",
+]
 ignore_missing_imports = true
 
 [tool.bandit]

@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Pluggable vector encoder backend** — vector/hybrid search can now use
+  `nomic-ai/nomic-embed-text-v1.5` via ONNX Runtime instead of spaCy doc vectors.
+  Set `VECTOR_ENCODER_MODEL=nomic` to switch; default remains `spacy` for
+  backward compatibility. Query expansion (`mymem0ry expand`) continues to use
+  spaCy word vectors regardless of this setting.
+- **`sync` optional dependency** — `pip install mymem0ry[sync]` installs the
+  DoltLite binding for version-controlled memory sync.
+
+### Changed
+
+- `src/mem0ry/conversations/embeddings.py` is now a compatibility re-export;
+  the `SpacyEncoder` implementation moved to
+  `src/mem0ry/conversations/encoders/spacy.py` and a shared `TextEncoder`
+  protocol was introduced.
+
 ## [0.26.0] - 2026-06-11
 
 ### Added

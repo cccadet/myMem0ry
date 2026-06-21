@@ -54,6 +54,10 @@ class MemoryConfig:
     search_top_k: int = int(os.environ.get("SEARCH_TOP_K", "3"))
     search_backend: str = os.environ.get("SEARCH_BACKEND", "ripgrep")
     spacy_model: str = os.environ.get("SPACY_MODEL", "en_core_web_lg")
+    # Encoder used for the vector/hybrid search backend. "spacy" keeps the
+    # historical behaviour (same model as query expansion); "nomic" switches to
+    # the lighter ONNX Runtime implementation of nomic-embed-text-v1.
+    vector_encoder_model: str = os.environ.get("VECTOR_ENCODER_MODEL", "spacy")
     system_prompt: str | None = os.environ.get("SYSTEM_PROMPT", None)
     vector_db_path: str = _resolve_file_path(
         os.environ.get("VECTOR_DB_PATH", str(_DATA_DIR / "conversations" / ".vec.db")),

@@ -82,13 +82,13 @@ def test_search_conversations_bm25(tmp_path: Path) -> None:
     assert len(result) == 1
 
 
-@patch("mem0ry.conversations.embeddings.SpacyEncoder")
+@patch("mem0ry.conversations.encoders.get_encoder")
 @patch("mem0ry.conversations.vector_store.VectorStore")
 @patch("mem0ry.conversations.search_hybrid.search_hybrid")
 def test_search_conversations_hybrid(
     mock_hybrid: MagicMock,
     mock_store_cls: MagicMock,
-    _mock_encoder_cls: MagicMock,
+    mock_get_encoder: MagicMock,
     tmp_path: Path,
 ) -> None:
     import mem0ry.mcp_server as mod
@@ -99,6 +99,9 @@ def test_search_conversations_hybrid(
     mock_hybrid.return_value = [conv / "chat.md"]
     mock_store = MagicMock()
     mock_store_cls.return_value = mock_store
+    mock_encoder = MagicMock()
+    mock_encoder.dim = 768
+    mock_get_encoder.return_value = mock_encoder
 
     with (
         patch.object(mod, "_conversations_dir", return_value=conv),

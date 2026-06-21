@@ -15,15 +15,15 @@ from ._app import _DEFAULT_SOURCES, app
 
 
 def _build_vector_index(conv_dir: Path, config: MemoryConfig) -> None:
-    from ..conversations.embeddings import SpacyEncoder
+    from ..conversations.encoders import get_encoder
     from ..conversations.vector_store import VectorStore
 
-    typer.echo(f"[vector] Carregando spaCy ({config.spacy_model})...")
-    encoder = SpacyEncoder(model_name=config.spacy_model)
+    typer.echo(f"[vector] Carregando encoder ({config.vector_encoder_model})...")
+    encoder = get_encoder(config)
 
     vec_path = Path(config.vector_db_path)
     vec_path.parent.mkdir(parents=True, exist_ok=True)
-    store = VectorStore(vec_path, dim=config.embedding_dim)
+    store = VectorStore(vec_path, dim=encoder.dim)
 
     files = sorted(conv_dir.rglob("*.md"))
     if not files:
@@ -154,11 +154,11 @@ def search(
     t0 = time.perf_counter()
 
     if backend == "hybrid":
-        from ..conversations.embeddings import SpacyEncoder
+        from ..conversations.encoders import get_encoder
         from ..conversations.vector_store import VectorStore
 
-        encoder = SpacyEncoder(model_name=config.spacy_model)
-        vec_store = VectorStore(Path(config.vector_db_path), dim=config.embedding_dim)
+        encoder = get_encoder(config)
+        vec_store = VectorStore(Path(config.vector_db_path), dim=encoder.dim)
         paths = search_hybrid(
             effective_query,
             conv_dir,

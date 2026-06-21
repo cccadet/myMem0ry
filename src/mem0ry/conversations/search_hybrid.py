@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .embeddings import SpacyEncoder
+from .encoders.base import TextEncoder
 from .search_bm25 import search_bm25
 from .vector_store import VectorStore
 
@@ -28,7 +28,7 @@ def _rrf_fuse(
 def search_hybrid(
     query: str,
     conversations_dir: Path,
-    encoder: SpacyEncoder,
+    encoder: TextEncoder,
     vec_store: VectorStore,
     top_k: int = 5,
     rrf_k: int = 60,

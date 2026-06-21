@@ -226,6 +226,8 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 
 ## DoltLite sync (experimental)
 
+- Install the optional dependency: `pip install mymem0ry[sync]` or
+  `uv sync --extra sync`.
 - `db/connection.py` auto-detects DoltLite when the binding is installed and the database file was created as DoltLite. Plain SQLite remains the default/fallback.
 - `db/doltlite_sync.py` centralizes version-control helpers (`auto_commit`, `dolt_push`, `dolt_pull`, etc.).
 - `cli/sync.py` exposes `mymem0ry sync {init,push,pull,status}`.
@@ -249,7 +251,8 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 | `CONVERSATIONS_DIR` | `data/conversations` | Archived conversation `.md` files |
 | `MEMORIES_DIR` | `data/memories` | Curated memory `.md` exports (kept separate from conversations) |
 | `MEM0RY_SPOOL_DIR` | `<db_dir>/spool` | Drop-box for lifecycle events the hook can't POST |
-| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for embeddings + search |
+| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for query expansion |
+| `VECTOR_ENCODER_MODEL` | `spacy` | Vector search encoder: `spacy` or `nomic` (ONNX) |
 | `MEM0RY_HOST` | `127.0.0.1` | HTTP host |
 | `MEM0RY_PORT` | `49374` | HTTP port |
 | `MEM0RY_TOKEN` | _(empty)_ | Bearer token (empty = no auth) |
@@ -259,7 +262,7 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 | `MEM0RY_NO_UPDATE_CHECK` | _(unset)_ | Set `1` to skip CLI update check (CI does this via `tests/conftest.py:3`) |
 | `MEM0RY_COMPRESS` | `0` | Set `1` to enable headroom-ai compression of `get_context()` results |
 | `MEM0RY_COMPRESS_LOG` | `0` | Set `1` to log compression details for debugging |
-| `EMBEDDING_DIM` | `300` | Vector dimensionality (must match spaCy model) |
+| `EMBEDDING_DIM` | `300` | Default vector dimensionality; actual size comes from the active encoder (`300` for spaCy, `768` for Nomic) |
 | `RRF_K` | `60` | RRF fusion constant |
 | `EXPAND_TOP_K` | `10` | spaCy concept expansion depth |
 | `SEARCH_TOP_K` | `3` | Default search result count |

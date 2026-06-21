@@ -338,12 +338,12 @@ def search_conversations(
         logger.warning("query expansion unavailable; searching with raw query")
 
     if backend == "hybrid":
-        from .conversations.embeddings import SpacyEncoder
+        from .conversations.encoders import get_encoder
         from .conversations.search_hybrid import search_hybrid
         from .conversations.vector_store import VectorStore
 
-        encoder = SpacyEncoder(model_name=config.spacy_model)
-        vec_store = VectorStore(Path(config.vector_db_path), dim=config.embedding_dim)
+        encoder = get_encoder(config)
+        vec_store = VectorStore(Path(config.vector_db_path), dim=encoder.dim)
         paths = search_hybrid(
             effective_query,
             conv_dir,

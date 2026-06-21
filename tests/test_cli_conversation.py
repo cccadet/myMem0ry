@@ -12,10 +12,10 @@ from mem0ry.cli.main import app
 runner = CliRunner()
 
 
-@patch("mem0ry.conversations.embeddings.SpacyEncoder")
+@patch("mem0ry.conversations.encoders.get_encoder")
 @patch("mem0ry.conversations.vector_store.VectorStore")
 def test_build_vector_index_with_files(
-    mock_store_cls: MagicMock, mock_encoder_cls: MagicMock, tmp_path: Path
+    mock_store_cls: MagicMock, mock_get_encoder: MagicMock, tmp_path: Path
 ) -> None:
     from mem0ry.cli.conversation import _build_vector_index
     from mem0ry.config import MemoryConfig
@@ -26,7 +26,8 @@ def test_build_vector_index_with_files(
 
     mock_encoder = MagicMock()
     mock_encoder.encode.return_value = [0.1] * cfg.embedding_dim
-    mock_encoder_cls.return_value = mock_encoder
+    mock_encoder.dim = cfg.embedding_dim
+    mock_get_encoder.return_value = mock_encoder
     mock_store = MagicMock()
     mock_store_cls.return_value = mock_store
 
@@ -36,10 +37,10 @@ def test_build_vector_index_with_files(
     mock_store.close.assert_called_once()
 
 
-@patch("mem0ry.conversations.embeddings.SpacyEncoder")
+@patch("mem0ry.conversations.encoders.get_encoder")
 @patch("mem0ry.conversations.vector_store.VectorStore")
 def test_build_vector_index_no_files(
-    mock_store_cls: MagicMock, _mock_encoder_cls: MagicMock, tmp_path: Path
+    mock_store_cls: MagicMock, _mock_get_encoder: MagicMock, tmp_path: Path
 ) -> None:
     from mem0ry.cli.conversation import _build_vector_index
     from mem0ry.config import MemoryConfig
@@ -117,19 +118,22 @@ def test_search_with_expand(
     assert "Query expandida" in result.output
 
 
-@patch("mem0ry.conversations.embeddings.SpacyEncoder")
+@patch("mem0ry.conversations.encoders.get_encoder")
 @patch("mem0ry.conversations.vector_store.VectorStore")
 @patch("mem0ry.conversations.search_hybrid.search_hybrid")
 def test_search_hybrid_backend(
     mock_hybrid: MagicMock,
     mock_store_cls: MagicMock,
-    _mock_encoder_cls: MagicMock,
+    mock_get_encoder: MagicMock,
     tmp_path: Path,
 ) -> None:
     (tmp_path / "test.md").write_text("python", encoding="utf-8")
     mock_hybrid.return_value = [tmp_path / "test.md"]
     mock_store = MagicMock()
     mock_store_cls.return_value = mock_store
+    mock_encoder = MagicMock()
+    mock_encoder.dim = 768
+    mock_get_encoder.return_value = mock_encoder
 
     result = runner.invoke(
         app,

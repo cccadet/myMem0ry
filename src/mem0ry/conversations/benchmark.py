@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from .encoders.base import TextEncoder
 from .search import search
 from .search_bm25 import search_bm25
 from .search_fts import search_fts
@@ -19,8 +20,8 @@ def run_benchmark(
     query: str,
     conversations_dir: Path,
     top_k: int = 3,
-    encoder=None,
-    vec_store=None,
+    encoder: TextEncoder | None = None,
+    vec_store: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Run query across all backends and collect timing + results.
 
