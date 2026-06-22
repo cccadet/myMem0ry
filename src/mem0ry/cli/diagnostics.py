@@ -98,42 +98,23 @@ def _check_spacy(config: MemoryConfig, ok: Any, fail: Any) -> None:
         fail("spacy nao instalado")
 
 
-def _check_doltlite(config: MemoryConfig, ok: Any, warn: Any) -> None:
-    try:
-        import doltlite  # type: ignore[import-not-found]  # noqa: F401
-
-        ok("DoltLite binding disponivel")
-    except ImportError:
-        warn(
-            "DoltLite nao instalado. Sync remoto ficara indisponivel; "
-            "o sistema continuara usando SQLite puro."
-        )
-        return
-
-    if config.sync_remote:
-        ok(f"MEM0RY_SYNC_REMOTE={config.sync_remote}")
-    else:
-        warn("MEM0RY_SYNC_REMOTE nao configurado")
-
-
 def _check_db(config: MemoryConfig, ok: Any, warn: Any, fail: Any) -> None:
-    typer.echo("[4/7] Database")
+    typer.echo("[3/6] Database")
     db_path = Path(config.db_path)
     if not db_path.exists():
         warn(f"DB nao encontrado em {db_path} (corra mymem0ry migrate)")
         return
     try:
-        from ..db.connection import get_connection, is_doltlite_db
+        from ..db.connection import get_connection
         from ..db.schema import init_schema
 
         conn = get_connection(db_path)
         init_schema(conn)
-        engine = "DoltLite" if is_doltlite_db(conn) else "SQLite"
         row = conn.execute(
             "SELECT value FROM schema_meta WHERE key='version'"
         ).fetchone()
         conn.close()
-        ok(f"schema v{row['value']} em {db_path} ({engine})")
+        ok(f"schema v{row['value']} em {db_path} (SQLite)")
     except Exception as e:
         fail(f"erro ao abrir DB: {e}")
 
@@ -177,15 +158,12 @@ def doctor() -> None:
     except ImportError:
         fail("sqlite-vec nao instalado")
 
-    typer.echo("[3/7] DoltLite")
-    _check_doltlite(config, ok, warn)
-
     _check_db(config, ok, warn, fail)
 
     conv_dir = Path(config.conversations_dir)
-    _check_index("[5/7] Indice BM25", conv_dir / ".bm25_index.pkl", ok, warn, "bm25")
-    _check_index("[6/7] Indice FTS5", conv_dir / ".fts5_index.db", ok, warn, "fts5")
-    _check_index("[7/7] Indice vector", Path(config.vector_db_path), ok, warn, "vector")
+    _check_index("[4/6] Indice BM25", conv_dir / ".bm25_index.pkl", ok, warn, "bm25")
+    _check_index("[5/6] Indice FTS5", conv_dir / ".fts5_index.db", ok, warn, "fts5")
+    _check_index("[6/6] Indice vector", Path(config.vector_db_path), ok, warn, "vector")
 
     typer.echo("")
     if errors:

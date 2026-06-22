@@ -5,6 +5,7 @@ from __future__ import annotations
 import mem0ry.cli.backup  # noqa: F401
 import mem0ry.cli.conversation  # noqa: F401
 import mem0ry.cli.diagnostics  # noqa: F401
+import mem0ry.cli.git_sync  # noqa: F401
 import mem0ry.cli.handoff  # noqa: F401
 import mem0ry.cli.hooks  # noqa: F401
 import mem0ry.cli.memory  # noqa: F401
@@ -12,7 +13,6 @@ import mem0ry.cli.migration  # noqa: F401
 import mem0ry.cli.retention  # noqa: F401
 import mem0ry.cli.server  # noqa: F401
 import mem0ry.cli.share  # noqa: F401
-import mem0ry.cli.sync  # noqa: F401
 from mem0ry.cli._app import app  # noqa: F401
 from mem0ry.cli.conversation import _build_vector_index, _get_expander  # noqa: F401
 

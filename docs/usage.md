@@ -216,6 +216,31 @@ mymem0ry decay --days 90
 mymem0ry migrate --reprocess    # Drops DB, reingests all .md files
 ```
 
+## Cross-machine sync
+
+If you work on more than one machine, you can synchronize your myMem0ry data by keeping `data/` in a git repository and enabling auto-sync:
+
+```bash
+export MEM0RY_GIT_AUTO_SYNC=1
+```
+
+With auto-sync enabled:
+
+- `get_context()` pulls latest changes before reading.
+- Memory writes commit and push changes automatically.
+
+Daily workflow:
+
+```bash
+# Machine A: auto-sync pushes after each write; manual push if needed
+mymem0ry git-sync push
+
+# Machine B: pull before working
+mymem0ry git-sync pull
+```
+
+See the dedicated [`sync.md`](sync.md) guide for setup, `.gitignore` rules, conflict resolution, and limitations.
+
 ## Language support
 
 myMem0ry uses spaCy for embeddings and semantic search. The default model is English (`en_core_web_lg`).

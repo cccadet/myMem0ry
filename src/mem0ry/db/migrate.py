@@ -303,12 +303,12 @@ def migrate_v7_to_v8(db_path: Path) -> dict:
 
 
 def migrate_v8_to_v9(db_path: Path) -> dict:
-    """Upgrade v8 schema to v9: explicit fts_rowid for DoltLite compatibility.
+    """Upgrade v8 schema to v9: explicit fts_rowid for stable FTS5 indexing.
 
-    DoltLite does not expose an implicit ``rowid`` on tables with a TEXT PRIMARY
-    KEY, so FTS5 triggers and joins break. We add an explicit ``fts_rowid``
-    column, backfill it for existing rows, rebuild the FTS index, and rewrite
-    the triggers to reference ``fts_rowid``.
+    SQLite's implicit ``rowid`` is not guaranteed to stay stable across VACUUM
+    or exports. We add an explicit ``fts_rowid`` column, backfill it for
+    existing rows, rebuild the FTS index, and rewrite the triggers to reference
+    ``fts_rowid``.
     """
     from .schema import (
         _CREATE_MEMORIES_FTS,

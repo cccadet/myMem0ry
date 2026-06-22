@@ -9,7 +9,6 @@ from typing import Any
 
 from .._helpers import _now_iso
 from ..connection import get_connection
-from ..doltlite_sync import maybe_auto_commit
 from ..retention import forget_sweep, pin_memory, unpin_memory
 from ..schema import init_schema
 from ..store_audit import record_audit
@@ -46,7 +45,6 @@ def end_session(db_path: Path, session_id: str, summary: str | None = None) -> b
                 "UPDATE memories SET updated_at = ? WHERE id = ?", (now, row["id"])
             )
         conn.commit()
-        maybe_auto_commit(conn)
     finally:
         conn.close()
 
@@ -86,7 +84,6 @@ def touch_memory(db_path: Path, memory_id: str) -> bool:
             (now, memory_id),
         )
         conn.commit()
-        maybe_auto_commit(conn)
         affected = cursor.rowcount
     finally:
         conn.close()
@@ -104,7 +101,6 @@ def _track_reads_sync(db_path: Path, memory_ids: list[str]) -> None:
                 (now, mid),
             )
         conn.commit()
-        maybe_auto_commit(conn)
     except Exception as exc:
         logger.warning("Failed to track memory reads: %s", exc)
     finally:
@@ -143,7 +139,6 @@ def delete_memories_batch(db_path: Path, memory_ids: list[str]) -> int:
                 (audit_id, "delete", "memory", mid, None, "batch", now),
             )
         conn.commit()
-        maybe_auto_commit(conn)
     finally:
         conn.close()
     return affected

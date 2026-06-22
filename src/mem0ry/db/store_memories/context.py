@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from ..connection import get_connection
+from ..git_sync import auto_sync_before_read
 from ..schema import init_schema
 from .helpers import _NOT_SUPERSEDED
 from .lifecycle import track_reads
@@ -96,6 +97,7 @@ def get_context(
     # throttled to a single row.
     queries = _context_queries(project_id, context, session_id)
 
+    auto_sync_before_read(db_path)
     conn = get_connection(db_path)
     try:
         init_schema(conn)

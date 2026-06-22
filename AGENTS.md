@@ -224,23 +224,16 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 - `evolve_fact` MCP tool (`mcp_server.py:530`) — agent LLM consolidates contradictory facts. Old facts get `superseded_by` set + soft-deleted; a new evolved fact is created. `get_context()` and `search_memories()` exclude superseded rows. The agent decides when to evolve (no heuristics, instruction-based).
 - `audit_log` records mutations (create, delete, import, handoff, evolve) — auto-written in `store.py`.
 
-## DoltLite sync (experimental)
+## Cross-machine sync
 
-- Install the optional dependency: `pip install mymem0ry[sync]` or
-  `uv sync --extra sync`.
-- `db/connection.py` auto-detects DoltLite when the binding is installed and the database file was created as DoltLite. Plain SQLite remains the default/fallback.
-- `db/doltlite_sync.py` centralizes version-control helpers (`auto_commit`, `dolt_push`, `dolt_pull`, etc.).
-- `cli/sync.py` exposes `mymem0ry sync {init,push,pull,status}`.
-- Schema v9 added `memories.fts_rowid` because DoltLite does not expose an implicit `rowid` on a TEXT PRIMARY KEY.
-- DoltLite requires a Python build where `_sqlite3` is a shared extension. It does **not** work with `uv python install` (python-build-standalone). Use Homebrew, distro, pyenv, or conda Python instead.
+To sync memories across machines, keep `data/` in a **private git repo** and enable `MEM0RY_GIT_AUTO_SYNC=1`. myMem0ry pulls before reads and pushes after memory writes. Failures are logged, never fatal.
 
-### Cross-machine sync workflow
+- `src/mem0ry/db/git_sync.py` centralizes git helpers (`auto_sync_before_read`, `auto_sync_after_write`).
+- `src/mem0ry/cli/git_sync.py` exposes `mymem0ry git-sync {pull,push,status}`.
+- `src/mem0ry/db/store_memories/context.py` pulls before `get_context()`.
+- `src/mem0ry/db/store_memories/crud.py` pushes after create/update/delete/restore.
 
-1. **Memories DB** (`DB_PATH`, e.g. `data/memories.db`) — synced via DoltLite remote (`mymem0ry sync push/pull`).
-2. **Everything else in `data/`** (conversation `.md` files, `.vec.db`, BM25/FTS5 indexes) — synced via a separate git repository.
-3. On a new machine: clone the git repo into `data/`, run `mymem0ry sync init --remote <REMOTE>`, then `mymem0ry sync pull`.
-4. After a git pull, rebuild conversation indexes if they changed: `mymem0ry index --backend vector/bm25/fts5`.
-5. Conflicts in DoltLite are resolved with `dolt_conflicts_resolve('--ours'/'--theirs', 'memories')` inside the DB.
+See `docs/sync.md` for the full workflow, `.gitignore` rules, conflict resolution, and when not to use git auto-sync.
 
 ## Env (loaded at `config.py` import time via `load_dotenv`)
 
@@ -268,10 +261,10 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 | `SEARCH_TOP_K` | `3` | Default search result count |
 | `SEARCH_BACKEND` | `ripgrep` | Default backend |
 | `MCP_TRANSPORT` | _(unset)_ | Set to `streamable-http` to expose web UI |
-| `MEM0RY_SYNC_ENGINE` | `auto` | `auto` / `doltlite` / `sqlite` — engine selection for new DBs |
-| `MEM0RY_SYNC_REMOTE` | _(unset)_ | DoltLite remote URL (`file://` or `http://`) |
-| `MEM0RY_SYNC_BRANCH` | `main` | Default branch for `mymem0ry sync` |
-| `MEM0RY_SYNC_AUTO_COMMIT` | `1` | Auto-commit each write on DoltLite when `1` |
+| `MEM0RY_GIT_AUTO_SYNC` | `0` | Set to `1` to auto pull/push the data directory via git |
+| `MEM0RY_GIT_SYNC_DIR` | parent of `DB_PATH` | Directory that contains the `.git` repo for auto-sync |
+| `MEM0RY_GIT_SYNC_REMOTE` | `origin` | Git remote used by `mymem0ry git-sync` |
+| `MEM0RY_GIT_SYNC_BRANCH` | `main` | Git branch used by `mymem0ry git-sync` |
 
 ## Tests
 

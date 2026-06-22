@@ -93,9 +93,9 @@ class MemoryConfig:
     cors_origins: str = os.environ.get("MEM0RY_CORS_ORIGINS", "")
     compress_enabled: bool = os.environ.get("MEM0RY_COMPRESS", "0") == "1"
     compress_log: bool = os.environ.get("MEM0RY_COMPRESS_LOG", "0") == "1"
-    # DoltLite version-control sync settings. DoltLite is opt-in/experimental;
-    # when disabled the system runs on plain SQLite.
-    sync_remote: str | None = os.environ.get("MEM0RY_SYNC_REMOTE", None)
-    sync_branch: str = os.environ.get("MEM0RY_SYNC_BRANCH", "main")
-    sync_auto_commit: bool = os.environ.get("MEM0RY_SYNC_AUTO_COMMIT", "1") == "1"
-    sync_engine: str = os.environ.get("MEM0RY_SYNC_ENGINE", "auto")
+    # Git-based auto-sync settings. The data directory is a git repo and
+    # myMem0ry pulls before reads and pushes after writes. Off by default.
+    git_auto_sync: bool = os.environ.get("MEM0RY_GIT_AUTO_SYNC", "0") == "1"
+    git_sync_dir: str | None = os.environ.get("MEM0RY_GIT_SYNC_DIR", None)
+    git_sync_remote: str = os.environ.get("MEM0RY_GIT_SYNC_REMOTE", "origin")
+    git_sync_branch: str = os.environ.get("MEM0RY_GIT_SYNC_BRANCH", "main")

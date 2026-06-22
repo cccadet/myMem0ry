@@ -1,6 +1,6 @@
 [project]
 name = "mymem0ry"
-version = "0.25.5"
+version = "0.27.0"
 description = "Personal memory system for AI coding agents — offline, zero API keys, cross-agent handoffs, semantic search"
 readme = "README.md"
 license = "MIT"
@@ -47,11 +47,6 @@ Changelog = "https://github.com/cccadet/myMem0ry/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
 compress = ["headroom-ai[code]"]
-# DoltLite sync requires a Python build where _sqlite3 is a shared extension.
-# It does NOT work with uv/python-build-standalone Python; use distro/homebrew/pyenv.
-sync = [
-    "doltlite>=0.11.15",
-]
 
 [project.scripts]
 mymem0ry = "mem0ry.cli.main:app"
@@ -103,7 +98,6 @@ module = [
     "onnxruntime",
     "huggingface_hub",
     "tokenizers",
-    "doltlite",
 ]
 ignore_missing_imports = true
 

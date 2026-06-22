@@ -6,18 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-06-21
+
 ### Added
 
-- **Pluggable vector encoder backend** — vector/hybrid search can now use
-  `nomic-ai/nomic-embed-text-v1.5` via ONNX Runtime instead of spaCy doc vectors.
-  Set `VECTOR_ENCODER_MODEL=nomic` to switch; default remains `spacy` for
-  backward compatibility. Query expansion (`mymem0ry expand`) continues to use
-  spaCy word vectors regardless of this setting.
-- **`sync` optional dependency** — `pip install mymem0ry[sync]` installs the
-  DoltLite binding for version-controlled memory sync.
+- **Git-based auto-sync** — `MEM0RY_GIT_AUTO_SYNC=1` keeps the `data/`
+  directory synchronized through a git repository. myMem0ry pulls before
+  reads and pushes after memory writes.
+- New CLI commands: `mymem0ry git-sync {status,pull,push}`.
+
+### Removed
+
+- Experimental DoltLite support and the `[sync]` optional dependency.
+  SQLite remains the only database engine; cross-machine sync is handled
+  entirely by git.
 
 ### Changed
 
+- `src/mem0ry/db/connection.py` is now SQLite-only (DoltLite detection
+  removed).
 - `src/mem0ry/conversations/embeddings.py` is now a compatibility re-export;
   the `SpacyEncoder` implementation moved to
   `src/mem0ry/conversations/encoders/spacy.py` and a shared `TextEncoder`
