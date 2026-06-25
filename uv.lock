@@ -538,17 +538,6 @@ wheels = [
 ]
 
 [[package]]
-name = "doltlite"
-version = "0.11.15"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/88/17/751625d93fa42c27636a51538051877bb72b490bf6456274da61a304aeae/doltlite-0.11.15.tar.gz", hash = "sha256:423958589d37503162d3f895ce81fff1ad690880d767780afd4220aebd3f122e", size = 13052, upload-time = "2026-06-19T01:19:31.688Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/1a/23825d88f164047cc838225e2d7d2ad24adac4eda08a88218218ad345b01/doltlite-0.11.15-py3-none-macosx_11_0_arm64.whl", hash = "sha256:ff7b390d8a23d5903124d275d07f5818f02c2ecb4558c1e59676b51aa7cbe21d", size = 1049065, upload-time = "2026-06-19T01:19:26.32Z" },
-    { url = "https://files.pythonhosted.org/packages/8c/98/ff3c7dd8e9ee08f98f2db202ca5f7ab7e5257fafebf740c2c2b2cd4bed98/doltlite-0.11.15-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ca197cc80f8b1a439913584a133c6aa206191f7337e573ecba8df8a5c6bf7a32", size = 4897315, upload-time = "2026-06-19T01:19:28.328Z" },
-    { url = "https://files.pythonhosted.org/packages/3c/1e/f5ac2da6ed8489178800e5b072a2044550690e7ea803e112e551ca894ec1/doltlite-0.11.15-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2485bc85d0a14a2bd42ac21b3f4a402019214061654c7e94a5b94c5d5aa3b420", size = 5515139, upload-time = "2026-06-19T01:19:30.166Z" },
-]
-
-[[package]]
 name = "fastuuid"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1328,7 +1317,7 @@ wheels = [
 
 [[package]]
 name = "mymem0ry"
-version = "0.25.5"
+version = "0.28.0"
 source = { editable = "." }
 dependencies = [
     { name = "huggingface-hub" },
@@ -1348,9 +1337,6 @@ dependencies = [
 compress = [
     { name = "headroom-ai", extra = ["code"] },
 ]
-sync = [
-    { name = "doltlite" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -1364,7 +1350,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "doltlite", marker = "extra == 'sync'", specifier = ">=0.11.15" },
     { name = "headroom-ai", extras = ["code"], marker = "extra == 'compress'" },
     { name = "huggingface-hub", specifier = ">=1.16.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0" },
@@ -1378,7 +1363,7 @@ requires-dist = [
     { name = "tokenizers", specifier = ">=0.23.1" },
     { name = "typer", specifier = ">=0.24.1" },
 ]
-provides-extras = ["compress", "sync"]
+provides-extras = ["compress"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -8,7 +8,6 @@ from typing import Any
 
 from .._helpers import _now_iso
 from ..connection import get_connection
-from ..doltlite_sync import maybe_auto_commit
 from ..retention import compute_salience
 from ..schema import init_schema, next_fts_rowid
 from ..store_audit import record_audit
@@ -154,7 +153,6 @@ def import_memories(
             )
             imported += 1
         conn.commit()
-        maybe_auto_commit(conn)
     finally:
         conn.close()
     return {"imported": imported, "skipped": skipped}
@@ -232,7 +230,6 @@ def evolve_memories(
             [new_id, now] + old_ids,
         )
         conn.commit()
-        maybe_auto_commit(conn)
     finally:
         conn.close()
 

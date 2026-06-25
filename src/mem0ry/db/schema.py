@@ -245,9 +245,8 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
 def next_fts_rowid(conn: sqlite3.Connection) -> int:
     """Return the next available fts_rowid for the memories table.
 
-    SQLite exposes an implicit rowid, but DoltLite does not for tables with a
-    TEXT PRIMARY KEY. We maintain an explicit ``fts_rowid`` column so FTS5
-    indexing works on both engines.
+    We maintain an explicit ``fts_rowid`` column so FTS5 indexing is stable
+    regardless of how SQLite assigns implicit rowids.
     """
     row = conn.execute("SELECT COALESCE(MAX(fts_rowid), 0) + 1 FROM memories").fetchone()
     return int(row[0]) if row else 1

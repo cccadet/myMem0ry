@@ -8,7 +8,7 @@ from typing import Any
 
 from .._helpers import _now_iso
 from ..connection import get_connection
-from ..doltlite_sync import maybe_auto_commit
+from ..git_sync import auto_sync_after_write
 from ..schema import init_schema
 from ..store_audit import record_audit
 from .helpers import _validate_memory_type, _validate_scope, _validate_source
@@ -73,9 +73,10 @@ def create_memory(
             ),
         )
         conn.commit()
-        maybe_auto_commit(conn)
     finally:
         conn.close()
+
+    auto_sync_after_write(db_path, message=f"auto: create memory {mem_id}")
 
     try:
         record_audit(
@@ -150,12 +151,12 @@ def update_memory(
             params,
         )
         conn.commit()
-        maybe_auto_commit(conn)
         affected = cursor.rowcount
     finally:
         conn.close()
 
     if affected > 0:
+        auto_sync_after_write(db_path, message=f"auto: update memory {memory_id}")
         try:
             record_audit(
                 db_path,
@@ -195,12 +196,12 @@ def restore_memory(db_path: Path, memory_id: str) -> bool:
             (memory_id,),
         )
         conn.commit()
-        maybe_auto_commit(conn)
         affected = cursor.rowcount
     finally:
         conn.close()
 
     if affected > 0:
+        auto_sync_after_write(db_path, message=f"auto: restore memory {memory_id}")
         try:
             record_audit(
                 db_path,
@@ -223,11 +224,11 @@ def delete_memory(db_path: Path, memory_id: str) -> bool:
         (now, memory_id),
     )
     conn.commit()
-    maybe_auto_commit(conn)
     affected = cursor.rowcount
     conn.close()
 
     if affected > 0:
+        auto_sync_after_write(db_path, message=f"auto: delete memory {memory_id}")
         try:
             record_audit(
                 db_path,

@@ -100,11 +100,13 @@ claude mcp add --scope user mymem0ry -- mymem0ry-mcp
 **Or manual config** — add to `~/.claude/settings.json`:
 
 ```json
+{
   "mcpServers": {
     "mymem0ry": {
       "command": "mymem0ry-mcp"
     }
   }
+}
 ```
 
 **Hooks (optional, for auto-capture):** Use the new command to get the correct path:
@@ -122,10 +124,14 @@ Then copy the snippet into `~/.claude/settings.json`.
 {
   "hooks": {
     "SessionStart": [{
-      "command": "/path/to/myMem0ry/hooks/claude-code/session-start.sh"
+      "hooks": [{"type": "command", "command": "/path/to/myMem0ry/hooks/claude-code/session-start.sh"}]
+    }],
+    "SessionEnd": [{
+      "hooks": [{"type": "command", "command": "/path/to/myMem0ry/hooks/claude-code/session-end.sh"}]
     }],
     "PostToolUse": [{
-      "command": "/path/to/myMem0ry/hooks/claude-code/mymem0ry-hook.sh PostToolUse"
+      "matcher": "",
+      "hooks": [{"type": "command", "command": "/path/to/myMem0ry/hooks/claude-code/mymem0ry-hook.sh PostToolUse"}]
     }]
   }
 }
@@ -143,11 +149,14 @@ Then copy the snippet into `~/.claude/settings.json`.
     "mymem0ry": {
       "type": "local",
       "command": ["mymem0ry-mcp"],
+      "timeout": 30000,
       "enabled": true
     }
   }
 }
 ```
+
+> `timeout: 30000` (30s) is recommended because loading the spaCy model on first run can exceed the default 5s timeout.
 
 **Hooks (optional):** Copy `hooks/opencode/mymem0ry-hook.sh` to your project's `.opencode/hooks/` directory.
 
@@ -255,10 +264,15 @@ export VECTOR_DB_PATH=/path/to/shared/conversations/.vec.db
 | `CONVERSATIONS_DIR` | `data/conversations` | .md conversation files |
 | `DB_PATH` | `data/memories.db` | SQLite memories database |
 | `VECTOR_DB_PATH` | `data/conversations/.vec.db` | sqlite-vec index |
-| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for embeddings and search |
+| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for query expansion |
+| `VECTOR_ENCODER_MODEL` | `spacy` | Vector search encoder: `spacy` or `nomic` (ONNX Runtime) |
 | `MCP_TRANSPORT` | `stdio` | MCP transport: `stdio`, `sse`, `streamable-http` |
 | `MEM0RY_HOST` | `127.0.0.1` | Host for HTTP transport |
 | `MEM0RY_PORT` | `49374` | Port for HTTP transport |
+| `MEM0RY_GIT_AUTO_SYNC` | `0` | Set to `1` to auto pull/push the data directory via git |
+| `MEM0RY_GIT_SYNC_DIR` | parent of `DB_PATH` | Directory that contains the `.git` repo for auto-sync |
+| `MEM0RY_GIT_SYNC_REMOTE` | `origin` | Git remote used by `mymem0ry git-sync` |
+| `MEM0RY_GIT_SYNC_BRANCH` | `main` | Git branch used by `mymem0ry git-sync` |
 
 ### Language support
 
@@ -282,56 +296,12 @@ mymem0ry index                        # Build search indexes
 mymem0ry migrate --reprocess          # Migrate into structured memories
 ```
 
-### DoltLite sync (experimental)
+### Cross-machine sync
 
-For cross-machine memory sync, myMem0ry supports [DoltLite](https://github.com/dolthub/doltlite) as a version-controlled backend for the memories DB.
-
-Requirements:
-
-- Python with `_sqlite3` as a shared extension (Homebrew, distro, pyenv, conda). It does **not** work with `uv python install`.
-- `pip install doltlite`
-
-Setup:
+To keep the same memories across multiple machines, put the `data/` directory in a **private git repository** and enable auto-sync:
 
 ```bash
-export MEM0RY_SYNC_ENGINE=doltlite
-export MEM0RY_SYNC_REMOTE=file:///path/to/shared/remote.doltlite
-mymem0ry sync init --remote $MEM0RY_SYNC_REMOTE
-mymem0ry sync push
+export MEM0RY_GIT_AUTO_SYNC=1
 ```
 
-Remote types:
-
-- `file://` — shared folder / synced cloud drive.
-- `http://` / `https://` — DoltLite remote server.
-
-Full cross-machine workflow:
-
-1. Sync the memories DB via DoltLite:
-   ```bash
-   mymem0ry sync push   # on machine A
-   mymem0ry sync pull   # on machine B
-   ```
-2. Sync conversation files and indexes via git:
-   ```bash
-   cd data
-   git init
-   git remote add origin https://github.com/you/my-mem0ry-data
-   git add .
-   git commit -m "initial data"
-   git push
-   ```
-3. On a new machine:
-   ```bash
-   git clone https://github.com/you/my-mem0ry-data.git data
-   mymem0ry sync init --remote $MEM0RY_SYNC_REMOTE
-   mymem0ry sync pull
-   mymem0ry index --backend vector
-   ```
-
-Resolve DoltLite conflicts keeping the local version:
-
-```bash
-sqlite3 $DB_PATH "SELECT dolt_conflicts_resolve('--ours', 'memories');"
-sqlite3 $DB_PATH "SELECT dolt_commit('-m', 'resolve conflict');"
-```
+With auto-sync enabled, myMem0ry pulls before reads and pushes after writes. See [`sync.md`](sync.md) for setup, `.gitignore` rules, conflict resolution, and alternatives.

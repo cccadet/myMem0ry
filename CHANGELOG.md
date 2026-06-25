@@ -13,8 +13,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Set `VECTOR_ENCODER_MODEL=nomic` to switch; default remains `spacy` for
   backward compatibility. Query expansion (`mymem0ry expand`) continues to use
   spaCy word vectors regardless of this setting.
-- **`sync` optional dependency** — `pip install mymem0ry[sync]` installs the
-  DoltLite binding for version-controlled memory sync.
+- **Git-based cross-machine sync** — new `mymem0ry git-sync` CLI command with
+  `status`, `pull`, and `push` subcommands. Keeps the `data/` directory in a
+  regular git repository and pulls before reads, commits/pushes after memory
+  writes when `MEM0RY_GIT_AUTO_SYNC=1`.
+- **Git auto-sync settings** — new environment variables:
+  `MEM0RY_GIT_AUTO_SYNC`, `MEM0RY_GIT_SYNC_DIR`, `MEM0RY_GIT_SYNC_REMOTE`,
+  `MEM0RY_GIT_SYNC_BRANCH`.
+- **`docs/sync.md`** — full cross-machine sync guide covering setup, daily
+  workflow, conflict resolution, and `.gitignore` recommendations.
+
+### Removed
+
+- **DoltLite integration** — removed the experimental DoltLite sync engine,
+  optional `[sync]` extra, `MIGRATION_PLAN_DOLTLITE.md`, `db/doltlite_sync.py`,
+  `cli/sync.py`, and related tests. Cross-machine synchronization is now handled
+  entirely by the git-based workflow.
 
 ### Changed
 
@@ -22,6 +36,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the `SpacyEncoder` implementation moved to
   `src/mem0ry/conversations/encoders/spacy.py` and a shared `TextEncoder`
   protocol was introduced.
+- **README / AGENTS.md / install.md / usage.md** — updated cross-machine sync
+  documentation to describe the git-based approach and removed DoltLite-specific
+  instructions.
+- **Diagnostics** — `mymem0ry doctor` no longer checks for DoltLite-specific
+  requirements.
+
+## [0.27.0] - 2026-06-21
+
+### Added
+
+- **Git-based cross-machine sync** — new `mymem0ry git-sync` CLI command with
+  `status`, `pull`, and `push` subcommands. Keeps the `data/` directory in a
+  regular git repository and pulls before reads, commits/pushes after memory
+  writes when `MEM0RY_GIT_AUTO_SYNC=1`.
+- **Git auto-sync settings** — new environment variables:
+  `MEM0RY_GIT_AUTO_SYNC`, `MEM0RY_GIT_SYNC_DIR`, `MEM0RY_GIT_SYNC_REMOTE`,
+  `MEM0RY_GIT_SYNC_BRANCH`.
+- **`docs/sync.md`** — full cross-machine sync guide covering setup, daily
+  workflow, conflict resolution, and `.gitignore` recommendations.
+- **Schema v9 retained** — `fts_rowid INTEGER UNIQUE` column and unique index
+  remain on `memories`, decoupling FTS5 from implicit `rowid` assumptions.
+
+### Removed
+
+- **DoltLite integration** — removed the experimental DoltLite sync engine,
+  optional `[sync]` extra, `MIGRATION_PLAN_DOLTLITE.md`, `db/doltlite_sync.py`,
+  `cli/sync.py`, and related tests. Cross-machine synchronization is now handled
+  entirely by the git-based workflow.
+
+### Changed
+
+- **README / AGENTS.md / install.md / usage.md** — updated cross-machine sync
+  documentation to describe the git-based approach and removed DoltLite-specific
+  instructions.
+- **Diagnostics** — `mymem0ry doctor` no longer checks for DoltLite-specific
+  requirements.
 
 ## [0.26.0] - 2026-06-11
 
@@ -622,7 +672,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.25.5...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/cccadet/myMem0ry/compare/v0.25.5...v0.27.0
 [0.26.0]: https://github.com/cccadet/myMem0ry/compare/v0.25.5...v0.26.0
 [0.25.5]: https://github.com/cccadet/myMem0ry/compare/v0.25.4...v0.25.5
 [0.25.4]: https://github.com/cccadet/myMem0ry/compare/v0.25.3...v0.25.4

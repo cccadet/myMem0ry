@@ -87,6 +87,11 @@ mymem0ry export --project-id X -o out.json
 mymem0ry import file.json
 mymem0ry import file.json --project-id Y          # remap to project Y on import
 
+# Sync (git-based)
+mymem0ry git-sync status                          # Show repository status
+mymem0ry git-sync pull                            # Pull latest changes
+mymem0ry git-sync push                            # Commit and push local changes
+
 # MCP server (separate entrypoint)
 mymem0ry-mcp                                      # FastMCP server (stdio or streamable-http)
 ```
@@ -100,16 +105,18 @@ src/mem0ry/
 ├── daemon.py                # ensure_server(), is_server_running(), stop_server()
 ├── mcp_server.py            # FastMCP server: 12 @mcp.tool() + HTTP routes + web UI mount
 ├── cli/main.py              # Typer app — all CLI commands (incl. backup, restore)
+├── cli/git_sync.py          # Git-based sync commands
 ├── db/
 │   ├── connection.py        # SQLite + sqlite-vec extension
-│   ├── schema.py            # _SCHEMA_VERSION = 8 (memories, observations, handoffs, audit_log, schema_meta)
-│   ├── migrate.py           # migrate_v1_to_v2 … migrate_v7_to_v8
+│   ├── schema.py            # _SCHEMA_VERSION = 9 (memories, observations, handoffs, audit_log, schema_meta)
+│   ├── migrate.py           # migrate_v1_to_v2 … migrate_v8_to_v9
 │   ├── store.py             # Re-exports from store_memories, store_observations, store_handoffs, store_audit
 │   ├── store_memories/      # CRUD + batch delete, export, import (package split by responsibility)
 │   ├── store_handoffs.py    # CRUD + export, import
 │   ├── store_audit.py       # Audit log writes
 │   ├── store_observations.py
-│   └── retention.py         # Salience scoring, pin/unpin, forget-sweep
+│   ├── retention.py         # Salience scoring, pin/unpin, forget-sweep
+│   └── git_sync.py          # Git-based auto-sync helpers (pull, push, commit, status)
 ├── hooks/
 │   ├── sanitize.py          # sanitize_payload() — strip PII, API keys, truncate
 │   └── router.py            # handle_hook_event() — sanitize → resolve context → store
@@ -124,12 +131,17 @@ src/mem0ry/
 │   ├── search_bm25.py       # BM25Okapi
 │   ├── search_fts.py        # SQLite FTS5
 │   ├── search_hybrid.py     # RRF fusion: 1/(k + rank) over BM25 + vector
-│   ├── embeddings.py        # SpacyEncoder — nlp(text).vector, 300-dim
+│   ├── embeddings.py        # Compatibility re-export; import from encoders/ for new code
+│   ├── encoders/            # Pluggable vector encoder backend
+│   │   ├── base.py          # TextEncoder protocol
+│   │   ├── factory.py       # Encoder factory (spacy / nomic)
+│   │   ├── spacy.py         # SpacyEncoder — nlp(text).vector, 300-dim
+│   │   └── nomic_onnx.py    # Nomic ONNX Runtime encoder, 768-dim
 │   ├── vector_store.py      # sqlite-vec wrapper
 │   └── spacy_expand.py      # SpacyConceptSearch — query expansion
 ├── dataset/                 # Legacy ChatML fine-tuning pipeline
-├── web/                     # Starlette app: pages.py (routes), templates.py (Jinja), i18n.py
-├── utils/                   # filenames, git_context, logging, paths, update_check
+├── web/                     # Starlette app: pages/ (routes), templates.py (Jinja), i18n.py
+├── utils/                   # filenames, git_context, logging, paths, update_check, compress
 ├── pipeline/                # (stub)
 └── training/                # (stub)
 
@@ -142,12 +154,12 @@ hooks/                       # Bash hook scripts shipped at repo root (NOT in sr
 
 tests/                       # No fixtures in conftest beyond env vars; see below
 docker/                      # Dockerfile + docker-compose.yml
-docs/                        # install.md, usage.md, analise-fluxo-mcp.md
+docs/                        # install.md, usage.md, sync.md, analise-fluxo-mcp.md
 ```
 
-## Schema and validation (v8)
+## Schema and validation (v9)
 
-- **Schema version**: 8. `db/schema.py:7` sets `_SCHEMA_VERSION = 8`. Tables: `memories`, `observations`, `handoffs`, `audit_log`, `schema_meta`. `memories.superseded_by` tracks fact evolution.
+- **Schema version**: 9. `db/schema.py:7` sets `_SCHEMA_VERSION = 9`. Tables: `memories`, `observations`, `handoffs`, `audit_log`, `schema_meta`. `memories.superseded_by` tracks fact evolution; `memories.fts_rowid` decouples FTS5 from implicit `rowid`.
 - **Migrations live in `db/migrate.py`**: chained `migrate_v{N}_to_v{N+1}` functions. Schema init runs all migrations in order on a fresh DB.
 - **Enums** are validated centrally in `db/store.py` and re-imported by callers — adding a value requires editing that file:
   - **Scopes** (`_VALID_SCOPES`): `global` / `project` / `context` / `session`
@@ -224,23 +236,16 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 - `evolve_fact` MCP tool (`mcp_server.py:530`) — agent LLM consolidates contradictory facts. Old facts get `superseded_by` set + soft-deleted; a new evolved fact is created. `get_context()` and `search_memories()` exclude superseded rows. The agent decides when to evolve (no heuristics, instruction-based).
 - `audit_log` records mutations (create, delete, import, handoff, evolve) — auto-written in `store.py`.
 
-## DoltLite sync (experimental)
+## Cross-machine sync
 
-- Install the optional dependency: `pip install mymem0ry[sync]` or
-  `uv sync --extra sync`.
-- `db/connection.py` auto-detects DoltLite when the binding is installed and the database file was created as DoltLite. Plain SQLite remains the default/fallback.
-- `db/doltlite_sync.py` centralizes version-control helpers (`auto_commit`, `dolt_push`, `dolt_pull`, etc.).
-- `cli/sync.py` exposes `mymem0ry sync {init,push,pull,status}`.
-- Schema v9 added `memories.fts_rowid` because DoltLite does not expose an implicit `rowid` on a TEXT PRIMARY KEY.
-- DoltLite requires a Python build where `_sqlite3` is a shared extension. It does **not** work with `uv python install` (python-build-standalone). Use Homebrew, distro, pyenv, or conda Python instead.
+To sync memories across machines, keep `data/` in a **private git repo** and enable `MEM0RY_GIT_AUTO_SYNC=1`. myMem0ry pulls before reads and pushes after memory writes. Failures are logged, never fatal.
 
-### Cross-machine sync workflow
+- `src/mem0ry/db/git_sync.py` centralizes git helpers (`auto_sync_before_read`, `auto_sync_after_write`).
+- `src/mem0ry/cli/git_sync.py` exposes `mymem0ry git-sync {pull,push,status}`.
+- `src/mem0ry/db/store_memories/context.py` pulls before `get_context()`.
+- `src/mem0ry/db/store_memories/crud.py` pushes after create/update/delete/restore.
 
-1. **Memories DB** (`DB_PATH`, e.g. `data/memories.db`) — synced via DoltLite remote (`mymem0ry sync push/pull`).
-2. **Everything else in `data/`** (conversation `.md` files, `.vec.db`, BM25/FTS5 indexes) — synced via a separate git repository.
-3. On a new machine: clone the git repo into `data/`, run `mymem0ry sync init --remote <REMOTE>`, then `mymem0ry sync pull`.
-4. After a git pull, rebuild conversation indexes if they changed: `mymem0ry index --backend vector/bm25/fts5`.
-5. Conflicts in DoltLite are resolved with `dolt_conflicts_resolve('--ours'/'--theirs', 'memories')` inside the DB.
+See `docs/sync.md` for the full workflow, `.gitignore` rules, conflict resolution, and when not to use git auto-sync.
 
 ## Env (loaded at `config.py` import time via `load_dotenv`)
 
@@ -268,10 +273,10 @@ Routes live in `web/__init__.py` (Starlette `Route(...)` list). Mostly read-only
 | `SEARCH_TOP_K` | `3` | Default search result count |
 | `SEARCH_BACKEND` | `ripgrep` | Default backend |
 | `MCP_TRANSPORT` | _(unset)_ | Set to `streamable-http` to expose web UI |
-| `MEM0RY_SYNC_ENGINE` | `auto` | `auto` / `doltlite` / `sqlite` — engine selection for new DBs |
-| `MEM0RY_SYNC_REMOTE` | _(unset)_ | DoltLite remote URL (`file://` or `http://`) |
-| `MEM0RY_SYNC_BRANCH` | `main` | Default branch for `mymem0ry sync` |
-| `MEM0RY_SYNC_AUTO_COMMIT` | `1` | Auto-commit each write on DoltLite when `1` |
+| `MEM0RY_GIT_AUTO_SYNC` | `0` | Set to `1` to auto pull/push the data directory via git |
+| `MEM0RY_GIT_SYNC_DIR` | parent of `DB_PATH` | Directory that contains the `.git` repo for auto-sync |
+| `MEM0RY_GIT_SYNC_REMOTE` | `origin` | Git remote used by `mymem0ry git-sync` |
+| `MEM0RY_GIT_SYNC_BRANCH` | `main` | Git branch used by `mymem0ry git-sync` |
 
 ## Tests
 
