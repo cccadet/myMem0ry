@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict, Unpack
 
 from ..connection import get_connection
 from ..schema import init_schema
@@ -24,6 +24,18 @@ def _has_fts(conn: sqlite3.Connection) -> bool:
         return True
     except Exception:
         return False
+
+
+class _SearchFilters(TypedDict, total=False):
+    scope: str | None
+    project_id: str | None
+    context: str | None
+    memory_type: str | None
+    tags: list[str] | None
+    source: str | None
+    pinned_only: bool
+    date_from: str | None
+    date_to: str | None
 
 
 def _build_filter_conditions(
@@ -114,34 +126,26 @@ def _execute_search(
 def search_memories(
     db_path: Path,
     query: str | None = None,
-    scope: str | None = None,
-    project_id: str | None = None,
-    context: str | None = None,
-    memory_type: str | None = None,
-    tags: list[str] | None = None,
     top_k: int = 10,
-    source: str | None = None,
-    pinned_only: bool = False,
-    date_from: str | None = None,
-    date_to: str | None = None,
     order_by: str | None = None,
     offset: int = 0,
     expanded_terms: list[str] | None = None,
+    **filters: Unpack[_SearchFilters],
 ) -> list[dict[str, Any]]:
     conn = get_connection(db_path)
     try:
         init_schema(conn)
 
         conditions, params = _build_filter_conditions(
-            scope,
-            project_id,
-            context,
-            memory_type,
-            tags,
-            source,
-            pinned_only,
-            date_from,
-            date_to,
+            filters.get("scope"),
+            filters.get("project_id"),
+            filters.get("context"),
+            filters.get("memory_type"),
+            filters.get("tags"),
+            filters.get("source"),
+            filters.get("pinned_only", False),
+            filters.get("date_from"),
+            filters.get("date_to"),
         )
         terms = _merge_terms(query, expanded_terms)
         rows = _execute_search(conn, terms, conditions, params, order_by, top_k, offset)

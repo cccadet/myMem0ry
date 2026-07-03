@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
@@ -93,20 +94,8 @@ def _build_filters(
 </form>"""
 
 
-def search_page(request: Request) -> HTMLResponse:
-    from ...db.store import search_memories
-
-    lang = get_lang(request)
-    theme = get_theme(request)
-    qp = request.query_params
-    q = qp.get("q", "")
-    scope = qp.get("scope", "")
-    mtype = qp.get("type", "")
-    source = qp.get("source", "")
-    tags_raw = qp.get("tags", "")
-    date_from = qp.get("from", "")
-    date_to = qp.get("to", "")
-    pinned_only = qp.get("pinned", "") == "1"
+def _parse_search_params(qp: Any) -> dict[str, Any]:
+    """Extract and normalize query params for the search page."""
     sort = qp.get("sort", "recent")
     if sort not in SORTS:
         sort = "recent"
@@ -114,9 +103,67 @@ def search_page(request: Request) -> HTMLResponse:
         page = max(1, int(qp.get("page", "1")))
     except ValueError:
         page = 1
-
+    tags_raw = qp.get("tags", "")
     tags = [tg.strip() for tg in tags_raw.replace(",", " ").split() if tg.strip()]
-    offset = (page - 1) * PAGE_SIZE
+    return {
+        "q": qp.get("q", ""),
+        "scope": qp.get("scope", ""),
+        "mtype": qp.get("type", ""),
+        "source": qp.get("source", ""),
+        "tags_raw": tags_raw,
+        "tags": tags,
+        "date_from": qp.get("from", ""),
+        "date_to": qp.get("to", ""),
+        "pinned_only": qp.get("pinned", "") == "1",
+        "sort": sort,
+        "page": page,
+        "offset": (page - 1) * PAGE_SIZE,
+    }
+
+
+def _render_results(
+    rows: list[dict[str, Any]],
+    terms: list[str],
+    lang: str,
+) -> str:
+    if not rows:
+        return f'<div class="card meta">{t("common.no_results", lang)}</div>'
+    return f'<div class="meta">{len(rows)} {t("common.results", lang)}</div>' + "".join(
+        _memory_card(r, lang, terms) for r in rows
+    )
+
+
+def _render_pager(
+    page: int,
+    has_next: bool,
+    qp: Any,
+    lang: str,
+) -> str:
+    if page <= 1 and not has_next:
+        return ""
+    base_params = {k: v for k, v in qp.items() if k != "page"}
+
+    def page_link(p: int, label: str) -> str:
+        params = dict(base_params)
+        params["page"] = str(p)
+        qs = "&".join(f"{html.escape(k)}={html.escape(str(v))}" for k, v in params.items())
+        return f'<a href="/search?{qs}" class="btn" style="text-decoration:none">{label}</a>'
+
+    parts = []
+    if page > 1:
+        parts.append(page_link(page - 1, t("search.prev", lang)))
+    parts.append(f'<span class="meta">{page}</span>')
+    if has_next:
+        parts.append(page_link(page + 1, t("search.next", lang)))
+    return f'<div class="pager">{"".join(parts)}</div>'
+
+
+def search_page(request: Request) -> HTMLResponse:
+    from ...db.store import search_memories
+
+    lang = get_lang(request)
+    theme = get_theme(request)
+    p = _parse_search_params(request.query_params)
 
     db = _db_path()
     results_html = ""
@@ -127,48 +174,36 @@ def search_page(request: Request) -> HTMLResponse:
         conn.close()
         rows = search_memories(
             db,
-            query=q or None,
-            scope=scope or None,
-            memory_type=mtype or None,
-            tags=tags or None,
-            source=source or None,
-            pinned_only=pinned_only,
-            date_from=date_from or None,
-            date_to=date_to or None,
-            order_by=sort,
+            query=p["q"] or None,
+            scope=p["scope"] or None,
+            memory_type=p["mtype"] or None,
+            tags=p["tags"] or None,
+            source=p["source"] or None,
+            pinned_only=p["pinned_only"],
+            date_from=p["date_from"] or None,
+            date_to=p["date_to"] or None,
+            order_by=p["sort"],
             top_k=PAGE_SIZE + 1,
-            offset=offset,
+            offset=p["offset"],
         )
         has_next = len(rows) > PAGE_SIZE
         rows = rows[:PAGE_SIZE]
-        terms = _query_terms_raw(q)
+        terms = _query_terms_raw(p["q"])
+        results_html = _render_results(rows, terms, lang)
+        pager_html = _render_pager(p["page"], has_next, request.query_params, lang)
 
-        if rows:
-            results_html = f'<div class="meta">{len(rows)} {t("common.results", lang)}</div>' + "".join(
-                _memory_card(r, lang, terms) for r in rows
-            )
-        else:
-            results_html = f'<div class="card meta">{t("common.no_results", lang)}</div>'
-
-        # Pagination controls (preserve all current query params except page)
-        base_params = {k: v for k, v in qp.items() if k != "page"}
-
-        def page_link(p: int, label: str) -> str:
-            params = dict(base_params)
-            params["page"] = str(p)
-            qs = "&".join(f"{html.escape(k)}={html.escape(str(v))}" for k, v in params.items())
-            return f'<a href="/search?{qs}" class="btn" style="text-decoration:none">{label}</a>'
-
-        parts = []
-        if page > 1:
-            parts.append(page_link(page - 1, t("search.prev", lang)))
-        parts.append(f'<span class="meta">{page}</span>')
-        if has_next:
-            parts.append(page_link(page + 1, t("search.next", lang)))
-        if page > 1 or has_next:
-            pager_html = f'<div class="pager">{"".join(parts)}</div>'
-
-    filters = _build_filters(lang, q, scope, mtype, source, tags_raw, date_from, date_to, pinned_only, sort)
+    filters = _build_filters(
+        lang,
+        p["q"],
+        p["scope"],
+        p["mtype"],
+        p["source"],
+        p["tags_raw"],
+        p["date_from"],
+        p["date_to"],
+        p["pinned_only"],
+        p["sort"],
+    )
     body = f"{filters}{results_html}{pager_html}"
 
     return HTMLResponse(_layout(t("nav.search", lang), body, "search", lang, theme))

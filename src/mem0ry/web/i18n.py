@@ -15,6 +15,9 @@ THEMES = ("dark", "light")
 DEFAULT_THEME = "dark"
 
 
+_PT_SESSION = "Sessão"
+_EN_SESSION = "Session"
+
 STRINGS: dict[str, dict[str, str]] = {
     "pt": {
         # nav
@@ -62,7 +65,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "mem.salience": "Relevância",
         "mem.project": "Projeto",
         "mem.context": "Contexto",
-        "mem.session": "Sessão",
+        "mem.session": _PT_SESSION,
         "mem.content": "Conteúdo",
         "mem.not_found": "Memória {id} não encontrada.",
         # dashboard
@@ -138,7 +141,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "ho.expires": "Expira",
         "ho.project": "Projeto",
         "ho.path": "Caminho",
-        "ho.session": "Sessão",
+        "ho.session": _PT_SESSION,
         "ho.accepted_by": "Aceito por",
         "ho.summary": "Resumo",
         "ho.open_questions": "Perguntas em aberto",
@@ -150,7 +153,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "ho.confirm_delete": "Excluir este repasse permanentemente?",
         # observation
         "obs.agent": "Agente",
-        "obs.session": "Sessão",
+        "obs.session": _PT_SESSION,
         "obs.project": "Projeto",
         "obs.cwd": "Diretório",
         "obs.body": "Corpo",
@@ -265,7 +268,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "mem.salience": "Salience",
         "mem.project": "Project",
         "mem.context": "Context",
-        "mem.session": "Session",
+        "mem.session": _EN_SESSION,
         "mem.content": "Content",
         "mem.not_found": "Memory {id} not found.",
         # dashboard
@@ -341,7 +344,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "ho.expires": "Expires",
         "ho.project": "Project",
         "ho.path": "Path",
-        "ho.session": "Session",
+        "ho.session": _EN_SESSION,
         "ho.accepted_by": "Accepted by",
         "ho.summary": "Summary",
         "ho.open_questions": "Open Questions",
@@ -353,7 +356,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "ho.confirm_delete": "Delete this handoff permanently?",
         # observation
         "obs.agent": "Agent",
-        "obs.session": "Session",
+        "obs.session": _EN_SESSION,
         "obs.project": "Project",
         "obs.cwd": "CWD",
         "obs.body": "Body",

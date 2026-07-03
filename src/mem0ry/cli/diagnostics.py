@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import typer
 
 from ..config import MemoryConfig
 from ._app import app
+
+
+class _SpacyConfig(Protocol):
+    spacy_model: str
 
 
 @app.command(help="Print the installed myMem0ry version")
@@ -81,7 +85,7 @@ def _download_spacy_model(model: str) -> None:
     subprocess.check_call(cmd)  # nosec B603
 
 
-def _check_spacy(config: MemoryConfig, ok: Any, fail: Any) -> None:
+def _check_spacy(config: _SpacyConfig, ok: Any, fail: Any) -> None:
     typer.echo("[1/6] spaCy model")
     try:
         import spacy

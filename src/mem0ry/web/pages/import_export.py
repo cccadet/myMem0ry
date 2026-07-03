@@ -13,6 +13,8 @@ from ..i18n import get_lang, get_theme, t
 from ..templates import _db_path, _esc, _layout
 from .shared import no_db_html
 
+_JSON_MEDIA_TYPE = "application/json"
+
 
 def export_page(request: Request) -> HTMLResponse:
     lang = get_lang(request)
@@ -165,7 +167,7 @@ async def export_memories_page(request: Request) -> Response:
         filename = "mem0ry-export-projects.json"
         return Response(
             content=json_str,
-            media_type="application/json",
+            media_type=_JSON_MEDIA_TYPE,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     elif scopes:
@@ -179,7 +181,7 @@ async def export_memories_page(request: Request) -> Response:
         filename = f"mem0ry-export-{'-'.join(scopes)}.json"
         return Response(
             content=json_str,
-            media_type="application/json",
+            media_type=_JSON_MEDIA_TYPE,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     elif scope_val:
@@ -198,7 +200,7 @@ async def export_memories_page(request: Request) -> Response:
     filename = "mem0ry-export.json"
     return Response(
         content=json_str,
-        media_type="application/json",
+        media_type=_JSON_MEDIA_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

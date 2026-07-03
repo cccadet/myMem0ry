@@ -12,6 +12,7 @@ from .schema import init_schema, next_fts_rowid
 
 _VERSION_SQL = "SELECT value FROM schema_meta WHERE key='version'"
 _SET_VERSION_SQL = "INSERT OR REPLACE INTO schema_meta(key, value) VALUES(?, ?)"
+_TABLE_INFO_SQL = "PRAGMA table_info(memories)"
 
 
 _HEADER_RE = re.compile(
@@ -189,7 +190,7 @@ def migrate_v4_to_v5(db_path: Path) -> dict:
     ]
     existing = {
         row[1]
-        for row in conn.execute("PRAGMA table_info(memories)").fetchall()
+        for row in conn.execute(_TABLE_INFO_SQL).fetchall()
     }
     for col_name, col_def in new_cols:
         if col_name not in existing:
@@ -245,7 +246,7 @@ def migrate_v6_to_v7(db_path: Path) -> dict:
     old_version = int(version_row["value"]) if version_row else 6
 
     existing = {
-        row[1] for row in conn.execute("PRAGMA table_info(memories)").fetchall()
+        row[1] for row in conn.execute(_TABLE_INFO_SQL).fetchall()
     }
     if "superseded_by" not in existing:
         conn.execute("ALTER TABLE memories ADD COLUMN superseded_by TEXT")
@@ -326,7 +327,7 @@ def migrate_v8_to_v9(db_path: Path) -> dict:
     old_version = int(version_row["value"]) if version_row else 8
 
     existing = {
-        row[1] for row in conn.execute("PRAGMA table_info(memories)").fetchall()
+        row[1] for row in conn.execute(_TABLE_INFO_SQL).fetchall()
     }
     if "fts_rowid" not in existing:
         conn.execute("ALTER TABLE memories ADD COLUMN fts_rowid INTEGER")
