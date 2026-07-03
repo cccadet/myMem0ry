@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from starlette.routing import Route
+from pathlib import Path
+
+from starlette.routing import BaseRoute, Mount, Route
+from starlette.staticfiles import StaticFiles
 
 from .pages import (
     api_memories,
@@ -35,8 +38,9 @@ from .pages import (
 from .templates import _db_path  # noqa: F401
 
 
-def get_web_routes() -> list[Route]:
+def get_web_routes() -> list[BaseRoute]:
     return [
+        Mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static"),
         Route("/", dashboard),
         Route("/projects", projects_page),
         # More specific route must come before the greedy {project_id:path} catch-all.

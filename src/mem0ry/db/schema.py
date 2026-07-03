@@ -246,10 +246,16 @@ def next_fts_rowid(conn: sqlite3.Connection) -> int:
     """Return the next available fts_rowid for the memories table.
 
     We maintain an explicit ``fts_rowid`` column so FTS5 indexing is stable
-    regardless of how SQLite assigns implicit rowids.
+    regardless of how SQLite assigns implicit rowids. We also consider the
+    FTS5 table itself, because a previous migration or manual fix may have
+    left it ahead of the explicit column.
     """
-    row = conn.execute("SELECT COALESCE(MAX(fts_rowid), 0) + 1 FROM memories").fetchone()
-    return int(row[0]) if row else 1
+    rows = conn.execute(
+        "SELECT COALESCE(MAX(fts_rowid), 0) FROM memories "
+        "UNION ALL "
+        "SELECT COALESCE(MAX(rowid), 0) FROM memories_fts"
+    ).fetchall()
+    return int(max(r[0] for r in rows)) + 1
 
 
 def _ensure_v9(conn: sqlite3.Connection) -> None:

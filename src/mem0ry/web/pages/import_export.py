@@ -10,7 +10,7 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response
 from ...db.connection import get_connection
 from ...db.schema import init_schema
 from ..i18n import get_lang, get_theme, t
-from ..templates import _db_path, _esc, _layout
+from ..templates import _db_path, _esc, _icon, _layout
 from .shared import no_db_html
 
 _JSON_MEDIA_TYPE = "application/json"
@@ -48,89 +48,60 @@ def export_page(request: Request) -> HTMLResponse:
     conn.close()
 
     project_options = "".join(
-        f'<label class="project-option" style="display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;'
-        f'border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:.15s">'
-        f'<input type="checkbox" name="project_ids" value="{html.escape(dict(r)["project_id"])}" '
-        f'style="accent-color:var(--accent)">'
-        f'<span style="flex:1;font-family:var(--mono);font-size:.85rem">{_esc(dict(r)["project_id"])}</span>'
-        f'<span class="meta">{dict(r)["cnt"]}</span>'
+        f'<label class="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-2.5 transition hover:bg-slate-50 dark:bg-[var(--md-sys-color-surface-container)] dark:hover:bg-slate-800">'
+        f'<input type="checkbox" name="project_ids" value="{html.escape(dict(r)["project_id"])}" class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800">'
+        f'<span class="flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">{_esc(dict(r)["project_id"])}</span>'
+        f'<span class="text-xs text-slate-500 dark:text-slate-400">{dict(r)["cnt"]}</span>'
         f'</label>'
         for r in projects
     )
 
     scope_options = "".join(
-        f'<label style="display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;'
-        f'border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:.15s">'
-        f'<input type="checkbox" name="scopes" value="{r["scope"]}" style="accent-color:var(--accent)">'
+        f'<label class="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-2 transition hover:bg-slate-50 dark:bg-[var(--md-sys-color-surface-container)] dark:hover:bg-slate-800">'
+        f'<input type="checkbox" name="scopes" value="{r["scope"]}" class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800">'
         f'{_tag_html(r["scope"], r["scope"])}'
-        f'<span class="meta">{r["cnt"]}</span>'
+        f'<span class="ml-auto text-xs text-slate-500 dark:text-slate-400">{r["cnt"]}</span>'
         f'</label>'
         for r in scopes
     )
 
-    body = f"""<h2>{t("exp.title", lang)}</h2>
-<p class="meta" style="margin-bottom:1.2rem">{t("exp.description", lang)}</p>
+    body = f"""<h2 class="mb-2 text-xl font-bold text-[var(--md-sys-color-on-surface)]">{t("exp.title", lang)}</h2>
+<p class="mb-6 text-sm text-slate-500 dark:text-slate-400">{t("exp.description", lang)}</p>
 
-<form method="post" action="/memories/export" id="export-form">
-  <div class="card" style="margin-bottom:1rem">
-    <h3 style="margin-top:0">{t("exp.quick_export", lang)}</h3>
-    <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-      <button type="submit" name="scope" value="" class="btn btn-export">
-        ↓ {t("exp.all_memories", lang)} ({total_mem})
+<form method="post" action="/memories/export" id="export-form" class="space-y-5">
+  <div class="reveal rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-5 shadow-sm dark:bg-[var(--md-sys-color-surface-container)]">
+    <h3 class="mb-3 text-sm font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400">{t("exp.quick_export", lang)}</h3>
+    <div class="flex flex-wrap gap-2">
+      <button type="submit" name="scope" value="" class="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-600 transition hover:bg-green-50 dark:border-green-900 dark:bg-slate-800 dark:text-green-400 dark:hover:bg-green-950">
+        {_icon("download")}{t("exp.all_memories", lang)} ({total_mem})
       </button>
-      <button type="submit" name="scope" value="global" class="btn btn-export">
-        ↓ {t("exp.global_only", lang)} ({global_cnt})
+      <button type="submit" name="scope" value="global" class="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-600 transition hover:bg-green-50 dark:border-green-900 dark:bg-slate-800 dark:text-green-400 dark:hover:bg-green-950">
+        {_icon("download")}{t("exp.global_only", lang)} ({global_cnt})
       </button>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:1rem">
-    <h3 style="margin-top:0">{t("exp.by_scope", lang)}</h3>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem">
+  <div class="reveal rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-5 shadow-sm dark:bg-[var(--md-sys-color-surface-container)]">
+    <h3 class="mb-3 text-sm font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400">{t("exp.by_scope", lang)}</h3>
+    <div class="mb-4 flex flex-wrap gap-2">
       {scope_options}
     </div>
-    <button type="submit" class="btn btn-export" id="scope-export-btn" disabled>
-      ↓ {t("exp.export_selected_scopes", lang)}
+    <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-600 transition hover:bg-green-50 disabled:opacity-50 dark:border-green-900 dark:bg-slate-800 dark:text-green-400 dark:hover:bg-green-950" id="scope-export-btn" disabled>
+      {_icon("download")}{t("exp.export_selected_scopes", lang)}
     </button>
   </div>
 
-  <div class="card">
-    <h3 style="margin-top:0">{t("exp.by_project", lang)}</h3>
-    {f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.5rem;margin-bottom:.8rem">{project_options}</div>' if project_options else f'<p class="meta">{t("exp.no_projects", lang)}</p>'}
-    <button type="submit" class="btn btn-export" id="project-export-btn" disabled>
-      ↓ {t("exp.export_selected_projects", lang)}
+  <div class="reveal rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-5 shadow-sm dark:bg-[var(--md-sys-color-surface-container)]">
+    <h3 class="mb-3 text-sm font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400">{t("exp.by_project", lang)}</h3>
+    {f'<div class="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{project_options}</div>' if project_options else f'<p class="text-sm text-slate-500 dark:text-slate-400">{t("exp.no_projects", lang)}</p>'}
+    <button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-600 transition hover:bg-green-50 disabled:opacity-50 dark:border-green-900 dark:bg-slate-800 dark:text-green-400 dark:hover:bg-green-950" id="project-export-btn" disabled>
+      {_icon("download")}{t("exp.export_selected_projects", lang)}
     </button>
   </div>
 </form>
 
-<script>
-(function() {{
-  var scopeCheckboxes = document.querySelectorAll('input[name="scopes"]');
-  var projectCheckboxes = document.querySelectorAll('input[name="project_ids"]');
-  var scopeBtn = document.getElementById('scope-export-btn');
-  var projectBtn = document.getElementById('project-export-btn');
-
-  scopeCheckboxes.forEach(function(cb) {{
-    cb.addEventListener('change', function() {{
-      scopeBtn.disabled = !document.querySelectorAll('input[name="scopes"]:checked').length;
-    }});
-  }});
-
-  projectCheckboxes.forEach(function(cb) {{
-    cb.addEventListener('change', function() {{
-      projectBtn.disabled = !document.querySelectorAll('input[name="project_ids"]:checked').length;
-    }});
-  }});
-
-  document.getElementById('export-form').addEventListener('submit', function(e) {{
-    var btn = e.submitter;
-    if (btn) {{
-      btn.innerHTML = '<span>⏳</span> {t("exp.exporting", lang)}...';
-      btn.disabled = true;
-    }}
-  }});
-}})();
-</script>"""
+<script>window.EXPORT_EXPORTING_LABEL = {json.dumps(t('exp.exporting', lang))};</script>
+<script src="/static/js/export.js"></script>"""
 
     return HTMLResponse(_layout(t("exp.title", lang), body, "export", lang, theme))
 
@@ -249,114 +220,56 @@ def import_page(request: Request) -> HTMLResponse:
 
     msg_html = ""
     if msg:
-        border_color = "var(--green)" if msg_type == "success" else "var(--red)"
-        bg_color = "var(--green-soft)" if msg_type == "success" else "var(--red-soft)"
-        icon = "✓" if msg_type == "success" else "⚠"
-        msg_html = f'''<div class="card" style="border-color:{border_color};background:{bg_color}">
-  <div style="display:flex;align-items:center;gap:.6rem">
-    <span style="font-size:1.3rem">{icon}</span>
-    <p style="margin:0">{html.escape(msg)}</p>
+        border = "border-green-300 dark:border-green-800" if msg_type == "success" else "border-red-300 dark:border-red-800"
+        bg = "bg-green-50 dark:bg-green-950/30" if msg_type == "success" else "bg-red-50 dark:bg-red-950/30"
+        icon = "check_circle" if msg_type == "success" else "error"
+        text = "text-green-800 dark:text-green-200" if msg_type == "success" else "text-red-800 dark:text-red-200"
+        msg_html = f'''<div class="reveal mb-4 rounded-xl border {border} {bg} p-4 shadow-sm">
+  <div class="flex items-center gap-3">
+    {_icon(icon, 'text-xl', 22)}
+    <p class="text-sm {text}">{html.escape(msg)}</p>
   </div>
 </div>'''
 
-    body = f"""<h2>{t("imp.title", lang)}</h2>
+    body = f"""<h2 class="mb-2 text-xl font-bold text-[var(--md-sys-color-on-surface)]">{t("imp.title", lang)}</h2>
 {msg_html}
-<div class="card" style="margin-top:1.2rem">
-  <form method="post" action="/memories/import" enctype="multipart/form-data" id="import-form">
-    <div style="margin-bottom:1.2rem">
-      <label style="display:block;color:var(--text-2);margin-bottom:.5rem;font-weight:600">{t("imp.select_file", lang)}</label>
-      <div id="drop-zone" style="border:2px dashed var(--border-strong);border-radius:12px;padding:2rem;text-align:center;
-        background:var(--surface);cursor:pointer;transition:.2s">
-        <div style="font-size:2.5rem;margin-bottom:.5rem;opacity:.5">📁</div>
-        <div style="color:var(--text-2);margin-bottom:.5rem">{t("imp.drop_hint", lang)}</div>
-        <div style="color:var(--text-3);font-size:.85rem">{t("imp.or_click", lang)}</div>
-        <input type="file" name="file" id="file-input" accept=".json" required
-          style="display:none">
-        <div id="file-name" style="margin-top:.8rem;color:var(--accent);font-family:var(--mono);font-size:.9rem;display:none"></div>
+<div class="reveal rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-5 shadow-sm dark:bg-[var(--md-sys-color-surface-container)]">
+  <form method="post" action="/memories/import" enctype="multipart/form-data" id="import-form" class="space-y-5">
+    <div>
+      <label class="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-400">{t("imp.select_file", lang)}</label>
+      <div id="drop-zone" class="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center transition hover:border-primary-400 hover:bg-primary-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary-700 dark:hover:bg-primary-950/20">
+        <div class="mb-2 text-slate-400">{_icon('upload_file', 'text-5xl', 48)}</div>
+        <div class="text-sm text-slate-600 dark:text-slate-400">{t("imp.drop_hint", lang)}</div>
+        <div class="mt-1 text-xs text-slate-400 dark:text-slate-500">{t("imp.or_click", lang)}</div>
+        <input type="file" name="file" id="file-input" accept=".json" required class="hidden">
+        <div id="file-name" class="mt-3 hidden font-mono text-sm"></div>
       </div>
     </div>
-    <div style="margin-bottom:1.2rem">
-      <label style="display:block;color:var(--text-2);margin-bottom:.5rem;font-weight:600">{t("imp.override", lang)}</label>
-      <input type="text" name="project_id_override" placeholder="e.g. https://github.com/org/repo"
-        style="max-width:100%;width:100%">
-      <div style="color:var(--text-3);font-size:.82rem;margin-top:.3rem">{t("imp.override_hint", lang)}</div>
+    <div>
+      <label class="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-400">{t("imp.override", lang)}</label>
+      <input type="text" name="project_id_override" placeholder="e.g. https://github.com/org/repo" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-primary-900">
+      <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("imp.override_hint", lang)}</div>
     </div>
-    <div style="display:flex;gap:.6rem;align-items:center">
-      <button type="submit" class="btn" id="import-btn" disabled style="display:flex;align-items:center;gap:.4rem">
-        <span>↑</span> {t("imp.button", lang)}
+    <div class="flex flex-wrap items-center gap-3">
+      <button type="submit" class="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:opacity-50" id="import-btn" disabled>
+        {_icon("upload")}{t("imp.button", lang)}
       </button>
-      <span id="import-status" class="meta" style="display:none"></span>
+      <span id="import-status" class="hidden text-sm text-slate-500 dark:text-slate-400"></span>
     </div>
   </form>
 </div>
-<div class="card" style="margin-top:1rem">
-  <h3 style="margin-top:0">{t("imp.help_title", lang)}</h3>
-  <ul style="padding-left:1.2rem;color:var(--text-2);line-height:1.7">
+<div class="reveal mt-4 rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-5 shadow-sm dark:bg-[var(--md-sys-color-surface-container)]">
+  <h3 class="mb-2 text-sm font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400">{t("imp.help_title", lang)}</h3>
+  <ul class="list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">
     <li>{t("imp.help_1", lang)}</li>
     <li>{t("imp.help_2", lang)}</li>
     <li>{t("imp.help_3", lang)}</li>
   </ul>
 </div>
 <script>
-(function() {{
-  var dropZone = document.getElementById('drop-zone');
-  var fileInput = document.getElementById('file-input');
-  var fileName = document.getElementById('file-name');
-  var importBtn = document.getElementById('import-btn');
-  var form = document.getElementById('import-form');
-
-  dropZone.addEventListener('click', function() {{ fileInput.click(); }});
-
-  dropZone.addEventListener('dragover', function(e) {{
-    e.preventDefault();
-    dropZone.style.borderColor = 'var(--accent)';
-    dropZone.style.background = 'var(--accent-soft)';
-  }});
-
-  dropZone.addEventListener('dragleave', function(e) {{
-    e.preventDefault();
-    dropZone.style.borderColor = 'var(--border-strong)';
-    dropZone.style.background = 'var(--surface)';
-  }});
-
-  dropZone.addEventListener('drop', function(e) {{
-    e.preventDefault();
-    dropZone.style.borderColor = 'var(--border-strong)';
-    dropZone.style.background = 'var(--surface)';
-    if (e.dataTransfer.files.length) {{
-      fileInput.files = e.dataTransfer.files;
-      showFile(e.dataTransfer.files[0]);
-    }}
-  }});
-
-  fileInput.addEventListener('change', function() {{
-    if (fileInput.files.length) showFile(fileInput.files[0]);
-  }});
-
-  function showFile(file) {{
-    if (!file.name.endsWith('.json')) {{
-      fileName.textContent = '⚠ {t("imp.invalid_type", lang)}';
-      fileName.style.color = 'var(--red)';
-      importBtn.disabled = true;
-    }} else {{
-      fileName.textContent = '✓ ' + file.name + ' (' + formatSize(file.size) + ')';
-      fileName.style.color = 'var(--green)';
-      importBtn.disabled = false;
-    }}
-    fileName.style.display = 'block';
-  }}
-
-  function formatSize(bytes) {{
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }}
-
-  form.addEventListener('submit', function() {{
-    importBtn.disabled = true;
-    importBtn.innerHTML = '<span>⏳</span> {t("imp.importing", lang)}...';
-  }});
-}})();
-</script>"""
+window.IMPORT_INVALID_TYPE = {json.dumps(t('imp.invalid_type', lang))};
+window.IMPORT_IMPORTING_LABEL = {json.dumps(t('imp.importing', lang))};
+</script>
+<script src="/static/js/import.js"></script>"""
 
     return HTMLResponse(_layout(t("imp.title", lang), body, "import-page", lang, theme))

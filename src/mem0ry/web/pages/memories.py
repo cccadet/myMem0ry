@@ -12,6 +12,7 @@ from ..i18n import get_lang, get_theme, t
 from ..templates import (
     _db_path,
     _esc,
+    _icon,
     _layout,
     _parse_tags,
     _salience_bar,
@@ -37,7 +38,7 @@ def memory_detail(request: Request) -> HTMLResponse:
     if not row:
         conn.close()
         return HTMLResponse(
-            _layout("Memory", f'<div class="card"><p>{t("mem.not_found", lang, id=mid)}</p></div>', "dashboard", lang, theme)
+            _layout("Memory", f'<div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"><p class="text-slate-600 dark:text-slate-400">{t("mem.not_found", lang, id=mid)}</p></div>', "dashboard", lang, theme)
         )
 
     m = dict(row)
@@ -55,39 +56,44 @@ def memory_detail(request: Request) -> HTMLResponse:
 
     superseded_info = ""
     if m.get("superseded_by"):
-        superseded_info = f'<div style="margin-top:.3rem">{_tag("superseded", t("mem.superseded_by", lang))} <a href="/memory/{_esc(m["superseded_by"])}">{_esc(m["superseded_by"])}</a></div>'
+        superseded_info = f'<div class="mt-2">{_tag("superseded", t("mem.superseded_by", lang))} <a href="/memory/{_esc(m["superseded_by"])}" class="text-primary-600 hover:underline dark:text-primary-300">{_esc(m["superseded_by"])}</a></div>'
 
     superseded_rows = ""
     if incoming:
-        links = ", ".join(f'<a href="/memory/{_esc(r["id"])}">{_esc(r["title"] or r["id"])}</a>' for r in incoming)
-        superseded_rows = f'<div style="margin-top:.3rem"><strong>{t("mem.supersedes", lang)}</strong> {links}</div>'
+        links = ", ".join(f'<a href="/memory/{_esc(r["id"])}" class="text-primary-600 hover:underline dark:text-primary-300">{_esc(r["title"] or r["id"])}</a>' for r in incoming)
+        superseded_rows = f'<div class="mt-2"><strong class="text-slate-700 dark:text-slate-300">{t("mem.supersedes", lang)}</strong> {links}</div>'
 
-    # Pin / unpin toggle
     if m.get("pinned"):
-        pin_btn = f'<form method="post" action="/memory/{mid}/unpin" style="display:inline"><button type="submit" class="btn">{t("common.unpin", lang)}</button></form>'
+        pin_btn = f'<form method="post" action="/memory/{mid}/unpin" class="inline"><button type="submit" class="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700">{_icon("push_pin")}{t("common.unpin", lang)}</button></form>'
     else:
-        pin_btn = f'<form method="post" action="/memory/{mid}/pin" style="display:inline"><button type="submit" class="btn">{t("common.pin", lang)}</button></form>'
+        pin_btn = f'<form method="post" action="/memory/{mid}/pin" class="inline"><button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">{_icon("push_pin")}{t("common.pin", lang)}</button></form>'
 
-    edit_btn = f'<a href="/memory/{mid}/edit" class="btn" style="text-decoration:none">{t("common.edit", lang)}</a>'
+    edit_btn = f'<a href="/memory/{mid}/edit" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">{_icon("edit")}{t("common.edit", lang)}</a>'
 
-    body = f"""<div class="card">
-  <h2>{_esc(m.get('title') or m['id'])}</h2>
-  <div>{_tag(m['scope'], m['scope'])} {_tag(m.get('memory_type','log'), m.get('memory_type','log'))}
-  {(f' <span class="meta pinned">{t("common.pinned", lang)}</span>' if m.get('pinned') else '')}</div>
+    body = f"""<div class="rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-5 shadow-sm dark:bg-[var(--md-sys-color-surface-container)]">
+  <h2 class="mb-3 text-xl font-bold text-[var(--md-sys-color-on-surface)]">{_esc(m.get('title') or m['id'])}</h2>
+  <div class="mb-3 flex flex-wrap items-center gap-2">{_tag(m['scope'], m['scope'])}{_tag(m.get('memory_type','log'), m.get('memory_type','log'))}
+  {(f'<span class="inline-flex items-center gap-1 text-sm text-primary-600 dark:text-primary-300">{_icon("push_pin", "text-base", 16)}{t("common.pinned", lang)}</span>' if m.get('pinned') else '')}</div>
   {superseded_info}{superseded_rows}
-  <div class="meta">
-    {t("mem.created", lang)}: {(m.get('created_at') or '')[:19]} &middot;
-    {t("mem.updated", lang)}: {(m.get('updated_at') or t("mem.never", lang))[:19]} &middot;
-    {t("mem.source", lang)}: {m.get('source','')} &middot;
-    {t("mem.access", lang)}: {m.get('access_count',0)}x &middot;
-    {t("mem.salience", lang)}: {m.get('salience',0):.3f} {_salience_bar(float(m.get('salience',0) or 0), lang)}
+  <div class="mt-3 space-y-1 text-sm text-slate-600 dark:text-slate-400">
+    <div class="flex flex-wrap gap-x-4 gap-y-1">
+      <span class="inline-flex items-center gap-1">{_icon("event", 'text-xs', 14)}<strong class="text-slate-800 dark:text-slate-200">{t("mem.created", lang)}:</strong> {(m.get('created_at') or '')[:19]}</span>
+      <span class="inline-flex items-center gap-1">{_icon("update", 'text-xs', 14)}<strong class="text-slate-800 dark:text-slate-200">{t("mem.updated", lang)}:</strong> {(m.get('updated_at') or t("mem.never", lang))[:19]}</span>
+      <span class="inline-flex items-center gap-1">{_icon("source", 'text-xs', 14)}<strong class="text-slate-800 dark:text-slate-200">{t("mem.source", lang)}:</strong> {m.get('source','')}</span>
+      <span class="inline-flex items-center gap-1">{_icon("replay", 'text-xs', 14)}<strong class="text-slate-800 dark:text-slate-200">{t("mem.access", lang)}:</strong> {m.get('access_count',0)}x</span>
+      <span class="inline-flex items-center gap-1">{t("mem.salience", lang)}: {m.get('salience',0):.3f} {_salience_bar(float(m.get('salience',0) or 0), lang)}</span>
+    </div>
+    <div class="flex flex-wrap gap-x-4 gap-y-1">
+      <span><strong class="text-slate-800 dark:text-slate-200">{t("mem.project", lang)}:</strong> {_esc(m.get('project_id'))}</span>
+      <span><strong class="text-slate-800 dark:text-slate-200">{t("mem.context", lang)}:</strong> {_esc(m.get('context'))}</span>
+      <span><strong class="text-slate-800 dark:text-slate-200">{t("mem.session", lang)}:</strong> {_esc(m.get('session_id'))}</span>
+    </div>
   </div>
-  <div class="meta">{t("mem.project", lang)}: {_esc(m.get('project_id'))} &middot; {t("mem.context", lang)}: {_esc(m.get('context'))} &middot; {t("mem.session", lang)}: {_esc(m.get('session_id'))}</div>
-  {f'<div style="margin-top:.4rem">{tags_html}</div>' if tags else ''}
-  <div style="margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap">{edit_btn} {pin_btn} {delete_form(mid, 'memory', t("common.confirm_delete", lang), t("common.delete", lang))}</div>
+  {f'<div class="mt-3 flex flex-wrap gap-1">{tags_html}</div>' if tags else ''}
+  <div class="mt-4 flex flex-wrap gap-2">{edit_btn} {pin_btn} {delete_form(mid, 'memory', t("common.confirm_delete", lang), t("common.delete", lang))}</div>
 </div>
-<h3>{t("mem.content", lang)}</h3>
-<pre>{content}</pre>"""
+<h3 class="mb-2 mt-6 text-xs font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400">{t("mem.content", lang)}</h3>
+<pre class="overflow-x-auto whitespace-pre-wrap rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container)] p-4 text-sm leading-relaxed text-slate-800 shadow-sm dark:bg-[var(--md-sys-color-surface-container-high)] dark:text-slate-200">{content}</pre>"""
 
     return HTMLResponse(_layout(f"Memory: {m.get('title', mid)}", body, "dashboard", lang, theme))
 
@@ -101,28 +107,28 @@ def memory_edit_form(request: Request) -> HTMLResponse:
     m = get_memory_by_id(_db_path(), mid)
     if not m:
         return HTMLResponse(
-            _layout("Memory", f'<div class="card"><p>{t("mem.not_found", lang, id=mid)}</p></div>', "dashboard", lang, theme)
+            _layout("Memory", f'<div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"><p class="text-slate-600 dark:text-slate-400">{t("mem.not_found", lang, id=mid)}</p></div>', "dashboard", lang, theme)
         )
 
     tags = ", ".join(_parse_tags(m.get("tags")))
 
-    body = f"""<h2>{t("edit.title", lang)}</h2>
-<form method="post" action="/memory/{mid}/edit">
-  <div style="margin-bottom:.6rem">
-    <label style="color:var(--text2)">{t("edit.title_label", lang)}</label><br>
-    <input type="text" name="title" value="{_esc(m.get('title'))}" style="max-width:600px">
+    body = f"""<h2 class="mb-4 text-xl font-bold text-[var(--md-sys-color-on-surface)]">{t("edit.title", lang)}</h2>
+<form method="post" action="/memory/{mid}/edit" class="space-y-4">
+  <div>
+    <label class="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-400">{t("edit.title_label", lang)}</label>
+    <input type="text" name="title" value="{_esc(m.get('title'))}" class="w-full max-w-2xl rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-primary-900">
   </div>
-  <div style="margin-bottom:.6rem">
-    <label style="color:var(--text2)">{t("edit.content_label", lang)}</label><br>
-    <textarea name="content" rows="12">{_esc(m.get('content'))}</textarea>
+  <div>
+    <label class="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-400">{t("edit.content_label", lang)}</label>
+    <textarea name="content" rows="12" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-primary-900">{_esc(m.get('content'))}</textarea>
   </div>
-  <div style="margin-bottom:.6rem">
-    <label style="color:var(--text2)">{t("edit.tags_label", lang)}</label><br>
-    <input type="text" name="tags" value="{_esc(tags)}" style="max-width:600px">
+  <div>
+    <label class="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-400">{t("edit.tags_label", lang)}</label>
+    <input type="text" name="tags" value="{_esc(tags)}" class="w-full max-w-2xl rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-primary-900">
   </div>
-  <div style="display:flex;gap:.5rem">
-    <button type="submit" class="btn">{t("common.save", lang)}</button>
-    <a href="/memory/{mid}" class="btn" style="background:var(--border);color:var(--text);text-decoration:none">{t("common.cancel", lang)}</a>
+  <div class="flex flex-wrap gap-2">
+    <button type="submit" class="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700">{_icon("save")}{t("common.save", lang)}</button>
+    <a href="/memory/{mid}" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">{_icon("cancel")}{t("common.cancel", lang)}</a>
   </div>
 </form>"""
 

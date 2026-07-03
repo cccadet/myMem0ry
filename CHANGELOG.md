@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-07-03
+
+### Added
+
+- **Web UI visual refresh** — complete redesign of the web interface using
+  Tailwind CSS utility classes and Material Design principles.
+- **Material Icons Outlined** — all UI icons now use
+  `<span class="material-icons-outlined">name</span>` from Google Fonts.
+- **Modular JavaScript** — client-side behaviour split into focused modules
+  under `src/mem0ry/web/static/js/`:
+  `theme.js`, `lang.js`, `batch.js`, `export.js`, and `import.js`.
+  All DOM manipulation uses `document.querySelector`.
+- **Static file serving** — web assets served via Starlette `StaticFiles`
+  from `src/mem0ry/web/static/`.
+
+### Changed
+
+- Refactored `templates.py` and all `web/pages/*.py` handlers to use Tailwind
+  utility classes for layout, cards, tables, forms, buttons, and empty states.
+- Replaced emoji/Unicode icons with Material Icons Outlined across dashboard,
+  search, projects, memories, handoffs, trash, audit, observations, import,
+  and export pages.
+- Migrated inline JavaScript to external modules for theme/language toggles,
+  batch memory selection, export checkboxes, and import drag-and-drop.
+
+### Fixed
+
+- `db/schema.py` — `next_fts_rowid()` now also considers the `memories_fts`
+  table when computing the next `fts_rowid`, avoiding collisions after
+  migrations or manual fixes.
+
 ## [0.29.0] - 2026-07-03
 
 ### Added
@@ -677,7 +708,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuracao via variaveis de ambiente
 - 245 testes
 
-[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/cccadet/myMem0ry/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/cccadet/myMem0ry/compare/v0.29.0...v0.30.0
+[0.29.0]: https://github.com/cccadet/myMem0ry/compare/v0.28.0...v0.29.0
+[0.28.0]: https://github.com/cccadet/myMem0ry/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/cccadet/myMem0ry/compare/v0.25.5...v0.27.0
 [0.26.0]: https://github.com/cccadet/myMem0ry/compare/v0.25.5...v0.26.0
 [0.25.5]: https://github.com/cccadet/myMem0ry/compare/v0.25.4...v0.25.5

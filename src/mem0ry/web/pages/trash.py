@@ -6,7 +6,7 @@ from starlette.responses import HTMLResponse
 from ...db.connection import get_connection
 from ...db.schema import init_schema
 from ..i18n import get_lang, get_theme, t
-from ..templates import _db_path, _esc, _layout, _tag
+from ..templates import _db_path, _esc, _icon, _layout, _tag
 from .shared import no_db_html
 
 
@@ -35,21 +35,28 @@ def trash_page(request: Request) -> HTMLResponse:
         grace = m.get("grace_until")
         grace_html = (grace[:10] if grace else t("trash.no_grace", lang))
         restore_form = (
-            f'<form method="post" action="/memory/{mid}/restore" style="display:inline" '
+            f'<form method="post" action="/memory/{mid}/restore" class="inline" '
             f'onsubmit="return confirm(\'{t("trash.confirm_restore", lang)}\')">'
-            f'<button type="submit" class="btn">{t("common.restore", lang)}</button></form>'
+            f'<button type="submit" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">{_icon("restore")}{t("common.restore", lang)}</button></form>'
         )
-        cards.append(f"""<div class="card">
-  <div><strong>{title}</strong> {_tag(scope, scope)} {_tag(mtype, mtype)}</div>
-  <div class="meta">{t("trash.deleted_at", lang)}: {deleted_at} &middot; {t("trash.grace_until", lang)}: {grace_html}</div>
-  <div style="margin-top:.4rem">{_esc((m.get('content') or '')[:200])}</div>
-  <div style="margin-top:.5rem">{restore_form}</div>
+        cards.append(f"""<div class="reveal rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-4 shadow-sm dark:bg-[var(--md-sys-color-surface-container)]">
+  <div class="mb-2 flex flex-wrap items-center gap-2">
+    <strong class="text-[var(--md-sys-color-on-surface)]">{title}</strong>
+    {_tag(scope, scope)}{_tag(mtype, mtype)}
+  </div>
+  <div class="text-xs text-slate-500 dark:text-slate-400">
+    <span class="inline-flex items-center gap-1">{_icon("event", "text-xs", 14)}{t("trash.deleted_at", lang)}: {deleted_at}</span>
+    <span class="mx-1">·</span>
+    <span class="inline-flex items-center gap-1">{_icon("timer", "text-xs", 14)}{t("trash.grace_until", lang)}: {grace_html}</span>
+  </div>
+  <div class="mt-2 text-sm text-slate-600 dark:text-slate-400">{_esc((m.get('content') or '')[:200])}</div>
+  <div class="mt-3">{restore_form}</div>
 </div>""")
 
-    cards_html = "".join(cards) if cards else f'<div class="card meta">{t("trash.empty", lang)}</div>'
+    cards_html = "".join(cards) if cards else f'<div class="reveal flex flex-col items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">{_icon("delete_outline", "text-5xl mb-3 opacity-50", 48)}<p>{t("trash.empty", lang)}</p></div>'
 
-    body = f"""<h2>{t("trash.subtitle", lang, n=len(rows))}</h2>
-<p class="meta" style="margin-bottom:1rem">{t("trash.hint", lang)}</p>
-{cards_html}"""
+    body = f"""<h2 class="mb-2 text-xl font-bold text-[var(--md-sys-color-on-surface)]">{t("trash.subtitle", lang, n=len(rows))}</h2>
+<p class="mb-5 text-sm text-slate-500 dark:text-slate-400">{t("trash.hint", lang)}</p>
+<div class="space-y-3">{cards_html}</div>"""
 
     return HTMLResponse(_layout(t("trash.title", lang), body, "trash", lang, theme))

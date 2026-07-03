@@ -10,7 +10,7 @@ from ...db.connection import get_connection
 from ...db.schema import init_schema
 from ...db.store_memories.helpers import _query_terms_raw
 from ..i18n import get_lang, get_theme, t
-from ..templates import _db_path, _layout, _memory_card
+from ..templates import _db_path, _icon, _layout, _memory_card
 from .shared import PAGE_SIZE, SORTS, SOURCES
 
 
@@ -52,44 +52,51 @@ def _build_filters(
     )
     pinned_checked = "checked" if pinned_only else ""
 
-    return f"""<form method="get" action="/search" class="filters">
-  <div class="filter-group">
-    <label for="f-q">{t('search.label_query', lang)}</label>
-    <input type="text" id="f-q" name="q" value="{html.escape(q)}" placeholder="{t('search.placeholder', lang)}" autofocus>
+    input_cls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-primary-900"
+    label_cls = "mb-1 block text-xs font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400"
+
+    return f"""<form method="get" action="/search" class="reveal mb-6 grid gap-4 rounded-xl border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-surface-container-low)] p-5 shadow-sm dark:bg-[var(--md-sys-color-surface-container)] md:grid-cols-2 lg:grid-cols-4">
+  <div class="md:col-span-2">
+    <label for="f-q" class="{label_cls}">{t('search.label_query', lang)}</label>
+    <div class="relative">
+      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{_icon('search', 'text-base', 18)}</span>
+      <input type="text" id="f-q" name="q" value="{html.escape(q)}" placeholder="{t('search.placeholder', lang)}" autofocus class="{input_cls} pl-9">
+    </div>
   </div>
-  <div class="filter-group">
-    <label for="f-tags">{t('search.label_tags', lang)}</label>
-    <input type="text" id="f-tags" name="tags" value="{html.escape(tags_raw)}" placeholder="{t('search.tags_placeholder', lang)}">
+  <div>
+    <label for="f-tags" class="{label_cls}">{t('search.label_tags', lang)}</label>
+    <input type="text" id="f-tags" name="tags" value="{html.escape(tags_raw)}" placeholder="{t('search.tags_placeholder', lang)}" class="{input_cls}">
   </div>
-  <div class="filter-group">
-    <label for="f-scope">{t('search.label_scope', lang)}</label>
-    <select id="f-scope" name="scope">{scope_opts}</select>
+  <div>
+    <label for="f-scope" class="{label_cls}">{t('search.label_scope', lang)}</label>
+    <select id="f-scope" name="scope" class="{input_cls}">{scope_opts}</select>
   </div>
-  <div class="filter-group">
-    <label for="f-type">{t('search.label_type', lang)}</label>
-    <select id="f-type" name="type">{type_opts}</select>
+  <div>
+    <label for="f-type" class="{label_cls}">{t('search.label_type', lang)}</label>
+    <select id="f-type" name="type" class="{input_cls}">{type_opts}</select>
   </div>
-  <div class="filter-group">
-    <label for="f-source">{t('search.label_source', lang)}</label>
-    <select id="f-source" name="source">{source_opts}</select>
+  <div>
+    <label for="f-source" class="{label_cls}">{t('search.label_source', lang)}</label>
+    <select id="f-source" name="source" class="{input_cls}">{source_opts}</select>
   </div>
-  <div class="filter-group">
-    <label for="f-from">{t('search.date_from', lang)}</label>
-    <input type="date" id="f-from" name="from" value="{html.escape(date_from)}">
+  <div>
+    <label for="f-from" class="{label_cls}">{t('search.date_from', lang)}</label>
+    <input type="date" id="f-from" name="from" value="{html.escape(date_from)}" class="{input_cls}">
   </div>
-  <div class="filter-group">
-    <label for="f-to">{t('search.date_to', lang)}</label>
-    <input type="date" id="f-to" name="to" value="{html.escape(date_to)}">
+  <div>
+    <label for="f-to" class="{label_cls}">{t('search.date_to', lang)}</label>
+    <input type="date" id="f-to" name="to" value="{html.escape(date_to)}" class="{input_cls}">
   </div>
-  <div class="filter-group">
-    <label for="f-sort">{t('search.sort', lang)}</label>
-    <select id="f-sort" name="sort">{sort_opts}</select>
+  <div>
+    <label for="f-sort" class="{label_cls}">{t('search.sort', lang)}</label>
+    <select id="f-sort" name="sort" class="{input_cls}">{sort_opts}</select>
   </div>
-  <div class="filter-group filter-actions">
-    <label class="meta" style="font-size:.85rem;text-transform:none;letter-spacing:0">
-      <input type="checkbox" name="pinned" value="1" {pinned_checked}> {t('search.only_pinned', lang)}
+  <div class="flex items-end gap-3 md:col-span-2 lg:col-span-4">
+    <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+      <input type="checkbox" name="pinned" value="1" {pinned_checked} class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800">
+      {t('search.only_pinned', lang)}
     </label>
-    <button type="submit" class="btn">{t('search.button', lang)}</button>
+    <button type="submit" class="ml-auto inline-flex items-center gap-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700">{_icon('search')}{t('search.button', lang)}</button>
   </div>
 </form>"""
 
@@ -127,8 +134,8 @@ def _render_results(
     lang: str,
 ) -> str:
     if not rows:
-        return f'<div class="card meta">{t("common.no_results", lang)}</div>'
-    return f'<div class="meta">{len(rows)} {t("common.results", lang)}</div>' + "".join(
+        return f'<div class="reveal rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">{t("common.no_results", lang)}</div>'
+    return f'<div class="reveal mb-3 text-sm text-slate-500 dark:text-slate-400">{len(rows)} {t("common.results", lang)}</div>' + "".join(
         _memory_card(r, lang, terms) for r in rows
     )
 
@@ -147,15 +154,15 @@ def _render_pager(
         params = dict(base_params)
         params["page"] = str(p)
         qs = "&".join(f"{html.escape(k)}={html.escape(str(v))}" for k, v in params.items())
-        return f'<a href="/search?{qs}" class="btn" style="text-decoration:none">{label}</a>'
+        return f'<a href="/search?{qs}" class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">{label}</a>'
 
     parts = []
     if page > 1:
-        parts.append(page_link(page - 1, t("search.prev", lang)))
-    parts.append(f'<span class="meta">{page}</span>')
+        parts.append(page_link(page - 1, _icon("arrow_back", "text-base", 16) + t("search.prev", lang)))
+    parts.append(f'<span class="inline-flex h-9 items-center px-3 text-sm font-medium text-slate-500 dark:text-slate-400">{page}</span>')
     if has_next:
-        parts.append(page_link(page + 1, t("search.next", lang)))
-    return f'<div class="pager">{"".join(parts)}</div>'
+        parts.append(page_link(page + 1, t("search.next", lang) + _icon("arrow_forward", "text-base", 16)))
+    return f'<div class="mt-6 flex items-center justify-center gap-3">{"".join(parts)}</div>'
 
 
 def search_page(request: Request) -> HTMLResponse:
