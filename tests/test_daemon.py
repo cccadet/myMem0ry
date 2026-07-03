@@ -28,12 +28,12 @@ def _fresh_daemon(monkeypatch: pytest.MonkeyPatch, **env: str) -> ModuleType:
     return importlib.reload(daemon_module)
 
 
-def test_get_server_url_uses_config(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_server_url_uses_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     daemon = _fresh_daemon(
         monkeypatch,
         MEM0RY_HOST="127.0.0.1",
         MEM0RY_PORT="12345",
-        MEM0RY_PID_FILE="/tmp/test-daemon.pid",
+        MEM0RY_PID_FILE=str(tmp_path / "test-daemon.pid"),
     )
     assert daemon.get_server_url() == "http://127.0.0.1:12345"
 

@@ -56,7 +56,7 @@ def test_serve_detach_skips_when_already_running(capsys: pytest.CaptureFixture[s
     assert "already running" in captured.out
 
 
-def test_observe_posts_event(capsys: pytest.CaptureFixture[str]) -> None:
+def test_observe_posts_event(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     mock_response = MagicMock()
     mock_response.read.return_value = b'{"id": "obs-1"}'
     mock_response.__enter__ = MagicMock(return_value=mock_response)
@@ -67,7 +67,7 @@ def test_observe_posts_event(capsys: pytest.CaptureFixture[str]) -> None:
         patch("mem0ry.daemon.get_server_url", return_value="http://127.0.0.1:49374"),
         patch("urllib.request.urlopen", return_value=mock_response) as urlopen_mock,
     ):
-        observe("log", "hello world", cwd="/tmp", session="sess-1", agent="opencode")
+        observe("log", "hello world", cwd=str(tmp_path), session="sess-1", agent="opencode")
 
     ensure_mock.assert_called_once()
     urlopen_mock.assert_called_once()
@@ -75,7 +75,7 @@ def test_observe_posts_event(capsys: pytest.CaptureFixture[str]) -> None:
     assert "obs-1" in captured.out
 
 
-def test_observe_server_not_reachable(capsys: pytest.CaptureFixture[str]) -> None:
+def test_observe_server_not_reachable(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     import urllib.error
 
     with (
@@ -83,7 +83,7 @@ def test_observe_server_not_reachable(capsys: pytest.CaptureFixture[str]) -> Non
         patch("mem0ry.daemon.get_server_url", return_value="http://127.0.0.1:49374"),
         patch("urllib.request.urlopen", side_effect=urllib.error.URLError("down")),
     ):
-        observe(kind="log", content="hello", session="sess-1", cwd="/tmp", agent="manual")
+        observe(kind="log", content="hello", session="sess-1", cwd=str(tmp_path), agent="manual")
 
     captured = capsys.readouterr()
     assert "Server not reachable" in captured.err
