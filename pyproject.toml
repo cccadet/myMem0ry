@@ -61,7 +61,6 @@ packages = ["src/mem0ry"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "hooks/" = "mem0ry/hooks/"
-"src/mem0ry/web/static/" = "mem0ry/web/static/"
 
 [dependency-groups]
 dev = [
