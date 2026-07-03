@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-07-03
+
 ### Added
 
 - **Pluggable vector encoder backend** — vector/hybrid search can now use
@@ -22,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `MEM0RY_GIT_SYNC_BRANCH`.
 - **`docs/sync.md`** — full cross-machine sync guide covering setup, daily
   workflow, conflict resolution, and `.gitignore` recommendations.
+- **README/OpenWiki integration** — README now links to the `openwiki/`
+  documentation layer (quickstart, architecture, workflows, integrations, and
+  testing).
 
 ### Removed
 

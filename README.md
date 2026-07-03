@@ -16,6 +16,8 @@
 
 Persistent memory that any AI agent can read and write. Quit Claude Code mid-task, open Codex in the same directory — it picks up where you left off.
 
+> 📚 **Full documentation lives in [`openwiki/`](openwiki/)** — start with the [quickstart](openwiki/quickstart.md) and follow the links for architecture, workflows, integrations, and testing.
+
 ## Features
 
 - **Scoped memory** — session → context (branch) → project → global, resolved automatically from `cwd`
@@ -412,8 +414,23 @@ When running in HTTP mode (`MCP_TRANSPORT=streamable-http`), a web UI is availab
 
 ## Documentation
 
+This repo keeps two documentation layers: **user-facing guides** in `docs/` and the **project OpenWiki** in `openwiki/` (the living reference for architecture, workflows, integrations, and testing).
+
+### OpenWiki (start here)
+
+- [openwiki/quickstart.md](openwiki/quickstart.md) — One-minute setup, layout, env vars, and where to go next
+- [openwiki/architecture/overview.md](openwiki/architecture/overview.md) — How CLI, MCP, DB, search, and web UI fit together
+- [openwiki/architecture/data-model.md](openwiki/architecture/data-model.md) — Schema v9, tables, FTS5, sqlite-vec, retention tiers
+- [openwiki/workflows/agent-setup.md](openwiki/workflows/agent-setup.md) — MCP transports, hooks, scoped memory, handoffs, git sync
+- [openwiki/workflows/operations.md](openwiki/workflows/operations.md) — CLI commands: context, save, migrate, retention, backup, diagnostics
+- [openwiki/integrations/mcp-and-web.md](openwiki/integrations/mcp-and-web.md) — MCP tool reference, HTTP routes, auth/CORS
+- [openwiki/testing.md](openwiki/testing.md) — Test organization, CI pipeline, and targeted test tips
+
+### User guides
+
 - [docs/install.md](docs/install.md) — Detailed per-agent install instructions
 - [docs/usage.md](docs/usage.md) — Usage guide, hooks, and workflows
+- [docs/sync.md](docs/sync.md) — Cross-machine git sync workflow
 - [AGENTS.md](AGENTS.md) — Architecture and developer reference
 
 ## Development
